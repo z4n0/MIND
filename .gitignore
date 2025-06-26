@@ -1,0 +1,7 @@
+/.mypy_cache
+/confusion_matrices
+/data
+/mlruns
+/snelled_requirements.txt
+/tmp_gradcam
+/venv

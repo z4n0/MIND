@@ -1,0 +1,41 @@
+_base_: base.yaml 
+# inherits from base.yaml overwriting all the parameters following this line if they exist
+
+# Data Splitting
+data_splitting:
+  random_seed: 42
+  val_set_size: 0.15
+  test_set_size: 0.1
+  num_folds: 6  # Changed from base
+
+# Data Loading
+data_loading:
+  batch_size: 16  # Custom batch size for DenseNet
+  num_workers: 2  # Increased workers
+
+model:
+  model_name: "Resnet101"  # Specific model name
+  spatial_dims: 2
+  in_channels: 3
+  out_channels: 2
+  pretrained_weights: "imagenet"  # Using ImageNet weights for transfer learning
+# Training
+training:
+  num_epochs: 100
+  early_stopping_patience: 19
+  mixup_alpha: 0
+  oversample: true
+  undersample: false
+  weighted_loss: false
+  fine_tuning: false
+  transfer_learning: true
+  freezed_layerIndex: null
+
+# Optimizer
+optimizer:
+  learning_rate: 2e-4  # Custom learning rate
+  optimizer_name: "AdamW"  # Changed optimizer
+  weight_decay: 2e-4
+
+data_augmentation:
+  use_color_transforms: false

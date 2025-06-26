@@ -1,0 +1,42 @@
+_base_: base.yaml
+
+# Data Splitting
+data_splitting:
+  random_seed: 42
+  val_set_size: 0.15
+  test_set_size: 0.1
+  num_folds: 6  # Changed from base
+
+# Data Loading
+data_loading:
+  batch_size: 16  # Custom batch size for DenseNet
+  num_workers: 2  
+
+model:
+  model_name: "Resnet50"  # Specific model name
+  spatial_dims: 2
+  in_channels: 4
+  out_channels: 2
+  
+# Training
+training:
+  num_epochs: 210
+  early_stopping_patience: 40
+  mixup_alpha: 0  # Added mixup
+  oversample: true
+  undersample: false
+  weighted_loss: false
+  fine_tuning: false
+  transfer_learning: false
+  freezed_layerIndex: null
+
+# Optimizer
+optimizer:
+  learning_rate: 2e-4  # Custom learning rate
+  optimizer_name: "AdamW"  # Changed optimizer
+  weight_decay: 1e-4
+  patience: 25
+
+# Data Augmentation
+data_augmentation:
+  use_color_transforms: false

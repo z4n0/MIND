@@ -1,0 +1,53 @@
+_base_: base.yaml 
+
+# Data Splitting
+data_splitting:
+  random_seed: 42
+  val_set_size: 0.15
+  test_set_size: 0.1
+  num_folds: 6
+
+# Data Augmentation
+data_augmentation:
+  resize_spatial_size: [256, 256]  # Tuple as list in YAML
+  rand_flip_prob: 0.3
+  rand_flip_spatial_axes: [0, 1]
+  rand_rotate90_prob: 0.3
+  rand_rotate90_max_k: 3
+  rand_gaussian_noise_prob: 0.5
+  rand_gaussian_noise_mean: 0.0
+  rand_gaussian_noise_std: 0.1
+  use_color_transforms: false
+
+# Data Loading
+data_loading:
+  batch_size: 32
+  num_workers: 0
+
+model:
+  model_name: "ViT"
+  spatial_dims: 2
+  in_channels: 4
+  out_channels: 2
+  patch_size: [32,32]  # New parameter
+  proj_type: "conv"
+  pos_embed_type: "sincos"
+  
+# Training
+training:
+  num_epochs: 150
+  early_stopping_patience: 29
+  mixup_alpha: 0
+  dropout_prob: 0.2
+  oversample: true
+  undersample: false
+  weighted_loss: false
+  fine_tuning: false
+  transfer_learning: false
+  freezed_layerIndex: null  # null in YAML = None in Python
+
+# Optimizer
+optimizer:
+  learning_rate: 1e-3  # Will be adjusted if transfer_learning is true
+  optimizer_name: "Adam"
+  weight_decay: 1e-5
