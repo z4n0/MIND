@@ -12,3 +12,5 @@
 *.pyc
 *.pyo
 *.pyd
+learning_curves*.png
+*.png
