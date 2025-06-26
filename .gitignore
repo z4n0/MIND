@@ -5,3 +5,10 @@
 /snelled_requirements.txt
 /tmp_gradcam
 /venv
+*.pth
+/learning_curves
+/learning_curves/*
+/__pycache__
+*.pyc
+*.pyo
+*.pyd

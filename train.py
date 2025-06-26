@@ -11,6 +11,7 @@ Run:
 """
 
 # ──────────────────────── std libs ─────────────────────────────────────────
+import time
 import argparse, os, sys, pathlib, random, re, glob
 import numpy as np, pandas as pd, torch
 from sklearn.model_selection import train_test_split
@@ -71,7 +72,7 @@ def get_data_directory(num_input_channels: int) -> Path:
 # ───────────────────── main ────────────────────────────────────────────────
 def main():
     args = parse()
-
+    start_time = time.time()
     # ---------- env vars ---------------------------------------------------
     # DATA_ROOT  = Path(os.environ["DATA_ROOT"])
     MLFLOW_URI = os.environ["MLFLOW_TRACKING_URI"]
@@ -91,6 +92,19 @@ def main():
     cfg = ConfigLoader(str(PROJ_ROOT / args.yaml))
     #NOTE: if you want to change the classes in classification use 
     # new_class_names =  ["MSA-P", "MSA-C"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
+    #NOTE if you want to change the number of channels use
+    # cfg.set_num_input_channels(3) # or 4
+    #NOTE if you want to change the pretrained weights use
+    # cfg.set_pretrained_weights("torchvision") # or "monai"
+    #NOTE if you want to change the number of epochs use
+    # cfg.set_num_epochs(100) # or any other number
+    #NOTE if you want to change the number of folds use
+    # cfg.set_num_folds(7) # or any other number
+    #NOTE if you want to change the model library use
+    # cfg.set_model_library("monai") # or "torchvision"
+    #NOTE if you want to use pretrained models use
+    # cfg.set_transfer_learning(True) # or False
+    
     # cfg.set_class_names(new_class_names)
     print(f"Using configuration: {args.yaml}")
     class_names        = cfg.get_class_names()
@@ -167,7 +181,7 @@ def main():
     )
 
     train_metrics, test_results = experiment.run_experiment()
-
+    execution_time = time.time() - start_time
     # ---------- MLflow logging --------------------------------------------
     EXPERIMENT_NAME = f"supervised_learning_{num_channels}c"    
     os.environ["MLFLOW_TRACKING_URI"] = MLFLOW_URI
@@ -192,6 +206,7 @@ def main():
         color_transforms=False,
         model_library=model_library,
         pretrained_weights=pretrained_weights,
+        execution_time=execution_time,
     )
 
 if __name__ == "__main__":

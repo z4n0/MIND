@@ -435,10 +435,10 @@ def log_SSL_run_to_mlflow(
         mlflow.log_param("trainable_params", sum(p.numel() for p in model.parameters()
                                                  if p.requires_grad))
         mlflow.log_param("fine_tuning", cfg.training["fine_tuning"])
-        mlflow.log_param("transfer_learning", cfg.training["transfer_learning"])
-        mlflow.log_param("pretrained", cfg.training["pretrained"])
         mlflow.log_param("weight_decay", cfg.get_weight_decay())
         mlflow.log_param("dropout_rate", cfg.get_dropout_prob())
+        mlflow.log_param("model_name", cfg.get_model_name())
+        mlflow.log_param("model_library", cfg.get_model_library())
 
         # ---- metrics ------------------------------------------------------
         log_kfold_epoch_metrics(per_fold_metrics, prefix="val")
@@ -459,8 +459,8 @@ def log_SSL_run_to_mlflow(
         mlflow.log_metric("mean_test_precision", mean_test_precision)
         mlflow.log_metric("mean_test_recall", mean_test_recall)
         # -- log time of training -----------------
-        mlflow.log_metric("execution_time_seconds", execution_time)
-        
+        mlflow.log_metric("exec_time_min", execution_time / 60)
+
         # ---- artifacts: model & YAML -------------------------------------
         mlflow.pytorch.log_model(model, "model")
         mlflow.log_artifact(yaml_path, artifact_path="config")
