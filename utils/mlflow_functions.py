@@ -496,6 +496,8 @@ def log_SSL_run_to_mlflow(
 
         # ---- log full CSV of fold results --------------------------------
         log_folds_results_to_csv(fold_results, prefix="val")
+        # log the train code since it contains the setter for pretraining/libraries ecc
+        mlflow.log_artifact("train.py", artifact_path="scripts")
 
     # reset eventual side-effects
     cfg.set_freezed_layer_index(None)
@@ -524,7 +526,7 @@ def log_attention_maps_to_mlflow(
         shuffle=False,
     )
     
-    from utils.vit_explainability_functions import save_attention_overlays_side_by_side
+    from utils.vit_explanation_functions import save_attention_overlays_side_by_side
     activation_overlay_output_path = "activation_overlays"
     save_attention_overlays_side_by_side(test_loader, model, activation_overlay_output_path, device, overlay_alpha=0.5)
     mlflow.log_artifacts(activation_overlay_output_path, artifact_path="activation_overlays_test")

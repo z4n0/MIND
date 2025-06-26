@@ -60,7 +60,7 @@ from .mlflow_functions import (
     start_mlflow_ui,
 )
 
-from vit_explanation_functions import (
+from .vit_explanation_functions import (
     save_attention_overlays_side_by_side,
 )
 

@@ -89,6 +89,9 @@ def main():
 
     # ---------- configuration ---------------------------------------------
     cfg = ConfigLoader(str(PROJ_ROOT / args.yaml))
+    #NOTE: if you want to change the classes in classification use 
+    # new_class_names =  ["MSA-P", "MSA-C"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
+    # cfg.set_class_names(new_class_names)
     print(f"Using configuration: {args.yaml}")
     class_names        = cfg.get_class_names()
     print(f"Class names: {class_names}")
@@ -100,8 +103,8 @@ def main():
     num_workers        = cfg.get_num_workers()
     batch_size         = cfg.get_batch_size()
     num_folds          = cfg.get_num_folds()
-    model_library     = cfg.get_model_library()
-    DATA_ROOT         = get_data_directory(num_channels)
+    model_library      = cfg.get_model_library()
+    DATA_ROOT          = get_data_directory(num_channels)
 
     print(f"Number of channels: {num_channels}")
     print(f"Pretrained weights: {pretrained_weights}")
@@ -182,7 +185,7 @@ def main():
         class_names=class_names,
         fold_results=test_results,
         per_fold_metrics=train_metrics,
-        test_transforms=val_transforms,             # ← here!
+        test_transforms=val_transforms,            
         test_images_paths_np=te_imgs,
         test_true_labels_np=te_y,
         yaml_path=str(PROJ_ROOT / args.yaml),
