@@ -75,6 +75,11 @@ class NestedCVStratifiedByPatient:
         self.current_fold_test_transforms = None
         self.per_fold_val_images_paths = {}
         self.compute_custom_normalization = compute_custom_normalization
+        self.x_outer_len = None
+        self.x_outer_len = None
+        self.train_image_counts_per_fold = {}
+        self.val_image_counts_per_fold = {}
+        self.num_outer_images = None
 
         print(f"Detected {self.num_classes} unique classes.")
 
@@ -95,6 +100,21 @@ class NestedCVStratifiedByPatient:
     def cfg(self):
         return self._cfg
     
+    @property
+    def num_outer_images(self):
+        """Returns the number of images in the outer test fold."""
+        return self.x_outer_len
+    
+    def get_early_stopping_split_counts(self):
+        """
+        Returns the number of train and validation images used for early stopping in each fold.
+        
+        Returns:
+            tuple: A tuple containing two dictionaries:
+                (train_image_counts_per_fold, val_image_counts_per_fold)
+        """
+        return self.train_image_counts_per_fold, self.val_image_counts_per_fold
+
     def get_current_fold_transforms(self):
         return self.current_fold_train_transforms, self.current_fold_val_transforms, self.current_fold_test_transforms
 
@@ -315,6 +335,8 @@ class NestedCVStratifiedByPatient:
             stratify=y_train_outer, # Stratify by original labels of this subset
             random_state=self.cfg.data_splitting["random_seed"]
         )
+        self.train_image_counts_per_fold[fold_idx] = len(X_train_es)
+        self.val_image_counts_per_fold[fold_idx] = len(X_val_es)
         print(f"X_train_es: {X_train_es.shape} | X_val_es: {X_val_es.shape}")
         print(f"Early stopping split: Train images: {len(X_train_es)}, Validation images: {len(X_val_es)}")
         # Handle over/undersampling (assuming functions are imported)
@@ -445,6 +467,7 @@ class NestedCVStratifiedByPatient:
             
             print(f"Outer Train images: {len(X_train_outer)} | Outer Test images: {len(X_test_outer)}")
 
+            self.num_outer_images = len(X_test_outer)
             # --- Calculate fold-specific normalization statistics ---
             fold_stats = None
             if not self.cfg.training.get("pretrained", False) or self.compute_custom_normalization:

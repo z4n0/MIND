@@ -399,6 +399,9 @@ def log_SSL_run_to_mlflow(
     encoder_type: Optional[str] = None,
     freeze_encoder: bool = False,
     execution_time: float = 0.0,
+    train_counts: int = 0,
+    val_counts: int = 0,
+    test_counts: int = 0,
 ) -> None:
     """
     Log parameters, metrics, artifacts to MLflow (file store) – CINECA version.
@@ -439,7 +442,10 @@ def log_SSL_run_to_mlflow(
         mlflow.log_param("dropout_rate", cfg.get_dropout_prob())
         mlflow.log_param("model_name", cfg.get_model_name())
         mlflow.log_param("model_library", cfg.get_model_library())
-
+        mlflow.log_param("train_counts", train_counts)
+        mlflow.log_param("val_counts", val_counts)
+        mlflow.log_param("test_counts", test_counts)
+        mlflow.log_param("n_folds", cfg.get_num_folds())
         # ---- metrics ------------------------------------------------------
         log_kfold_epoch_metrics(per_fold_metrics, prefix="val")
         test_balanced_accs = [r["test_balanced_acc"] for r in fold_results]
@@ -497,7 +503,10 @@ def log_SSL_run_to_mlflow(
         # ---- log full CSV of fold results --------------------------------
         log_folds_results_to_csv(fold_results, prefix="val")
         # log the train code since it contains the setter for pretraining/libraries ecc
-        mlflow.log_artifact("train.py", artifact_path="scripts")
+        try:
+            mlflow.log_artifact("train.py", artifact_path="scripts")
+        except Exception as e:
+            print("Logging train.py failed:", e)
 
     # reset eventual side-effects
     cfg.set_freezed_layer_index(None)
@@ -545,6 +554,11 @@ def log_gradcam_to_mlflow(
     experiment_name: str = None,  # Add experiment_name parameter
     base_dir: str = None,  # Add base_dir parameter
 ):
+    # ----------------- saving gradcams with threshold ---------------------
+    from utils.explainability_functions import process_and_save_batch_gradcam_and_Overlay
+    from utils.data_visualization_functions import min_max_normalization
+    from utils.train_functions import make_loader
+    
     model_name = cfg.get_model_name()
     if "vit" in model_name.lower() or ssl:
         raise RuntimeError(f"you can't generate gradCAMs for {model_name} because it's not a CNN or you are doing SSL")
@@ -566,6 +580,7 @@ def log_gradcam_to_mlflow(
         return  # Add return to exit early if GradCAM fails
     
     # Create test_loader here, before using it
+    
     test_loader = make_loader(
         test_images_paths_np,
         test_true_labels_np,
@@ -591,10 +606,6 @@ def log_gradcam_to_mlflow(
     except Exception as e:
         print(f"Error generating GradCAM for test images: {e}")
         
-    # ----------------- saving gradcams with threshold ---------------------
-    from utils.explainability_functions import process_and_save_batch_gradcam_and_Overlay
-    from utils.data_visualization_functions import min_max_normalization
-    from utils.train_functions import make_loader
     
     try:
         thresholded_gradcam_folder = process_and_save_batch_gradcam_and_Overlay(

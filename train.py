@@ -129,7 +129,6 @@ def main():
     print(f"Model library: {model_library}")
     print(f"Data directory: {DATA_ROOT}")
 
-
     # ---------- dataset ----------------------------------------------------
     images, labels = [], []
     for lab, cname in enumerate(class_names):
@@ -182,6 +181,13 @@ def main():
 
     train_metrics, test_results = experiment.run_experiment()
     execution_time = time.time() - start_time
+    
+    train_counts, val_counts = experiment.get_early_stopping_split_counts()
+    test_counts = experiment.num_outer_images
+
+    print("Train counts per fold:", train_counts)
+    print("Validation counts per fold:", val_counts)
+    print("Test count:", test_counts)
     # ---------- MLflow logging --------------------------------------------
     EXPERIMENT_NAME = f"supervised_learning_{num_channels}c"    
     os.environ["MLFLOW_TRACKING_URI"] = MLFLOW_URI
@@ -207,6 +213,9 @@ def main():
         model_library=model_library,
         pretrained_weights=pretrained_weights,
         execution_time=execution_time,
+        train_counts=train_counts,
+        val_counts=val_counts,
+        test_counts=test_counts,
     )
 
 if __name__ == "__main__":
