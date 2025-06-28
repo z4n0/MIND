@@ -386,8 +386,6 @@ def log_SSL_run_to_mlflow(
     fold_results: List[Dict[str, Any]],
     per_fold_metrics: Dict[str, Any],
     test_transforms: Compose,
-    # all_images_paths_np: np.ndarray,
-    # all_labels_np: np.ndarray,
     test_images_paths_np: np.ndarray,
     test_true_labels_np: np.ndarray,
     yaml_path: str,
@@ -403,117 +401,131 @@ def log_SSL_run_to_mlflow(
     val_counts: int = 0,
     test_counts: int = 0,
 ) -> None:
-    """
-    Log parameters, metrics, artifacts to MLflow (file store) – CINECA version.
-    No environment flags, no interactive widgets.
-    """
+    """Log parameters, metrics and artifacts to MLflow (file store)."""
 
-    # ------------ env & directories ---------------------------------------
+    # ------------------------------------------------------------------ URI
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
-    print("MLFLOW_TRACKING_URI =", tracking_uri)
     if not tracking_uri:
         raise RuntimeError("MLFLOW_TRACKING_URI env-var missing")
     mlflow.set_tracking_uri(tracking_uri)
+    # sanity-check
+    resolved_uri = mlflow.get_tracking_uri()
+    if resolved_uri.rstrip("/") != tracking_uri.rstrip("/"):
+        raise RuntimeError(f"MLflow tracking URI mismatch: '{resolved_uri}'")
 
-    PROJ_ROOT = Path(os.getenv("PROJ_ROOT", Path.cwd()))
-    run_name  = create_run_name(cfg,
-                                color_transforms=color_transforms,
-                                model_library=model_library,
-                                pretrained_weights=pretrained_weights)
-
+    # ---------------------------------------------------------------- run / exp
+    run_name = create_run_name(
+        cfg,
+        color_transforms=color_transforms,
+        model_library=model_library,
+        pretrained_weights=pretrained_weights,
+    )
     exp_suffix = "SSL" if ssl else "supervised"
-    exp_name   = f"{'_vs_'.join(class_names)}_{cfg.get_model_input_channels()}c_{exp_suffix}"
+    exp_name = f"{'_vs_'.join(class_names)}_{cfg.get_model_input_channels()}c_{exp_suffix}"
     mlflow.set_experiment(exp_name)
 
-    # ------------ start run -----------------------------------------------
     with mlflow.start_run(run_name=run_name):
-        # ---- params -------------------------------------------------------
-        mlflow.log_param("freezed_layer_index", cfg.get_freezed_layer_index())
-        mlflow.log_param("color_transforms", color_transforms)
-        mlflow.log_param("epochs",        cfg.training["num_epochs"])
-        mlflow.log_param("batch_size",    cfg.get_batch_size())
-        mlflow.log_param("transfer_learning", cfg.training["transfer_learning"])
-        mlflow.log_param("pretrained", pretrained_weights)
-        mlflow.log_param("total_params",     sum(p.numel() for p in model.parameters()))
-        mlflow.log_param("trainable_params", sum(p.numel() for p in model.parameters()
-                                                 if p.requires_grad))
-        mlflow.log_param("fine_tuning", cfg.training["fine_tuning"])
-        mlflow.log_param("weight_decay", cfg.get_weight_decay())
-        mlflow.log_param("dropout_rate", cfg.get_dropout_prob())
-        mlflow.log_param("model_name", cfg.get_model_name())
-        mlflow.log_param("model_library", cfg.get_model_library())
-        mlflow.log_param("train_counts", train_counts)
-        mlflow.log_param("val_counts", val_counts)
-        mlflow.log_param("test_counts", test_counts)
-        mlflow.log_param("n_folds", cfg.get_num_folds())
-        # ---- metrics ------------------------------------------------------
-        log_kfold_epoch_metrics(per_fold_metrics, prefix="val")
-        test_balanced_accs = [r["test_balanced_acc"] for r in fold_results]
-        mean_test_acc = np.mean([r["test_acc"] for r in fold_results])
-        mean_test_loss = np.mean([r["test_loss"] for r in fold_results])
-        mean_test_f1 = np.mean([r["test_f1"] for r in fold_results])
-        mean_test_balanced_acc = np.mean([r["test_balanced_acc"] for r in fold_results])
-        mean_test_recall = np.mean([r["test_recall"] for r in fold_results])
-        mean_test_precision = np.mean([r["test_precision"] for r in fold_results])
-        # ---- log metrics to MLflow -----------------------------------
-        mlflow.log_metric("mean_test_balanced_acc", float(np.mean(test_balanced_accs)))
-        mlflow.log_metric("std_test_balanced_acc", float(np.std(test_balanced_accs)))
-        mlflow.log_metric("mean_test_accuracy", mean_test_acc)
-        mlflow.log_metric("mean_test_loss", mean_test_loss)
-        mlflow.log_metric("mean_test_f1", mean_test_f1)
-        mlflow.log_metric("mean_test_balanced_accuracy", mean_test_balanced_acc)
-        mlflow.log_metric("mean_test_precision", mean_test_precision)
-        mlflow.log_metric("mean_test_recall", mean_test_recall)
-        # -- log time of training -----------------
-        mlflow.log_metric("exec_time_min", execution_time / 60)
+        # --------------------- PARAMS
+        mlflow.log_params(
+            {
+                "epochs": cfg.training["num_epochs"],
+                "batch_size": cfg.get_batch_size(),
+                "transfer_learning": cfg.training["transfer_learning"],
+                "fine_tuning": cfg.training["fine_tuning"],
+                "pretrained": pretrained_weights,
+                "weight_decay": cfg.get_weight_decay(),
+                "dropout_rate": cfg.get_dropout_prob(),
+                "model_name": cfg.get_model_name(),
+                "model_library": cfg.get_model_library(),
+                "n_folds": cfg.get_num_folds(),
+                "train_counts": train_counts,
+                "val_counts": val_counts,
+                "test_counts": test_counts,
+                "color_transforms": color_transforms,
+                "freezed_layer_index": cfg.get_freezed_layer_index(),
+            }
+        )
+        mlflow.log_param(
+            "total_params", int(sum(p.numel() for p in model.parameters()))
+        )
+        mlflow.log_param(
+            "trainable_params",
+            int(sum(p.numel() for p in model.parameters() if p.requires_grad)),
+        )
 
-        # ---- artifacts: model & YAML -------------------------------------
-        mlflow.pytorch.log_model(model, "model")
+        # --------------------- METRICS
+        log_kfold_epoch_metrics(per_fold_metrics, prefix="val")
+        per_fold = np.asarray(
+            [
+                (r["test_loss"], r["test_acc"], r["test_balanced_acc"], r["test_f1"])
+                for r in fold_results
+            ]
+        )
+        mlflow.log_metrics(
+            {
+                "mean_test_loss": float(per_fold[:, 0].mean()),
+                "mean_test_accuracy": float(per_fold[:, 1].mean()),
+                "mean_test_balanced_acc": float(per_fold[:, 2].mean()),
+                "std_test_balanced_acc": float(per_fold[:, 2].std()),
+                "mean_test_f1": float(per_fold[:, 3].mean()),
+                "exec_time_min": execution_time / 60.0,
+            }
+        )
+
+        # --------------------- ARTIFACTS
+        # 1. model (always push CPU version)
+        with torch.no_grad():
+            mlflow.pytorch.log_model(
+                model.cpu(), "model", pickle_module=cloudpickle
+            )
+        # 2. config YAML
         mlflow.log_artifact(yaml_path, artifact_path="config")
 
-        # ---- per-fold results figure -------------------------------------
+        # 3. CV box-plot
         fig_box = generate_cv_results_figure(fold_results, "test")
         mlflow.log_figure(fig_box, "fold_box_plot.png")
 
-        # ---- Grad-CAM example (optional) ---------------------------------
-        if "vit" not in cfg.get_model_name().lower() and not ssl: #if the model is not a ViT (ie is a CNN) and im not doing SSL
-            try:
-                log_gradcam_to_mlflow(
-                    model=model,
-                    test_images_paths_np=test_images_paths_np,
-                    test_true_labels_np=test_true_labels_np,
-                    test_transforms=test_transforms,
-                    class_names=class_names,
-                    cfg=cfg,
-                    ssl=ssl,
-                    run_name=run_name,
-                    experiment_name=exp_name,
-                )
-            except Exception as e:
-                print("Grad-CAM skipped:", e)
-        elif "vit" in cfg.get_model_name().lower() and not ssl:
-            log_attention_maps_to_mlflow(
-                model=model,
-                test_images_paths_np=test_images_paths_np,
-                test_true_labels_np=test_true_labels_np,
-                test_transforms=test_transforms,
-                cfg=cfg,
-            )
+        # 4. learning curves (if produced)
+        lc_dir = Path.cwd() / "learning_curves"
+        if lc_dir.is_dir():
+            mlflow.log_artifacts(str(lc_dir), artifact_path="learning_curves")
 
-        # ---- log full CSV of fold results --------------------------------
-        log_folds_results_to_csv(fold_results, prefix="val")
-        # log the train code since it contains the setter for pretraining/libraries ecc
-        learning_curves_path = PROJ_ROOT / "learning_curves"
-        if learning_curves_path.is_dir():
-            mlflow.log_artifacts(str(learning_curves_path), artifact_path="learning_curves")
-        else:
-            print(f"Warning: Directory 'learning_curves' not found at {learning_curves_path}, skipping artifact logging.")
-        try:
+        # 5. train.py backup
+        if Path("train.py").is_file():
             mlflow.log_artifact("train.py", artifact_path="scripts")
-        except Exception as e:
-            print("Logging train.py failed:", e)
 
-    # reset eventual side-effects
+        # 6. Grad-CAM / attention maps
+        try:
+            if "vit" in cfg.get_model_name().lower():
+                if not ssl:
+                    log_attention_maps_to_mlflow(
+                        model,
+                        test_images_paths_np,
+                        test_true_labels_np,
+                        test_transforms,
+                        cfg,
+                    )
+            else:
+                if not ssl:
+                    tmp_dir = Path.cwd() / "tmp_gradcam"
+                    tmp_dir.mkdir(exist_ok=True)
+                    log_gradcam_to_mlflow(
+                        model,
+                        test_images_paths_np,
+                        test_true_labels_np,
+                        test_transforms,
+                        class_names,
+                        cfg,
+                        ssl=ssl,
+                        run_name=run_name,
+                        experiment_name=exp_name,
+                        base_dir=tmp_dir,
+                    )
+        finally:
+            # ensure temp dirs are cleaned even if log_artifacts() fails
+            shutil.rmtree(Path.cwd() / "tmp_gradcam", ignore_errors=True)
+
+    # restore
     cfg.set_freezed_layer_index(None)
 
 def log_attention_maps_to_mlflow(
@@ -557,7 +569,7 @@ def log_gradcam_to_mlflow(
     ssl: bool = False,  # Add ssl parameter
     run_name: str = None,  # Add run_name parameter
     experiment_name: str = None,  # Add experiment_name parameter
-    base_dir: str = None,  # Add base_dir parameter
+    base_dir: Path = None,  # Add base_dir parameter
 ):
     # ----------------- saving gradcams with threshold ---------------------
     from utils.explainability_functions import process_and_save_batch_gradcam_and_Overlay
