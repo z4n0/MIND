@@ -93,7 +93,7 @@ def main():
     #NOTE: if you want to change the classes in classification use 
     # new_class_names =  ["MSA-P", "MSA-C"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
     #NOTE if you want to change the number of channels use
-    cfg.set_num_input_channels(4) # or 4
+    # cfg.set_model_input_channels(4) # or 4
     #NOTE if you want to change the pretrained weights use
     # cfg.set_pretrained_weights("torchvision") # or "monai"
     #NOTE if you want to change the number of epochs use

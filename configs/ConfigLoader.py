@@ -336,7 +336,19 @@ class ConfigLoader:
     
     def get_model_input_channels(self) -> int:
         """Get the number of input channels for the model"""
-        return self.model.get("in_channels", 3) if self.model else 3
+        if self.model["in_channels"] is None:
+            raise ValueError("Input channels are not set in model configuration")
+        return self.model["in_channels"]
+    
+    def set_model_input_channels(self, in_channels: int) -> None:
+        """Set the number of input channels for the model
+        
+        Args:
+            in_channels: Number of input channels (e.g., 1 for grayscale, 3 for RGB)
+        """
+        if self.model is None:
+            self.model = {}
+        self.model["in_channels"] = in_channels
     
     def get_model_library(self) -> str:
         """Get the library used for the model (e.g., 'torchvision', 'monai')"""
