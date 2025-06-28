@@ -5,7 +5,7 @@ data_splitting:
   random_seed: 42
   val_set_size: 0.15
   test_set_size: 0.1
-  num_folds: 6  # Changed from base
+  num_folds: 7  # Changed from base
 
 # Data Loading
 data_loading:
@@ -17,11 +17,12 @@ model:
   spatial_dims: 2
   in_channels: 4
   out_channels: 2
+  library: "monai" #because torchvision does not support 4 channels
   
 # Training
 training:
   num_epochs: 210
-  early_stopping_patience: 40
+  early_stopping_patience: 60
   mixup_alpha: 0  # Added mixup
   oversample: true
   undersample: false
@@ -35,9 +36,9 @@ optimizer:
   learning_rate: 2e-4  # Custom learning rate
   optimizer_name: "AdamW"  # Changed optimizer
   weight_decay: 1e-4
-  patience: 25
+  patience: 30
 
 # # Data Augmentation
-# data_augmentation:
-#   use_color_transforms: false
+data_augmentation:
+  use_color_transforms: false
 

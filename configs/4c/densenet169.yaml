@@ -18,7 +18,7 @@ model:
   spatial_dims: 2
   in_channels: 4
   out_channels: 2 #TODO should be called num_classes
-  
+  library: "monai"  # Using MONAI for 4 channels support
 # Training
 training:
   num_epochs: 100
