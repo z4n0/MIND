@@ -503,6 +503,11 @@ def log_SSL_run_to_mlflow(
         # ---- log full CSV of fold results --------------------------------
         log_folds_results_to_csv(fold_results, prefix="val")
         # log the train code since it contains the setter for pretraining/libraries ecc
+        learning_curves_path = PROJ_ROOT / "learning_curves"
+        if learning_curves_path.is_dir():
+            mlflow.log_artifacts(str(learning_curves_path), artifact_path="learning_curves")
+        else:
+            print(f"Warning: Directory 'learning_curves' not found at {learning_curves_path}, skipping artifact logging.")
         try:
             mlflow.log_artifact("train.py", artifact_path="scripts")
         except Exception as e:

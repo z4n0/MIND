@@ -79,7 +79,7 @@ class NestedCVStratifiedByPatient:
         self.x_outer_len = None
         self.train_image_counts_per_fold = {}
         self.val_image_counts_per_fold = {}
-        self.num_outer_images = None
+        self._num_outer_images = None
 
         print(f"Detected {self.num_classes} unique classes.")
 
@@ -103,7 +103,7 @@ class NestedCVStratifiedByPatient:
     @property
     def num_outer_images(self):
         """Returns the number of images in the outer test fold."""
-        return self.x_outer_len
+        return self._num_outer_images # CORRECT: The property reads from the internal attribute
     
     def get_early_stopping_split_counts(self):
         """
@@ -467,7 +467,7 @@ class NestedCVStratifiedByPatient:
             
             print(f"Outer Train images: {len(X_train_outer)} | Outer Test images: {len(X_test_outer)}")
 
-            self.num_outer_images = len(X_test_outer)
+            self._num_outer_images = len(X_test_outer)
             # --- Calculate fold-specific normalization statistics ---
             fold_stats = None
             if not self.cfg.training.get("pretrained", False) or self.compute_custom_normalization:

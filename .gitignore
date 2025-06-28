@@ -6,7 +6,6 @@
 /tmp_gradcam
 /venv
 *.pth
-/learning_curves
 /learning_curves/*
 /__pycache__
 *.pyc
@@ -14,3 +13,4 @@
 *.pyd
 learning_curves*.png
 *.png
+*.out
