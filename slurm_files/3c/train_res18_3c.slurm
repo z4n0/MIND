@@ -47,4 +47,4 @@ echo "────────────────────────�
 
 # --- 5) launch training ----------------------------------------------------
 cd "$SLURM_SUBMIT_DIR"
-srun python train.py --yaml configs/3c/resnet18.yaml
+srun python train_3c.py --yaml configs/3c/resnet18.yaml
