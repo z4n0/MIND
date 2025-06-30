@@ -474,6 +474,7 @@ def log_SSL_run_to_mlflow(
 
         # --------------------- ARTIFACTS
         # 1. model (always push CPU version)
+        import cloudpickle
         with torch.no_grad():
             mlflow.pytorch.log_model(
                 model.cpu(), "model", pickle_module=cloudpickle
