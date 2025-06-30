@@ -10,8 +10,8 @@ data_splitting:
 
 # Data Loading
 data_loading:
-  batch_size: 16  # Custom batch size for DenseNet
-  num_workers: 0  # Increased workers
+  batch_size: 32  # Custom batch size for DenseNet
+  num_workers: 2  # Increased workers
 
 model:
   model_name: "Densenet169"  # Specific model name
@@ -21,8 +21,8 @@ model:
   library: "monai"  # Using MONAI for 4 channels support
 # Training
 training:
-  num_epochs: 100
-  early_stopping_patience: 19
+  num_epochs: 125
+  early_stopping_patience: 40
   mixup_alpha: 0
   oversample: true
   undersample: false
@@ -36,6 +36,7 @@ optimizer:
   learning_rate: 2e-4  # Custom learning rate
   optimizer_name: "AdamW"  # Changed optimizer
   weight_decay: 1e-4
+  patience: 25 
 
 data_augmentation:
   use_color_transforms: false

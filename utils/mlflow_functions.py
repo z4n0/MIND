@@ -568,9 +568,9 @@ def log_gradcam_to_mlflow(
     class_names: List[str],
     cfg,  # Add cfg parameter
     ssl: bool = False,  # Add ssl parameter
-    run_name: str = None,  # Add run_name parameter
-    experiment_name: str = None,  # Add experiment_name parameter
-    base_dir: Path = None,  # Add base_dir parameter
+    run_name: Optional[str] = None,  # Add run_name parameter
+    experiment_name: Optional[str] = None,  # Add experiment_name parameter
+    base_dir: Optional[Path] = None,  # Add base_dir parameter
 ):
     # ----------------- saving gradcams with threshold ---------------------
     from utils.explainability_functions import process_and_save_batch_gradcam_and_Overlay
@@ -582,10 +582,16 @@ def log_gradcam_to_mlflow(
         raise RuntimeError(f"you can't generate gradCAMs for {model_name} because it's not a CNN or you are doing SSL")
     
     from utils.explainability_functions import generate_and_save_gradcam_batch
+    import shutil
     from monai.visualize import GradCAM, GradCAMpp
     
     # Or GradCAM++
     target_layer, target_layer_type = find_last_conv_layer(model)
+    if target_layer is None:
+        print("No convolutional layer found in the model. Cannot apply GradCAM.")
+        return
+    
+    model.eval().cpu()
     
     try:
         gradcampp = GradCAMpp(
@@ -619,10 +625,13 @@ def log_gradcam_to_mlflow(
             experiment_name=experiment_name
         )
         
-        mlflow.log_artifacts(gradcam_folder, artifact_path="test_gradcam_images")
-        shutil.rmtree(gradcam_folder, ignore_errors=True)
+        mlflow.log_artifacts(str(gradcam_folder), artifact_path="test_gradcam_images")
     except Exception as e:
         print(f"Error generating GradCAM for test images: {e}")
+    finally:
+        # Clean up the local directory after logging to MLflow
+        if gradcam_folder and gradcam_folder.exists():
+            shutil.rmtree(gradcam_folder, ignore_errors=True)
         
     
     try:
