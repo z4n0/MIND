@@ -614,26 +614,24 @@ def log_gradcam_to_mlflow(
     )
     
     #------- saving test images gradcams -------------------------------
-    try: 
-        gradcam_folder = generate_and_save_gradcam_batch(
-            model=model,
-            loader=test_loader,
-            gradcam_obj=gradcampp,
-            output_dir=base_dir,
-            class_names=class_names,
-            run_name=run_name,
-            experiment_name=experiment_name
-        )
+    # try: 
+    #     gradcam_folder = generate_and_save_gradcam_batch(
+    #         model=model,
+    #         loader=test_loader,
+    #         gradcam_obj=gradcampp,
+    #         output_dir=base_dir,
+    #         class_names=class_names,
+    #         run_name=run_name,
+    #         experiment_name=experiment_name
+    #     )
         
-        mlflow.log_artifacts(str(gradcam_folder), artifact_path="test_gradcam_images")
-    except Exception as e:
-        print(f"Error generating GradCAM for test images: {e}")
-    finally:
-        # Clean up the local directory after logging to MLflow
-        if gradcam_folder and gradcam_folder.exists():
-            shutil.rmtree(gradcam_folder, ignore_errors=True)
+    #     mlflow.log_artifacts(str(gradcam_folder), artifact_path="test_gradcam_images")
+    # except Exception as e:
+    #     print(f"Error generating GradCAM for test images: {e}")
+    # finally:
+    #     # Clean up the local directory after logging to MLflow
+    #     shutil.rmtree(gradcam_folder, ignore_errors=True)
         
-    
     try:
         thresholded_gradcam_folder = process_and_save_batch_gradcam_and_Overlay(
             model=model,

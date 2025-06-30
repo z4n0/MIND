@@ -160,13 +160,17 @@ def main():
         print(f"Running experiment with pretrained weights: {pretrained_weights}")
         cfg.set_pretrained_weights(pretrained_weights)
         # ---------- transforms (as in notebook) --------------------------------
-        train_transforms, val_transforms, _ = tf.get_transforms(
-            cfg, color_transforms=False
-        )
-
+        try: 
+            train_transforms, val_transforms, _ = tf.get_transforms(
+                cfg, color_transforms=False
+            )
+            model_manager = ModelManager(cfg, library=cfg.get_model_library())
+            model, device = model_manager.setup_model(len(class_names), pretrained_weights)
+        except Exception as e:
+            print(f"Error in getting transforms: {e}")
+            print("Please check your configuration and transformations.")
+            return
         # ---------- model ----------------------------------------
-        model_manager = ModelManager(cfg, library=cfg.get_model_library())
-        model, device = model_manager.setup_model(len(class_names), pretrained_weights)
         if device.type != "cuda":
             raise RuntimeError(
                 "This script is intended to run on a CUDA-enabled GPU. "

@@ -92,6 +92,8 @@ def main():
     cfg = ConfigLoader(str(PROJ_ROOT / args.yaml))
     #NOTE: if you want to change the classes in classification use 
     # new_class_names =  ["MSA-P", "MSA-C"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
+    new_class_names = ["MSA-P", "PD"] # ["MSA-P", "MSA-C"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
+    cfg.set_class_names(new_class_names) 
     #NOTE if you want to change the number of channels use
     # cfg.set_model_input_channels(4) # or 4
     #NOTE if you want to change the pretrained weights use
