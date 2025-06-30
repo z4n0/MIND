@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=efficientnetb0_3c_tesi
+#SBATCH --job-name=densenet169_3c_tesi
 #SBATCH --account=pMI24_EleBr_1
 #SBATCH --partition=boost_usr_prod
 #SBATCH --gres=gpu:1
@@ -47,4 +47,4 @@ echo "────────────────────────�
 
 # --- 5) launch training ----------------------------------------------------
 cd "$SLURM_SUBMIT_DIR"
-srun python train_3c.py --yaml configs/3c/efficientnetb0.yaml
+srun python train_pretrained.py --yaml configs/pretrained/densenet169.yaml

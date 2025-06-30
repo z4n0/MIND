@@ -72,7 +72,7 @@ def get_data_directory(num_input_channels: int) -> Path:
 # ───────────────────── main ────────────────────────────────────────────────
 def main():
     args = parse()
-    start_time = time.time()
+    # start_time = time.time()
     # ---------- env vars ---------------------------------------------------
     # DATA_ROOT  = Path(os.environ["DATA_ROOT"])
     MLFLOW_URI = os.environ["MLFLOW_TRACKING_URI"]
@@ -95,7 +95,8 @@ def main():
     #NOTE if you want to change the number of channels use
     # cfg.set_num_input_channels(3) # or 4
     #NOTE if you want to change the pretrained weights use
-    # cfg.set_pretrained_weights("torchvision") # or "monai"
+    available_weights = ["torchvision", "monai", "imagenet-microscopynet", "microscopynet"]
+    #cfg.set_pretrained_weights("torchvision") # or "monai" or "imagenet-microscopynet" "microscopynet"
     #NOTE if you want to change the number of epochs use
     # cfg.set_num_epochs(100) # or any other number
     #NOTE if you want to change the number of folds use
@@ -154,60 +155,64 @@ def main():
     unique_pats = pat_df["patient_id"].values
     pat_labels  = pat_df["label"].values
 
-    # ---------- transforms (as in notebook) --------------------------------
-    train_transforms, val_transforms, test_transforms = tf.get_transforms(
-        cfg, color_transforms=False
-    )
-
-    # ---------- model ------------------------------------------------------
-    model_manager = ModelManager(cfg, library=cfg.get_model_library())
-    model, device = model_manager.setup_model(len(class_names), pretrained_weights)
-    if device.type != "cuda":
-        raise RuntimeError(
-            "This script is intended to run on a CUDA-enabled GPU. "
-            "Please ensure you have a compatible GPU and the necessary drivers installed."
+    for pretrained_weights in available_weights:
+        start_time = time.time()
+        print(f"Running experiment with pretrained weights: {pretrained_weights}")
+        cfg.set_pretrained_weights(pretrained_weights)
+        # ---------- transforms (as in notebook) --------------------------------
+        train_transforms, val_transforms, _ = tf.get_transforms(
+            cfg, color_transforms=False
         )
-    # ---------- experiment -------------------------------------------------
-    experiment = NestedCVStratifiedByPatient(
-        df=df,
-        cfg=cfg,
-        labels_np=labels,
-        pat_labels=pat_labels,
-        unique_pat_ids=unique_pats,
-        pretrained_weights=pretrained_weights,
-        class_names=class_names,
-        model_manager=model_manager,
-        num_folds=num_folds,
-    )
 
-    train_metrics, test_results = experiment.run_experiment()
-    execution_time = time.time() - start_time
-    # ---------- MLflow logging --------------------------------------------
-    EXPERIMENT_NAME = f"supervised_learning_{num_channels}c"    
-    os.environ["MLFLOW_TRACKING_URI"] = MLFLOW_URI
-    os.environ["MLFLOW_EXPERIMENT_NAME"] = EXPERIMENT_NAME
+        # ---------- model ----------------------------------------
+        model_manager = ModelManager(cfg, library=cfg.get_model_library())
+        model, device = model_manager.setup_model(len(class_names), pretrained_weights)
+        if device.type != "cuda":
+            raise RuntimeError(
+                "This script is intended to run on a CUDA-enabled GPU. "
+                "Please ensure you have a compatible GPU and the necessary drivers installed."
+            )
+        # ---------- experiment -------------------------------------------------
+        experiment = NestedCVStratifiedByPatient(
+            df=df,
+            cfg=cfg,
+            labels_np=labels,
+            pat_labels=pat_labels,
+            unique_pat_ids=unique_pats,
+            pretrained_weights=pretrained_weights,
+            class_names=class_names,
+            model_manager=model_manager,
+            num_folds=num_folds,
+        )
 
-    best_idx   = best_fold_idx(test_results)
-    best_model, _ = experiment._get_model_and_device()
-    best_model.load_state_dict(
-        torch.load(f"best_model_fold_{best_idx}.pth", map_location=device))
-    best_model.eval()
+        train_metrics, test_results = experiment.run_experiment()
+        execution_time = time.time() - start_time
+        # ---------- MLflow logging --------------------------------------------
+        EXPERIMENT_NAME = f"supervised_learning_{num_channels}c"    
+        os.environ["MLFLOW_TRACKING_URI"] = MLFLOW_URI
+        os.environ["MLFLOW_EXPERIMENT_NAME"] = EXPERIMENT_NAME
 
-    log_SSL_run_to_mlflow(
-        cfg=cfg,
-        model=best_model,
-        class_names=class_names,
-        fold_results=test_results,
-        per_fold_metrics=train_metrics,
-        test_transforms=val_transforms,            
-        test_images_paths_np=te_imgs,
-        test_true_labels_np=te_y,
-        yaml_path=str(PROJ_ROOT / args.yaml),
-        color_transforms=False,
-        model_library=model_library,
-        pretrained_weights=pretrained_weights,
-        execution_time=execution_time,
-    )
+        best_idx   = best_fold_idx(test_results)
+        best_model, _ = experiment._get_model_and_device()
+        best_model.load_state_dict(
+            torch.load(f"best_model_fold_{best_idx}.pth", map_location=device))
+        best_model.eval()
+
+        log_SSL_run_to_mlflow(
+            cfg=cfg,
+            model=best_model,
+            class_names=class_names,
+            fold_results=test_results,
+            per_fold_metrics=train_metrics,
+            test_transforms=val_transforms,            
+            test_images_paths_np=te_imgs,
+            test_true_labels_np=te_y,
+            yaml_path=str(PROJ_ROOT / args.yaml),
+            color_transforms=False,
+            model_library=model_library,
+            pretrained_weights=pretrained_weights,
+            execution_time=execution_time,
+        )
 
 if __name__ == "__main__":
     main()

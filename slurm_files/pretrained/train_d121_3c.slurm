@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=resnet101_3c_tesi
+#SBATCH --job-name=d121_3c_tesi
 #SBATCH --account=pMI24_EleBr_1
 #SBATCH --partition=boost_usr_prod
 #SBATCH --gres=gpu:1
@@ -47,4 +47,4 @@ echo "────────────────────────�
 
 # --- 5) launch training ----------------------------------------------------
 cd "$SLURM_SUBMIT_DIR"
-srun python train_3c.py --yaml configs/3c/resnet101.yaml
+srun python train_pretrained.py --yaml configs/pretrained/densenet121.yaml

@@ -832,6 +832,7 @@ def freeze_layers_up_to(model, cfg: ConfigLoader) -> int:
 
     # Only print layers and ask for input if freezed_layerIndex is not set
     if cfg.get_freezed_layer_index() is None:
+        # select interactivly the last layer to freeze
         print("Model Layers:")
         for i, layer in enumerate(layers):
             print(f"{i}: {layer}")
