@@ -249,7 +249,7 @@ def log_kfold_epoch_metrics(per_fold_metrics, prefix="val"):
     for metric_name, fold_dict in per_fold_metrics.items():
         for fold_idx, values in fold_dict.items():
             for epoch, value in enumerate(values):
-                print(f"Logging {prefix}_fold_{fold_idx}/{metric_name}")
+                # print(f"Logging {prefix}_fold_{fold_idx}/{metric_name}")
                 mlflow.log_metric(f"{prefix}_fold_{fold_idx}/{metric_name}", value, step=epoch)
 
 
