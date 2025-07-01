@@ -150,6 +150,8 @@ class ConfigLoader:
             raise ValueError("Data augmentation configuration is not set")
         if "resize_spatial_size" not in self.data_augmentation:
             raise ValueError("resize_spatial_size is not set in data augmentation configuration")
+        if self.data_augmentation is None:
+            raise ValueError("Data augmentation configuration is not set")
         return tuple(self.data_augmentation["resize_spatial_size"])
     
     # Data Splitting getters and setters
