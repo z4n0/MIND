@@ -19,7 +19,8 @@ module load cineca-ai/4.3.0             # CUDA 12 + PyTorch 2.2 stack
 source "$HOME/venvs/tesi/bin/activate"  # adjust if you use another env
 
 # ───────────────────── 2) project-specific env vars ───────────────────────
-export DATA_ROOT="$WORK/lzanotto/data"          # where 3c_MIP / 4c_MIP live
+export DATA_ROOT="$WORK/lzanotto/FOLDER_CINECA/data"
+echo "DATA_ROOT will be: $WORK/lzanotto/FOLDER_CINECA/data"
 export PYTHONPATH="$SLURM_SUBMIT_DIR:$PYTHONPATH"    # make code importable
 
 # ───────────────────── 3) rename Slurm log with timestamp ─────────────────
@@ -28,7 +29,7 @@ log_dir="$SLURM_SUBMIT_DIR/logs"
 mkdir -p "$log_dir"
 
 tmp_log="/tmp/${SLURM_JOB_NAME}-${SLURM_JOB_ID}.tmp.out"
-final_log="$log_dir/${SLURM_JOB_NAME}_${ts}_${SLURM_JOB_ID}.out"
+final_log="$log_dir/${ts}_${SLURM_JOB_NAME}_${SLURM_JOB_ID}.out"
 
 # move the file that Slurm already opened for us
 mv "$tmp_log" "$final_log" 2>/dev/null || true
@@ -36,6 +37,8 @@ mv "$tmp_log" "$final_log" 2>/dev/null || true
 # keep appending to the renamed file
 exec > >(tee -a "$final_log") 2>&1
 
+echo "WORK variable: $WORK"
+echo "DATA_ROOT will be: $WORK/lzanotto/FOLDER_CINECA/data"
 echo "Logging to:   $final_log"
 echo "Running on:   $(hostname)"
 echo "CUDA visible: $CUDA_VISIBLE_DEVICES"

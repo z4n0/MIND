@@ -85,20 +85,51 @@ class ConfigLoader:
         
         # Run post-initialization
         self._post_init_logic()
+        
+    def _is_ssl_pretrain(self) -> bool:
+        """
+        Return True when the YAML looks like a *pure* SimCLR / MoCo pre-training
+        file – i.e. it contains an `unlabeled_subdir` but none of the usual
+        supervised keys such as `data_splitting`.
+        """
+        return (
+            isinstance(self.dataset, dict)
+            and "unlabeled_subdir" in self.dataset               # ← SimCLR hint
+            and self.data_splitting is None                      # ← no CV blocks
+        )
+        
+        return (
+            isinstance(self.dataset, dict)
+            and "unlabeled_subdir" in self.dataset               # ← SimCLR hint
+            and self.data_splitting is None                      # ← no CV blocks
+        )
     
     def _post_init_logic(self):
+        """
+        Performs common post-initialization checks and logic for configuration validation.
+        Raises:
+            ValueError: If any required configuration section is missing.
+            ValueError: If transfer learning is enabled with 4-channel input data.
+            ValueError: If both transfer learning and fine tuning are enabled simultaneously.
+        Side Effects:
+            - Sets the 'pretrained' flag in the training configuration based on transfer learning or fine tuning.
+            - Prints a message if transfer learning is attempted with 4-channel input data.
+        """
         """Common post-initialization logic"""
-        if not all([self.data_splitting, self.data_augmentation, self.data_loading,
-                   self.model, self.training, self.optimizer, self.scheduler]):
-            raise ValueError("Missing required configuration sections")
-        
-        if self.model["in_channels"] == 4 and self.training["transfer_learning"] == True:
-            print(f"found {self.model['in_channels']} channels in input data and {self.training['transfer_learning']} in transfer learning")
-            raise ValueError("Transfer learning is not supported for 4-channel input")
+        if not self._is_ssl_pretrain():
+            if not all([self.data_splitting, self.data_augmentation, self.data_loading,
+                    self.model, self.training, self.optimizer, self.scheduler]):
+                raise ValueError("Missing required configuration sections")
             
-        self.training["pretrained"] = self.training["transfer_learning"] or self.training["fine_tuning"]
-        if self.training["transfer_learning"] and self.training["fine_tuning"]:
-            raise ValueError("Choose either transfer learning OR fine tuning")
+            if self.model["in_channels"] == 4 and self.training["transfer_learning"] == True:
+                print(f"found {self.model['in_channels']} channels in input data and {self.training['transfer_learning']} in transfer learning")
+                raise ValueError("Transfer learning is not supported for 4-channel input")
+                
+            self.training["pretrained"] = self.training["transfer_learning"] or self.training["fine_tuning"]
+            if self.training["transfer_learning"] and self.training["fine_tuning"]:
+                raise ValueError("Choose either transfer learning OR fine tuning")
+        
+    
     
     # Dataset getters and setters
     def get_dataset(self) -> Optional[List[str]]:

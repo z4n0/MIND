@@ -31,13 +31,14 @@ log_dir="$SLURM_SUBMIT_DIR/logs"
 mkdir -p "$log_dir"
 
 tmp_log="/tmp/${SLURM_JOB_NAME}-${SLURM_JOB_ID}.tmp.out"
-final_log="$log_dir/${SLURM_JOB_NAME}_${ts}_${SLURM_JOB_ID}.out"
+final_log="$log_dir/${ts}_${SLURM_JOB_NAME}_${SLURM_JOB_ID}.out"
 
 # move the file that SLURM already opened for us
 mv "$tmp_log" "$final_log" 2>/dev/null || true
 
 # optionally keep writing into the renamed file
 exec > >(tee -a "$final_log") 2>&1
+
 
 echo "Logging to:   $final_log"
 echo "Running on:   $(hostname)"A

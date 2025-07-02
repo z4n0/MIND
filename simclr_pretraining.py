@@ -4,7 +4,7 @@ simclr_pretrain.py ─ Self-supervised SimCLR backbone training for CINECA.
 
 Run
 ----
-srun … python simclr_pretrain.py --yaml configs/simclr_densenet_3c.yaml
+srun … python simclr_pretrain.py --yaml configs/simclr_d121
 """
 
 # ───────────────────── std-lib
