@@ -523,7 +523,6 @@ def log_SSL_run_to_mlflow(
                         base_dir=tmp_dir,
                     )
         finally:
-            # ensure temp dirs are cleaned even if log_artifacts() fails
             shutil.rmtree(Path.cwd() / "tmp_gradcam", ignore_errors=True)
 
     # restore
@@ -587,6 +586,7 @@ def log_gradcam_to_mlflow(
     
     # Or GradCAM++
     target_layer, target_layer_type = find_last_conv_layer(model)
+    print(f"Target layer found for gradcam: {target_layer_type} type, name: {target_layer}")
     if target_layer is None:
         print("No convolutional layer found in the model. Cannot apply GradCAM.")
         return
@@ -614,23 +614,23 @@ def log_gradcam_to_mlflow(
     )
     
     #------- saving test images gradcams -------------------------------
-    # try: 
-    #     gradcam_folder = generate_and_save_gradcam_batch(
-    #         model=model,
-    #         loader=test_loader,
-    #         gradcam_obj=gradcampp,
-    #         output_dir=base_dir,
-    #         class_names=class_names,
-    #         run_name=run_name,
-    #         experiment_name=experiment_name
-    #     )
+    try: 
+        gradcam_folder = generate_and_save_gradcam_batch(
+            model=model,
+            loader=test_loader,
+            gradcam_obj=gradcampp,
+            output_dir=base_dir,
+            class_names=class_names,
+            run_name=run_name,
+            experiment_name=experiment_name
+        )
         
-    #     mlflow.log_artifacts(str(gradcam_folder), artifact_path="test_gradcam_images")
-    # except Exception as e:
-    #     print(f"Error generating GradCAM for test images: {e}")
-    # finally:
-    #     # Clean up the local directory after logging to MLflow
-    #     shutil.rmtree(gradcam_folder, ignore_errors=True)
+        mlflow.log_artifacts(str(gradcam_folder), artifact_path="test_gradcam_images")
+    except Exception as e:
+        print(f"Error generating GradCAM for test images: {e}")
+    finally:
+        # Clean up the local directory after logging to MLflow
+        shutil.rmtree(gradcam_folder, ignore_errors=True)
         
     try:
         thresholded_gradcam_folder = process_and_save_batch_gradcam_and_Overlay(

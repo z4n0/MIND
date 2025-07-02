@@ -157,6 +157,8 @@ def main():
     train_transforms, val_transforms, test_transforms = tf.get_transforms(
         cfg, color_transforms=False
     )
+    # print(f"Train transforms: {train_transforms}")
+    print(f"Validation transforms: {val_transforms}")
 
     # ---------- model ------------------------------------------------------
     model_manager = ModelManager(cfg, library=cfg.get_model_library())
