@@ -17,4 +17,4 @@ training:
   temperature: 0.07
 
 output:
-  weights_path: pretrained_encoders/simclr_d121_3c.pth
+  weights_path: /leonardo_work/pMI24_EleBr_1/lzanotto/FOLDER_CINECA/pretrained_encoders/simclr_d121_3c.pth

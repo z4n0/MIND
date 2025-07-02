@@ -40,7 +40,7 @@ mv "$tmp_log" "$final_log" 2>/dev/null || true
 exec > >(tee -a "$final_log") 2>&1
 
 echo "Logging to:   $final_log"
-echo "Running on:   $(hostname)"
+echo "Running on:   $(hostname)"A
 echo "CUDA visible: $CUDA_VISIBLE_DEVICES"
 echo "Started at:   $(date)"
 echo "──────────────────────────────────────────────"

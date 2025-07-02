@@ -452,7 +452,7 @@ class NestedCVStratifiedByPatient:
             print(f"\n===== OUTER FOLD {fold_display_idx} / {self.num_folds} =====")
             
             for key in self.per_fold_metrics:
-                self.per_fold_metrics[key][fold_display_idx] = []
+                self.per_fold_metrics[key][fold_idx_actual] = []
 
             train_patients = self.unique_pat_ids[train_pat_idx]
             test_patients = self.unique_pat_ids[test_pat_idx]
@@ -500,11 +500,11 @@ class NestedCVStratifiedByPatient:
 
             # 2. Train Final Model for the Fold
             print(f"--- Starting Final Model Training for Fold {fold_display_idx} with LR={best_lr:.6f} ---")
-            best_model_path, loss_func_for_eval = self._train_model_with_early_stopping(fold_display_idx, X_train_outer, y_train_outer, best_lr)
+            best_model_path, loss_func_for_eval = self._train_model_with_early_stopping(fold_idx_actual, X_train_outer, y_train_outer, best_lr)
             
             # 3. Evaluate on Test Set
             print(f"--- Evaluating Fold {fold_display_idx} on Outer Test Set ---")
-            self._evaluate_fold_on_test_set(fold_display_idx, best_model_path, loss_func_for_eval, X_test_outer, y_test_outer, best_lr)
+            self._evaluate_fold_on_test_set(fold_idx_actual, best_model_path, loss_func_for_eval, X_test_outer, y_test_outer, best_lr)
 
         self._print_summary() # Ensure this method exists and is correctly implemented
         return self.per_fold_metrics, self.fold_results

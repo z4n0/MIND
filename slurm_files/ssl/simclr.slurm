@@ -1,33 +1,53 @@
 #!/bin/bash
 ###############################################################################
-#  SimCLR self-supervised pre-training (DenseNet-121, 3-channel MIPs)
+#  SimCLR self-supervised pre-training  (DenseNet-121, 3-channel MIPs)
 #  $ sbatch slurm_simclr_3c.slurm
 ###############################################################################
-#SBATCH --job-name=ssl_d121_3c          # appears in squeue / *.out filename
+#SBATCH --job-name=ssl_d121_3c          # appears in squeue / log filename
 #SBATCH --account=pMI24_EleBr_1
 #SBATCH --partition=boost_usr_prod
-#SBATCH --gres=gpu:1                    # 1× A100 on “boost” queue
-#SBATCH --cpus-per-task=4               # dataloader workers / augmentations
+#SBATCH --gres=gpu:1                    # 1 × A100 on “boost”
+#SBATCH --cpus-per-task=4               # dataloader / augmentations
 #SBATCH --mem=32G                       # system RAM
-#SBATCH --time=00:59:00                 # hh:mm:ss  (adjust as needed)
-#SBATCH --output=%x-%j.out              # e.g. ssl_d121_3c-1234567.out
-#-----------------------------------------------------------------------------#
-# 1) software modules
+#SBATCH --time=01:00:00                 # hh:mm:ss
+# ––– temporary log file (renamed below) ––––––––––––––––––––––––––––––––––
+#SBATCH --output=/tmp/%x-%j.tmp.out
+
+# ───────────────────── 1) software stack & venv ───────────────────────────
 module load profile/deeplrn
-module load cineca-ai/4.3.0             # CUDA 12  + PyTorch 2.2 stack
+module load cineca-ai/4.3.0             # CUDA 12 + PyTorch 2.2 stack
+source "$HOME/venvs/tesi/bin/activate"  # adjust if you use another env
 
-# 2) private virtual-env
-source "$HOME/venvs/tesi/bin/activate"  # ← change if you use another env
+# ───────────────────── 2) project-specific env vars ───────────────────────
+export DATA_ROOT="$WORK/lzanotto/data"          # where 3c_MIP / 4c_MIP live
+export PYTHONPATH="$SLURM_SUBMIT_DIR:$PYTHONPATH"    # make code importable
 
-# 3) project-specific environment vars
-export DATA_ROOT=$WORK/lzanotto/data                # 3c_MIP / 4c_MIP live here
-export PYTHONPATH=$SLURM_SUBMIT_DIR:$PYTHONPATH     # make code import-able
+# ───────────────────── 3) rename Slurm log with timestamp ─────────────────
+ts=$(date +'%Y-%m-%d_%H-%M-%S')                 # e.g. 2025-06-30_21-18-05
+log_dir="$SLURM_SUBMIT_DIR/logs"
+mkdir -p "$log_dir"
 
-# 4) launch SimCLR pre-training
-cd "$SLURM_SUBMIT_DIR"                              # project root (FOLDER_CINECA)
+tmp_log="/tmp/${SLURM_JOB_NAME}-${SLURM_JOB_ID}.tmp.out"
+final_log="$log_dir/${SLURM_JOB_NAME}_${ts}_${SLURM_JOB_ID}.out"
 
-# YAML with **only** SimCLR options (no supervised-only keys)
-YAML=configs/simclr_densenet_3c.yaml
+# move the file that Slurm already opened for us
+mv "$tmp_log" "$final_log" 2>/dev/null || true
 
-# srun ensures the job inherits the GPU/CPU allocation from SLURM
-srun python simclr_pretrain.py --yaml "$YAML"
+# keep appending to the renamed file
+exec > >(tee -a "$final_log") 2>&1
+
+echo "Logging to:   $final_log"
+echo "Running on:   $(hostname)"
+echo "CUDA visible: $CUDA_VISIBLE_DEVICES"
+echo "Started at:   $(date)"
+echo "──────────────────────────────────────────────────────────────"
+
+# ───────────────────── 4) launch SimCLR pre-training  ─────────────────────
+cd "$SLURM_SUBMIT_DIR"          # project root (FOLDER_CINECA)
+
+YAML=configs/ssl/simclr_d121_3c.yaml   # YAML with only SimCLR options
+
+# srun inherits the GPU/CPU allocation granted by Slurm
+srun python simclr_pretraining.py --yaml "$YAML"
+
+echo "Finished at:  $(date)"
