@@ -41,53 +41,101 @@ def parse() -> argparse.Namespace:
 
 # ───────────────────── LightningModule
 class SimCLRModule(pl.LightningModule):
-    """Lightning wrapper around an arbitrary CNN backbone + SimCLR projection head."""
-    def __init__(
-        self,
-        backbone: nn.Module,
-        proj_hidden_dim: int,
-        proj_out_dim: int,
-        temperature: float,
-        lr: float,
-    ):
+    def __init__(self, backbone, proj_hidden_dim=512, proj_out_dim=128, temperature=0.07, lr=3e-4):
         super().__init__()
         self.save_hyperparameters(ignore=["backbone"])
         self.backbone = backbone
+        self.temperature = temperature
+        self.lr = lr
+        
+        # Strip encoder linear probe head and get feature dimension
+        backbone_outdim = self._get_projection_head_input_dim()
+        self._remove_linear_probe_head()
+        
+        self.projection_head = SimCLRProjectionHead(
+            input_dim=backbone_outdim,
+            hidden_dim=proj_hidden_dim,
+            output_dim=proj_out_dim,
+        )
 
-        # —— remove any classification head the backbone might have
+        self.criterion = NTXentLoss(temperature=self.temperature)
+    
+    @property
+    def encoder(self):
+        return self.backbone
+        
+    def _remove_linear_probe_head(self):
         if hasattr(self.backbone, "fc"):
             self.backbone.fc = nn.Identity()
         elif hasattr(self.backbone, "classifier"):
             self.backbone.classifier = nn.Identity()
+        else:
+            # For torchvision models, this is normal - they might not have these attributes
+            pass
+    
+    def _get_projection_head_input_dim(self):
+        """
+        Get the feature dimension without doing a forward pass.
+        Uses known architectures to avoid device mismatch issues.
+        """
+        # Check if we have a custom LinearProbeHead with stored dimensions
+        if hasattr(self.backbone, "fc") and hasattr(self.backbone.fc, "in_dim"):
+            if self.backbone.fc.__class__.__name__ == "LinearProbeHead":
+                return self.backbone.fc.in_dim
+        elif hasattr(self.backbone, "classifier") and hasattr(self.backbone.classifier, "in_dim"):
+            if self.backbone.classifier.__class__.__name__ == "LinearProbeHead":
+                return self.backbone.classifier.in_dim
+        
+        # Check if ModelManager set in_dim attribute
+        if hasattr(self.backbone, "in_dim"):
+            return self.backbone.in_dim
+            
+        # Fallback: Use known architecture dimensions
+        model_name = self.backbone.__class__.__name__.lower()
+        
+        if "densenet121" in model_name:
+            return 1024
+        elif "densenet169" in model_name:
+            return 1664
+        elif "densenet201" in model_name:
+            return 1920
+        elif "resnet18" in model_name:
+            return 512
+        elif "resnet34" in model_name:
+            return 512
+        elif "resnet50" in model_name:
+            return 2048
+        elif "resnet101" in model_name:
+            return 2048
+        elif "resnet152" in model_name:
+            return 2048
+        else:
+            # Last resort: inspect the classifier/fc layer
+            if hasattr(self.backbone, "classifier") and hasattr(self.backbone.classifier, "in_features"):
+                return self.backbone.classifier.in_features
+            elif hasattr(self.backbone, "fc") and hasattr(self.backbone.fc, "in_features"):
+                return self.backbone.fc.in_features
+            else:
+                # Final fallback - assume DenseNet121 since that's what you're using
+                print("Warning: Could not determine feature dimension, assuming DenseNet121 (1024)")
+                return 1024
+        
+    def forward(self, x):
+        feats = self.backbone(x).flatten(start_dim=1)
+        z = self.projection_head(feats)
+        return z
 
-        # —— detect encoder output dimension
-        with torch.no_grad():
-            dummy = torch.zeros(1, *self.backbone.input_shape).to(self.device)
-            feat_dim = self.backbone(dummy).flatten(1).shape[1]
-
-        self.projection_head = SimCLRProjectionHead(
-            input_dim=feat_dim,
-            hidden_dim=proj_hidden_dim,
-            output_dim=proj_out_dim,
-        )
-        self.criterion = NTXentLoss(temperature=temperature)
-
-    # Lightning API ---------------------------------------------
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        z = self.backbone(x).flatten(1)
-        return self.projection_head(z)
-
-    def training_step(self, batch, _):
-        (x0, x1), _, _ = batch           # lightly returns (views, label, fname)
-        z0, z1 = self(x0), self(x1)
-        loss   = self.criterion(z0, z1)
-        self.log("train_loss", loss, on_epoch=True, prog_bar=True)
+    def training_step(self, batch, batch_idx):
+        (x0, x1), _, _ = batch  # x0,x1 are tensor of shape (B,C,H,W)
+        z0 = self.forward(x0)
+        z1 = self.forward(x1)
+        loss = self.criterion(z0, z1)
+        self.log("train_loss", loss, on_epoch=True)
         return loss
 
     def configure_optimizers(self):
-        return torch.optim.Adam(
-            self.parameters(), lr=self.hparams.lr, weight_decay=1e-6
-        )
+        optim = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=1e-6)
+        return optim
 
 
 # ───────────────────── helpers
@@ -145,9 +193,9 @@ def main() -> None:
     module = SimCLRModule(
         backbone=backbone,
         proj_hidden_dim=cfg.model["proj_hidden_dim"],
-        proj_out_dim   =cfg.model["proj_output_dim"],
-        temperature    =cfg.training["temperature"],
-        lr             =cfg.training["lr"],
+        proj_out_dim=cfg.model["proj_output_dim"],
+        temperature=cfg.training["temperature"],
+        lr=float(cfg.training["lr"]),  # Ensure it's a float
     )
     trainer = pl.Trainer(
         accelerator="gpu" if torch.cuda.is_available() else "cpu",
