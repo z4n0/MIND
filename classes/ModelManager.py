@@ -151,7 +151,17 @@ class TorchvisionModelFactory():
         
     def create_model(self, model_name, pretrained_weights=None, num_classes=2):
         print(f"pretrained_weights? {pretrained_weights} pretrained? {self.pretrained}")
-        builder = self.builders.get(model_name)
+        # Make case-insensitive lookup
+        model_name_key = None
+        for key in self.builders.keys():
+            if key.lower() == model_name.lower():
+                model_name_key = key
+                break
+        
+        if model_name_key is None:
+            raise ValueError(f"Model {model_name} not supported by Torchvision factory. Supported models: {list(self.builders.keys())}")
+        
+        builder = self.builders[model_name_key]
         if builder is None:
             raise ValueError(f"Model {model_name} not supported by Torchvision factory. Supported models: {list(self.builders.keys())}")
         return builder(pretrained_weights, num_classes)
