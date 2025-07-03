@@ -14,3 +14,4 @@
 learning_curves*.png
 *.png
 *.out
+lightning_logs/*

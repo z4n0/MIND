@@ -22,7 +22,7 @@ model:
   
 # Data Loading
 data_loading:
-  batch_size: 512  # Larger batch size for ResNet18 (lighter model)
+  batch_size: 127   # Reduced batch size to fit dataset size (127 images)
   num_workers: 2   # Number of data loading workers
 
 data_augmentation:
@@ -37,7 +37,7 @@ data_augmentation:
   gaussian_blur_sigma: [0.1, 2.0]          # sigma range for Gaussian blur
 
 training:
-  batch_size: 512                           # Larger batch size for lighter model
+  batch_size: 64                            # Reduced batch size to fit dataset size
   num_workers: 4
   num_epochs: 120
   lr: 3e-4

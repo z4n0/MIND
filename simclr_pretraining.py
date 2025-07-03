@@ -197,6 +197,7 @@ def main() -> None:
         temperature=cfg.training["temperature"],
         lr=float(cfg.training["lr"]),  # Ensure it's a float
     )
+    
     trainer = pl.Trainer(
         accelerator="gpu" if torch.cuda.is_available() else "cpu",
         devices=1,
