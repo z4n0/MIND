@@ -312,8 +312,16 @@ def main() -> None:
     method = "simsiam" if simsiam_flag else "byol"
     loader_type = cfg.data_loading["loader_type"]  # "patch" or "full_image"
 
-    # Create new filename with method and loader type
-    new_filename = f"{base_name}_{method}_{loader_type}{extension}"
+    # Determine dataset type based on class names
+    if "MSA" in class_names and "MSA-P" not in class_names:
+        dataset_type = "MSA_VS_PD"
+    elif "MSA-P" in class_names:
+        dataset_type = "MSAP_VS_PD"
+    else:
+        dataset_type = "custom"  # Fallback for other datasets
+
+    # Create new filename with method, dataset type, and loader type
+    new_filename = f"{base_name}_{method}_{dataset_type}_{loader_type}{extension}"
     w_path = base_dir / new_filename
 
     w_path.parent.mkdir(parents=True, exist_ok=True)
