@@ -51,4 +51,4 @@ data_augmentation:
   use_color_transforms: false
 
 output:
-  weights_path: /leonardo_work/pMI24_EleBr_1/lzanotto/FOLDER_CINECA/pretrained_encoders/simclr_resnet18_3c.pth
+  weights_path: /leonardo_work/pMI24_EleBr_1/lzanotto/FOLDER_CINECA/pretrained_encoders/byol_resnet18_3c.pth

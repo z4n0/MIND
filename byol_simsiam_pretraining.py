@@ -26,11 +26,7 @@ from configs.ConfigLoader import ConfigLoader
 from classes.ModelManager import ModelManager
 
 # ───────────────────── lightly / lightning
-import pytorch_lightning as pl
-from lightly.data import LightlyDataset
-from lightly.transforms import SimCLRTransform
-from lightly.loss import NTXentLoss
-from lightly.models.modules import SimCLRProjectionHead
+import torch.optim as optim
 
 # ───────────────────── CLI
 def parse() -> argparse.Namespace:
