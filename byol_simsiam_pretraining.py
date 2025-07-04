@@ -16,6 +16,9 @@ import torch.backends.cudnn as cudnn
 from torch import nn
 from torch.utils.data import DataLoader
 from monai.utils.misc import set_determinism
+from monai.transforms.croppad.array import RandSpatialCropSamples  # pure sampler
+from monai.data.grid_dataset import PatchDataset
+
 
 # ───────────────────── project path
 PROJ_ROOT = Path(__file__).resolve().parent
@@ -95,11 +98,6 @@ def main() -> None:
     # ------------------------------------------------------------------
     dataset_ssl = [{"image": path} for path in ssl_images_paths_np]
     
-    from monai.transforms.croppad.array import RandSpatialCropSamples  # pure sampler
-    from monai.data.grid_dataset import PatchDataset
-    import matplotlib.pyplot as plt
-    import torch, itertools, math, numpy as np
-
     # b) image‑level transforms 
     # ------------------------------------------------------------------
     from monai.transforms import (
@@ -344,7 +342,6 @@ def main() -> None:
 
     w_path = Path(cfg.output["weights_path"]).expanduser()
     w_path.parent.mkdir(parents=True, exist_ok=True)
-
     torch.save(learner.net.state_dict(), w_path)
     print(f"✓ Encoder weights saved to: {w_path}")
 

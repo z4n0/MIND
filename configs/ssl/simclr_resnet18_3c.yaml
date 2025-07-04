@@ -19,12 +19,13 @@ model:
   input_size: 256                           # image crop/resize used in SimCLRTransform
   proj_hidden_dim: 512                      # hidden dim of the projection MLP
   proj_output_dim: 128                      # output dim of the projection MLP
+  library: torchvision
   
 # Data Loading
 data_loading:
   batch_size: 127   # Reduced batch size to fit dataset size (127 images)
   num_workers: 2   # Number of data loading workers
-  loader_type: "patch" #"full-image"  # Use Lightly's DataLoader for SimCLR
+  # loader_type: patch #"full-image"  # Use Lightly's DataLoader for SimCLR
 
 data_augmentation:
   resize_spatial_size: [256, 256]           # [height, width] for input images
