@@ -151,15 +151,20 @@ def reproducibility(seed: int = 42) -> None:
 def main() -> None:
     args = parse()
     cfg  = ConfigLoader(Path(args.yaml))
+    class_names = cfg.get_class_names()
 
     reproducibility(42)
 
     # ---------- find unlabeled images ------------------------------------
     data_root = Path(os.environ["DATA_ROOT"])
-    ssl_dir   = data_root / cfg.dataset["unlabeled_subdir"]
+    if "MSA" in class_names:
+        ssl_dir = data_root / "PRETRAINING_MSA_VS_PD"
+    elif "MSA-P" in class_names:
+        ssl_dir = data_root / "PRETRAINING_MSAP_VS_PD"
+    else:
+        raise ValueError("Unknown class names in config. Please specify the correct dataset path.")
     if not ssl_dir.is_dir():
         raise FileNotFoundError(f"Unlabeled dir not found: {ssl_dir}")
-
     # lightly dataset ------------------------------------------------------
     transform = SimCLRTransform(
         input_size=cfg.data_augmentation["resize_spatial_size"][0],
