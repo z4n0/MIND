@@ -14,7 +14,7 @@ dataset:
 
 model:
   backbone_library: torchvision             # or "monai"
-  model_name: resnet18                      # ResNet18 architecture
+  model_name: Resnet18                      # ResNet18 architecture
   in_channels: 3
   input_size: 256                           # image crop/resize used in SimCLRTransform
   proj_hidden_dim: 512                      # hidden dim of the projection MLP
@@ -25,7 +25,7 @@ model:
 data_loading:
   batch_size: 127   # Reduced batch size to fit dataset size (127 images)
   num_workers: 2   # Number of data loading workers
-  loader_type: patch #full-image  # Use Lightly's DataLoader for SimCLR
+  loader_type: full-image #full-image or patch # Use Lightly's DataLoader for SimCLR
 
 data_augmentation:
   resize_spatial_size: [256, 256]           # [height, width] for input images

@@ -7,7 +7,7 @@
 #SBATCH --account=pMI24_EleBr_1
 #SBATCH --partition=boost_usr_prod
 #SBATCH --gres=gpu:1                    # 1 × A100 on "boost"
-#SBATCH --cpus-per-task=4               # dataloader / augmentations
+#SBATCH --cpus-per-task=2               # dataloader / augmentations
 #SBATCH --mem=32G                       # system RAM
 #SBATCH --time=01:00:00                 # hh:mm:ss
 # ––– temporary log file (renamed below) ––––––––––––––––––––––––––––––––––
@@ -48,9 +48,9 @@ echo "────────────────────────�
 # ───────────────────── 4) launch SimCLR pre-training  ─────────────────────
 cd "$SLURM_SUBMIT_DIR"          # project root (FOLDER_CINECA)
 
-YAML=configs/ssl/byol_resnet18_3c.yaml   # YAML with ResNet18 SimCLR options
+YAML=configs/ssl/simclr_resnet18_3c.yaml   # YAML with ResNet18 SimCLR options
 
 # srun inherits the GPU/CPU allocation granted by Slurm
-srun python byol_simsiam_pretraining.py --yaml "$YAML"
+srun python simclr_pretraining.py --yaml "$YAML"
 
 echo "Finished at:  $(date)"

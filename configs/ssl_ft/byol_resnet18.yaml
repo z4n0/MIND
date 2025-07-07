@@ -1,4 +1,4 @@
-_base_: ../base.yaml 
+_base_: ./base.yaml 
 # Inherits from base.yaml, overriding the parameters below
 
 # Data Splitting
@@ -15,9 +15,10 @@ dataset:
 # Model
 model:
   backbone_library: torchvision  # Must match pretrained encoder
-  model_name: resnet18          # Must match pretrained encoder
+  model_name: Resnet18          # Must match pretrained encoder
   in_channels: 3                # Must match pretrained encoder
   input_size: 256               # Must match pretrained encoder
+  library: "torchvision"
 
 # Data Loading
 data_loading:
