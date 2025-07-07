@@ -71,3 +71,7 @@ to change the parameters of the training you should modify the yaml files
 
 NOTE: the only exception is for the supervised fine tuning of a ssl pretrained encoder in such case the parameters are still passed by the yaml but if we want to use a randomly initialized encoder
 you should change the slurm and not pass the yaml
+
+PROBLEMS:
+- the images for SSL in the folder "VARIE" are 2 channels images but i need at least 3 channels images to use the pretrained encoders
+
