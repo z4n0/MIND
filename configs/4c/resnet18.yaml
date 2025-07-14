@@ -5,7 +5,7 @@ data_splitting:
   random_seed: 42
   val_set_size: 0.15
   test_set_size: 0.1
-  num_folds: 7  # Changed from base
+  # num_folds: 7  # Changed from base
 
 # Data Loading
 data_loading:

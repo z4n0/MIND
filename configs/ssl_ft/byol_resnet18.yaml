@@ -10,7 +10,7 @@ data_splitting:
 
 # Dataset
 dataset:
-  class_names: ["MSA-P", "PD"]  # Class names for downstream task
+  class_names: ["MSA", "PD"]  # Class names for downstream task
 
 # Model
 model:

@@ -217,7 +217,7 @@ def log_folds_results_to_csv(fold_results, prefix='val'):
     df = pd.DataFrame(fold_results)
 
     # Compute summary (mean, std, min, max) for selected metrics
-    metric_keys = ['loss', 'acc', 'f1', 'balanced_acc', 'auc']
+    metric_keys = ['loss', 'acc', 'f1', 'balanced_acc', 'auc', 'mcc']
     for key in metric_keys:
         metric_name = f"{prefix}_{key}"
         if metric_name in df.columns:
@@ -457,17 +457,37 @@ def log_SSL_run_to_mlflow(
         log_kfold_epoch_metrics(per_fold_metrics, prefix="val")
         per_fold = np.asarray(
             [
-                (r["test_loss"], r["test_acc"], r["test_balanced_acc"], r["test_f1"])
+                (
+                    r["test_loss"],
+                    r["test_acc"],
+                    r["test_balanced_acc"],
+                    r["test_f1"],
+                    r.get("test_auc", 0.0),
+                    r.get("test_mcc", 0.0),
+                    r.get("test_precision", 0.0),
+                    r.get("test_recall", 0.0),
+                )
                 for r in fold_results
             ]
         )
         mlflow.log_metrics(
             {
                 "mean_test_loss": float(per_fold[:, 0].mean()),
+                "std_test_loss": float(per_fold[:, 0].std()),
                 "mean_test_accuracy": float(per_fold[:, 1].mean()),
+                "std_test_accuracy": float(per_fold[:, 1].std()),
                 "mean_test_balanced_acc": float(per_fold[:, 2].mean()),
                 "std_test_balanced_acc": float(per_fold[:, 2].std()),
                 "mean_test_f1": float(per_fold[:, 3].mean()),
+                "std_test_f1": float(per_fold[:, 3].std()),
+                "mean_test_auc": float(per_fold[:, 4].mean()),
+                "std_test_auc": float(per_fold[:, 4].std()),
+                "mean_test_mcc": float(per_fold[:, 5].mean()),
+                "std_test_mcc": float(per_fold[:, 5].std()),
+                "mean_test_precision": float(per_fold[:, 6].mean()),
+                "std_test_precision": float(per_fold[:, 6].std()),
+                "mean_test_recall": float(per_fold[:, 7].mean()),
+                "std_test_recall": float(per_fold[:, 7].std()),
                 "exec_time_min": execution_time / 60.0,
             }
         )

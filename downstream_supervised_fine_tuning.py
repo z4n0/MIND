@@ -95,6 +95,7 @@ def load_ssl_encoder(model_manager, encoder_path, num_classes, pretrained_weight
     
     # Check if encoder path contains the model name
     encoder_filename = Path(encoder_path).stem.lower()
+    print(f"Validating encoder path: {encoder_filename}")
     model_name = model_manager.model_name.lower()
     
     if model_name not in encoder_filename:
@@ -108,22 +109,36 @@ def load_ssl_encoder(model_manager, encoder_path, num_classes, pretrained_weight
     
     # Create base model
     model, _ = model_manager.setup_model(num_classes=num_classes, pretrained_weights=pretrained_weights)
-    
+    byol_encoder = copy.deepcopy(model)
     # Load SSL weights
     try:
         state_dict = torch.load(encoder_path, map_location=device)
-        model.load_state_dict(state_dict)
+        # Use strict=False to ignore the final classifier layer which has a different size
+        byol_encoder.load_state_dict(state_dict)
     except Exception as e:
-        raise RuntimeError(
+        raise RuntimeError(\
             f"Failed to load SSL weights from '{encoder_path}': {str(e)}. "
             f"Please check if the encoder was trained with the same model architecture."
         )
-    
-    model = model.to(device)
-    
+
+    byol_encoder = byol_encoder.to(device)
+    print("Removing projection head from the encoder...")
+    print(byol_encoder)
+    print("Removing linear probe head if exists...")
+    # 4) (Optional) Quick check of encoder output dim
+    encoder = copy.deepcopy(byol_encoder).eval()  # Set the encoder to evaluation mode
+    print(cfg.get_image_shape())
+    with torch.no_grad():
+        test_input = torch.zeros(1, 3, cfg.get_image_shape()[0], cfg.get_image_shape()[1], device=device)
+        encoder_out = byol_encoder(test_input).flatten(start_dim=1)
+        model_without_projection = remove_projection_head(copy.deepcopy(byol_encoder))  # Set the encoder to evaluation mode
+        test_input = torch.zeros(1, 3, cfg.get_image_shape()[0], cfg.get_image_shape()[1], device=device)
+        feats = model_without_projection(test_input).flatten(start_dim=1)
+    print(f"Detected encoder output dimension: {encoder_out.shape[1]}")
+    print(f"Detected encoder output dimension once removed classification head: {feats.shape[1]}")
     # Remove projection head and get feature dimension
-    model_without_projection = remove_projection_head(copy.deepcopy(model))
-    
+    model_without_projection = remove_projection_head(copy.deepcopy(byol_encoder))
+
     # Get input shape from configuration
     num_channels = cfg.get_model_input_channels()
     spatial_size = cfg.get_spatial_size()  # Returns (height, width)
@@ -191,6 +206,7 @@ def main():
     
     # Extract configuration
     class_names = cfg.get_class_names()
+    num_classes = len(class_names)
     num_channels = cfg.get_model_input_channels()
     pretrained_weights = cfg.get_pretrained_weights()
     model_library = cfg.get_model_library()
@@ -256,8 +272,9 @@ def main():
         # Use randomly initialized encoder
         print("Creating randomly initialized encoder...")
         encoder, feature_dim = create_baseline_encoder(
-            model_manager, len(class_names), pretrained_weights, device, cfg
+            model_manager, num_classes, pretrained_weights, device, cfg
         )
+        
         encoder_type = f"RandomInit_{freeze_status}"
         pretrained_backbone_path = None  # No pretrained path for random init
         
@@ -275,7 +292,7 @@ def main():
             ssl_method = "SSL"  # Generic SSL
         
         encoder, feature_dim = load_ssl_encoder(
-            model_manager, args.encoder_path, len(class_names), 
+            model_manager, args.encoder_path, num_classes, 
             pretrained_weights, device, cfg
         )
         encoder_type = f"{ssl_method}_{freeze_status}"
@@ -292,7 +309,7 @@ def main():
         fresh_encoder = copy.deepcopy(encoder)
         return SSLClassifierModule(
             encoder=fresh_encoder,
-            num_classes=len(class_names),
+            num_classes=num_classes,
             freeze_encoder=args.freeze_encoder,
             lr=cfg.get_learning_rate(),
             backbone_output_dim=feature_dim,

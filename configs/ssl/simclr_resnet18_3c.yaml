@@ -20,6 +20,7 @@ model:
   proj_hidden_dim: 512                      # hidden dim of the projection MLP
   proj_output_dim: 128                      # output dim of the projection MLP
   library: torchvision
+  pretrained_weights: "imagenet"
   
 # Data Loading
 data_loading:

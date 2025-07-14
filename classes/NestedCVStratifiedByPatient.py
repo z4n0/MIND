@@ -64,7 +64,7 @@ class NestedCVStratifiedByPatient:
         self.oversample = self.cfg.training.get("oversample", False)
         self.undersample = self.cfg.training.get("undersample", False)
         self.num_classes = self._determine_num_classes()
-        self.val_set_size = self.cfg.data_splitting.get("val_set_size", 0.1)
+        self.val_set_size = self.cfg.data_splitting.get("val_set_size", 0.15)
         self.num_epochs = self.cfg.training.get("num_epochs", 100)
         self.is_supported_by_torchvision = self.pretrained_weights is not None
         self.train_transforms = train_transforms
@@ -88,7 +88,7 @@ class NestedCVStratifiedByPatient:
         self.per_fold_metrics = {
             'train_loss': {}, 'val_loss': {}, 'train_accuracy': {},
             'val_accuracy': {}, 'val_f1': {}, 'val_balanced_accuracy': {},
-            'val_precision': {}, 'val_recall': {}, 'val_auc': {}
+            'val_precision': {}, 'val_recall': {}, 'val_auc': {}, 'val_mcc': {}
         }
         self.fold_results = []
 
@@ -155,32 +155,6 @@ class NestedCVStratifiedByPatient:
 
         if self.cfg.training.get("transfer_learning") or self.cfg.training.get("fine_tuning"):
             freeze_layers_up_to(model, self.cfg)
-            
-        # def _count_frozen_layers(model):
-        #     """
-        #     Counts the number of frozen (requires_grad=False) and unfrozen (requires_grad=True) layers.
-
-        #     Args:
-        #         model (torch.nn.Module): The model to check.
-
-        #     Returns:
-        #         tuple: (num_frozen, num_unfrozen)
-        #     """
-        #     num_frozen = 0
-        #     num_unfrozen = 0
-        #     for param in model.parameters():
-        #         if param.requires_grad:
-        #             num_unfrozen += 1
-        #         else:
-        #             num_frozen += 1
-        #     return num_frozen, num_unfrozen
-
-        # # Report how many layers are frozen/unfrozen
-        # if self.cfg.training.get("transfer_learning") or self.cfg.training.get("fine_tuning"):
-        #     num_frozen, num_unfrozen = _count_frozen_layers(model)
-        #     total_layers = num_frozen + num_unfrozen
-        #     print(f"Frozen layers: {num_frozen} / {total_layers}")
-        #     print(f"Unfrozen layers: {num_unfrozen} / {total_layers}")
         
         return model, device
     
@@ -240,7 +214,7 @@ class NestedCVStratifiedByPatient:
         inner_pat_labels = df_pat_inner["label"].values
 
         inner_skf = StratifiedKFold(
-            n_splits= 4, #or Get from cfg
+            n_splits= 5, #or Get from cfg
             shuffle=True,
             random_state=self.cfg.data_splitting["random_seed"]
         )
@@ -299,7 +273,7 @@ class NestedCVStratifiedByPatient:
             for _ in range(inner_num_epochs):
                 # from utils.training_utils import train_epoch, val_epoch
                 train_loss_e, _ = train_epoch(model_inner, train_loader_inner, optimizer_inner, loss_function_inner, device_inner, print_batch_stats=False)
-                val_loss_e, _, _, _, _, _, _ = val_epoch(model_inner, val_loader_inner, loss_function_inner, device_inner)
+                val_loss_e, _, _, _, _, _, _, _ = val_epoch(model_inner, val_loader_inner, loss_function_inner, device_inner)
                 if val_loss_e < best_inner_loss:
                     best_inner_loss = val_loss_e
             inner_val_losses.append(best_inner_loss)
@@ -317,7 +291,7 @@ class NestedCVStratifiedByPatient:
         print(f"  Best LR from inner CV = {best_lr:.6f}")
         return best_lr
     
-    def _append_fold_metrics(self, fold_idx, train_loss, val_loss, train_acc, val_acc, val_f1, val_bal_acc, val_prec, val_recall, val_auc):
+    def _append_fold_metrics(self, fold_idx, train_loss, val_loss, train_acc, val_acc, val_f1, val_bal_acc, val_prec, val_recall, val_auc, val_mcc):
                 self.per_fold_metrics['train_loss'][fold_idx].append(train_loss)
                 self.per_fold_metrics['val_loss'][fold_idx].append(val_loss)
                 self.per_fold_metrics['train_accuracy'][fold_idx].append(train_acc)
@@ -327,6 +301,7 @@ class NestedCVStratifiedByPatient:
                 self.per_fold_metrics['val_precision'][fold_idx].append(val_prec)
                 self.per_fold_metrics['val_recall'][fold_idx].append(val_recall)
                 self.per_fold_metrics['val_auc'][fold_idx].append(val_auc)
+                self.per_fold_metrics['val_mcc'][fold_idx].append(val_mcc)
 
     def _train_model_with_early_stopping(self, fold_idx, X_train_outer, y_train_outer, best_lr):
         X_train_es, X_val_es, y_train_es, y_val_es = train_test_split(
@@ -373,13 +348,13 @@ class NestedCVStratifiedByPatient:
             else:
                 train_loss, train_acc = train_epoch(model, train_loader_es, optimizer, loss_function, device, print_batch_stats=False)
 
-            val_loss, val_acc, val_prec, val_recall, val_f1, val_bal_acc, val_roc_auc = val_epoch(model, val_loader_es, loss_function, device)
+            val_loss, val_acc, val_prec, val_recall, val_f1, val_bal_acc, val_roc_auc, val_mcc = val_epoch(model, val_loader_es, loss_function, device)
 
             if using_cosine_scheduler: scheduler.step(epoch)
             else: scheduler.step(val_loss)
 
             # Store metrics for this fold
-            self._append_fold_metrics(fold_idx, train_loss, val_loss, train_acc, val_acc, val_f1, val_bal_acc, val_prec, val_recall, val_roc_auc)
+            self._append_fold_metrics(fold_idx, train_loss, val_loss, train_acc, val_acc, val_f1, val_bal_acc, val_prec, val_recall, val_roc_auc, val_mcc)
 
             print(f" Fold {fold_idx} Epoch {epoch+1}/{self.num_epochs}: "
                   f"Tr L: {train_loss:.4f}, Tr Acc: {train_acc:.4f}, "
@@ -408,9 +383,9 @@ class NestedCVStratifiedByPatient:
 
         # Using val_epoch for evaluation metrics
         (final_test_loss, final_test_acc, final_test_prec, final_test_recall,
-         final_test_f1, final_test_balanced_acc, test_auc) = val_epoch(model, test_loader, loss_function_for_eval, device)
+         final_test_f1, final_test_balanced_acc, test_auc, test_mcc) = val_epoch(model, test_loader, loss_function_for_eval, device)
 
-        print(f" [FOLD {fold_idx} FINAL] Test Loss: {final_test_loss:.4f} | Test Acc: {final_test_acc:.4f} | test Balanced Acc: {final_test_balanced_acc:.4f} | test F1: {final_test_f1:.4f} | Test AUC: {test_auc:.4f}")
+        print(f" [FOLD {fold_idx} FINAL] Test Loss: {final_test_loss:.4f} | Test Acc: {final_test_acc:.4f} | test Balanced Acc: {final_test_balanced_acc:.4f} | test F1: {final_test_f1:.4f} | Test AUC: {test_auc:.4f} | Test MCC: {test_mcc:.4f}")
 
         # Assuming evaluate_model is general enough
         eval_results = evaluate_model(model=model, dataloader=test_loader, class_names=self.class_names, return_misclassified=True)
@@ -435,7 +410,7 @@ class NestedCVStratifiedByPatient:
             "fold": fold_idx, "test_loss": final_test_loss, "test_acc": final_test_acc,
             "test_f1": final_test_f1, "test_balanced_acc": final_test_balanced_acc,
             "test_auc": test_auc, "test_precision": final_test_prec,
-            "test_recall": final_test_recall, "best_lr": best_lr_for_fold
+            "test_recall": final_test_recall, "test_mcc": test_mcc, "best_lr": best_lr_for_fold
         })
 
     def run_experiment(self):
@@ -515,7 +490,7 @@ class NestedCVStratifiedByPatient:
         print("Cross-validation results (outer folds):")
         for res in self.fold_results:
             print(f"  Fold {res['fold']}: Test Loss={res['test_loss']:.4f}, Acc={res['test_acc']:.4f}, "
-                  f"F1={res['test_f1']:.4f}, Bal Acc={res['test_balanced_acc']:.4f}, AUC={res['test_auc']:.4f} (Best LR={res['best_lr']:.6f})")
+                  f"F1={res['test_f1']:.4f}, Bal Acc={res['test_balanced_acc']:.4f}, AUC={res['test_auc']:.4f}, MCC={res['test_mcc']:.4f} (Best LR={res['best_lr']:.6f})")
 
         # Aggregate and print mean/std if desired
         if self.fold_results:
@@ -531,6 +506,8 @@ class NestedCVStratifiedByPatient:
             std_precision = np.std([r['test_precision'] for r in self.fold_results])
             avg_recall = np.mean([r['test_recall'] for r in self.fold_results])
             std_recall = np.std([r['test_recall'] for r in self.fold_results])
+            avg_mcc = np.mean([r['test_mcc'] for r in self.fold_results])
+            std_mcc = np.std([r['test_mcc'] for r in self.fold_results])
             print("\n--- Aggregate Results ---")
             print(f"Avg Test Accuracy: {avg_acc:.4f} +/- {std_acc:.4f}")
             print(f"Avg Test F1-Score: {avg_f1:.4f} +/- {std_f1:.4f}")
@@ -538,6 +515,7 @@ class NestedCVStratifiedByPatient:
             print(f"Avg Test Balanced Acc: {avg_balanced_acc:.4f} +/- {std_balanced_acc:.4f}")
             print(f"Avg Test Precision: {avg_precision:.4f} +/- {std_precision:.4f}")
             print(f"Avg Test Recall: {avg_recall:.4f} +/- {std_recall:.4f}")
+            print(f"Avg Test MCC: {avg_mcc:.4f} +/- {std_mcc:.4f}")
         print("-------------------------------------------------")
 
 

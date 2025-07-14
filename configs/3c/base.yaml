@@ -1,12 +1,12 @@
 # config.yaml
 dataset:
-  class_names: ["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
+  class_names: ["MSA-P", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
 
 data_splitting:
   random_seed: 42
   val_set_size: 0.2
   test_set_size: 0.10
-  num_folds: 6
+  num_folds: 8
 
 data_augmentation:
   resize_spatial_size: [256,256]  # Tuple becomes list in YAML
@@ -19,8 +19,8 @@ data_augmentation:
   rand_gaussian_noise_std: 0.1
 
 data_loading:
-  batch_size: 8
-  num_workers: 0
+  batch_size: 16
+  num_workers: 2
 
 model:
   model_name: "base"
@@ -28,7 +28,7 @@ model:
   in_channels: 3
   out_channels: 2
   dropout_prob: 0.1
-  library: "monai"
+  library: "torchvision"
 
 training:
   num_epochs: 50

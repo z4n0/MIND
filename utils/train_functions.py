@@ -6,121 +6,20 @@ import torch
 import torch.nn as nn
 import pytorch_lightning as pl
 import torch.optim as optim
-from sklearn.metrics import f1_score, balanced_accuracy_score, roc_auc_score, precision_score, recall_score
+from sklearn.metrics import (
+    f1_score,
+    balanced_accuracy_score,
+    roc_auc_score,
+    precision_score,
+    recall_score,
+    matthews_corrcoef,
+)
 from sklearn.utils import resample
 import matplotlib.pyplot as plt
 from configs.ConfigLoader import ConfigLoader
 from torch.cuda.amp import GradScaler, autocast
 from torch.amp.autocast_mode import autocast
 
-# def train_epoch(model, loader, optimizer, loss_function, device, clip_value=1.0, print_batch_stats=False): # Added clip_value
-#     """
-#     Trains the model for one epoch using Automatic Mixed Precision (AMP)
-#     with gradient clipping and NaN checks.
-
-#     Args:
-#         model (torch.nn.Module): The model to be trained.
-#         loader (torch.utils.data.DataLoader): DataLoader for the training data.
-#         optimizer (torch.optim.Optimizer): Optimizer for updating the model parameters.
-#         loss_function (callable): Loss function to compute the loss.
-#         device (torch.device): Device on which to perform computations (e.g., 'cpu' or 'cuda').
-#         clip_value (float): Maximum norm for gradient clipping. Default is 1.0.
-
-#     Returns:
-#         tuple: A tuple containing:
-#             - avg_loss (float): The average loss over valid batches in the epoch.
-#             - avg_accuracy (float): The average accuracy over all processed samples in the epoch.
-#     """
-#     model.train()
-#     epoch_loss = 0.0
-#     correct = 0
-#     total = 0
-#     num_valid_batches = 0 # Track batches without NaN loss
-
-#     # Initialize gradient scaler for AMP
-#     # Check if device is cuda before initializing scaler
-#     use_amp = device.type == 'cuda'
-#     if use_amp:
-#         scaler = GradScaler()
-
-#     for i, batch in enumerate(loader): # Added enumerate for batch index logging
-#         images_batch = batch["image"].to(device)
-#         labels_batch = batch["label"].to(device).long()
-#         if i == 0 and print_batch_stats: # Check first batch only
-#             print(f"\n--- Input Batch Stats (Batch {i}) ---")
-#             print(f"  Images shape: {images_batch.shape}, dtype: {images_batch.dtype}")
-#             print(f"  Images min: {images_batch.min()}, max: {images_batch.max()}, mean: {images_batch.mean()}")
-#             print(f"  Images has NaN: {torch.isnan(images_batch).any()}, has Inf: {torch.isinf(images_batch).any()}")
-#             print(f"  Labels shape: {labels_batch.shape}, dtype: {labels_batch.dtype}")
-#             print(f"  Labels unique: {torch.unique(labels_batch)}")
-#             print(f"  Images dtype: {images_batch.dtype}, device: {images_batch.device}")
-
-#             # Add check for label range if num_classes is known
-#             # num_classes = model.classifier_model.classifier[-1].out_features # Example way to get num_classes
-#             # if (labels_batch < 0).any() or (labels_batch >= num_classes).any():
-#             #      print(f"!!! WARNING: Labels out of range [0, {num_classes-1}) detected: {torch.unique(labels_batch)}")
-#             print("-------------------------------------\n")
-#         optimizer.zero_grad()
-
-#         # --- Automatic Mixed Precision Context ---
-#         with autocast(device_type=device.type, enabled=use_amp):
-#             outputs = model(images_batch)
-#             # Ensure labels_batch is compatible if loss expects float (unlikely for CrossEntropy)
-#             loss = loss_function(outputs, labels_batch)
-
-#         # --- Check for NaN/Inf Loss BEFORE backward ---
-#         if torch.isnan(loss) or torch.isinf(loss):
-#             print(f"Warning: NaN/Inf loss detected at training batch index {i}. Loss: {loss.item()}. Skipping batch update.")
-#             # Optional: Investigate why loss is NaN here (e.g., print outputs, inputs)
-#             # print(f"  Outputs sample: {outputs.flatten()[:10]}")
-#             continue # Skip backward and optimizer step for this batch
-
-#         # --- Perform backward pass and optimizer step (conditionally using scaler) ---
-#         if use_amp:
-#             scaler.scale(loss).backward()
-#             # Unscale gradients before clipping
-#             scaler.unscale_(optimizer)
-#             # Clip gradients after unscaling
-#             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip_value)
-#             # Optimizer step (internally checks for inf/nans in gradients)
-#             scaler.step(optimizer)
-#             # Update scaler for next iteration
-#             scaler.update()
-#         else: # If not using CUDA or AMP is disabled
-#             loss.backward()
-#             # Clip gradients directly
-#             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip_value)
-#             optimizer.step()
-
-#         # --- Accumulate metrics for valid batches ---
-#         epoch_loss += loss.item()
-#         num_valid_batches += 1
-
-#         # Get predictions (works for both binary and multi-class)
-#         # Ensure outputs are not NaN before calculating accuracy
-#         if not torch.isnan(outputs).any():
-#              with torch.no_grad(): # Ensure no gradients calculated here
-#                 _, predicted = torch.max(outputs, dim=1)
-#                 correct += (predicted == labels_batch).sum().item()
-#         else:
-#             print(f"Warning: NaN outputs detected at training batch index {i} during accuracy calculation.")
-
-#         total += labels_batch.size(0) # Count total samples processed regardless of NaN loss
-
-#     # --- Calculate average metrics ---
-#     if num_valid_batches > 0:
-#         avg_loss = epoch_loss / num_valid_batches
-#     else:
-#         print("Warning: No valid batches processed in this epoch (all resulted in NaN/Inf loss).")
-#         avg_loss = float('nan') # Indicate failure
-
-#     if total > 0:
-#         avg_accuracy = correct / total
-#     else:
-#         print("Warning: No samples processed in this epoch.")
-#         avg_accuracy = 0.0
-
-#     return avg_loss, avg_accuracy
 
 def train_epoch(
     model, 
@@ -267,7 +166,7 @@ def val_epoch(model, loader, loss_function, device):
         loss_function (torch.nn.Module): Loss function to use.
         device (torch.device): Device to run the validation on (e.g., 'cpu' or 'cuda').
 
-    Returns in order: val_loss, accuracy, precision, recall, f1, balanced_acc, roc_auc_placeholder
+    Returns in order: val_loss, accuracy, precision, recall, f1, balanced_acc, roc_auc, mcc
         tuple: A tuple containing the following metrics:
             - val_loss (float): Average loss over all batches.
             - accuracy (float): Accuracy of the model on the validation data.
@@ -275,7 +174,8 @@ def val_epoch(model, loader, loss_function, device):
             - recall (float): Recall score.
             - f1 (float): F1 score (using binary averaging for 2 classes, weighted for multi-class).
             - balanced_acc (float): Balanced accuracy score.
-            - roc_auc (float): ROC AUC score (placeholder - currently returns 1, calculation was commented out).
+            - roc_auc (float): ROC AUC score.
+            - mcc (float): Matthews Correlation Coefficient.
     """
     model.eval() # Set model to evaluation mode so that it doesn't update batch norm or dropout layers
     epoch_loss = 0.0
@@ -299,8 +199,6 @@ def val_epoch(model, loader, loss_function, device):
             # Ensure outputs are float32 before loss calculation if model might be in another default dtype
             # Usually unnecessary if model is standard nn.Module, but safe to include.
             loss = loss_function(outputs, true_labels_batch)
-            # --- END REMOVAL ---
-
             # --- DEBUG: Check for NaN/Inf in Loss (Still useful) ---
             if torch.isnan(loss).any() or torch.isinf(loss).any():
                 print(f"!!! NaN/Inf found in loss WITHOUT AMP at val batch index {i} !!!")
@@ -357,7 +255,7 @@ def val_epoch(model, loader, loss_function, device):
              val_loss = float('nan') # Indicate failure clearly
 
 
-    # --- Metric Calculations (largely unchanged) ---
+    # --- Metric Calculations---
     if total == 0: # Handle case where loader might be empty or all labels invalid
          print("Warning: No valid samples found for metric calculation in validation.")
          accuracy = 0.0
@@ -365,7 +263,8 @@ def val_epoch(model, loader, loss_function, device):
          recall = 0.0
          f1 = 0.0
          balanced_acc = 0.0
-         # roc_auc = 0.0 # Placeholder
+         roc_auc = 0.0
+         mcc = 0.0
     else:
         accuracy = correct / total
 
@@ -383,6 +282,7 @@ def val_epoch(model, loader, loss_function, device):
             recall = recall_score(all_labels, all_predictions, average=avg_mode, zero_division=0)
             f1 = f1_score(all_labels, all_predictions, average=avg_mode, zero_division=0)
             balanced_acc = balanced_accuracy_score(all_labels, all_predictions) # Handles multi-class directly
+            mcc = matthews_corrcoef(all_labels, all_predictions)
 
             # ROC AUC Calculation (add back if needed, ensure all_probs is correctly formatted)
             if len(unique_labels) == 2 and len(all_probs) == len(all_labels):
@@ -404,14 +304,14 @@ def val_epoch(model, loader, loss_function, device):
                 roc_auc = 0.0 # Placeholder
         else:
             print("Warning: No valid labels/predictions for sklearn metrics.")
-            precision, recall, f1, balanced_acc = 0.0, 0.0, 0.0, 0.0
-            # roc_auc = 0.0
+            precision, recall, f1, balanced_acc, mcc = 0.0, 0.0, 0.0, 0.0, 0.0
+            roc_auc = 0.0
 
 
     # Using placeholder 1 for roc_auc as in original code snippet provided last time
-    roc_auc_placeholder = 1
+    # roc_auc_placeholder = 1
 
-    return val_loss, accuracy, precision, recall, f1, balanced_acc, roc_auc_placeholder
+    return val_loss, accuracy, precision, recall, f1, balanced_acc, roc_auc, mcc
 
 
 
@@ -1074,7 +974,8 @@ def nested_cv_stratified_by_patient(df, cfg, labels_np, pat_labels, unique_pat_i
             'val_balanced_accuracy': {},
             'val_precision': {},
             'val_recall': {},
-            'val_auc': {}
+            'val_auc': {},
+            'val_mcc': {}
         }
     
     # create folders for saving images to log
@@ -1240,7 +1141,7 @@ def nested_cv_stratified_by_patient(df, cfg, labels_np, pat_labels, unique_pat_i
                         loss_function_inner, device_inner
                     )
                     
-                    val_loss_inner, _, _, _, _, _, _ = val_epoch(
+                    val_loss_inner, _, _, _, _, _, _, _= val_epoch(
                         model_inner, val_loader_inner, loss_function_inner, device_inner
                     )
                     
@@ -1373,7 +1274,7 @@ def nested_cv_stratified_by_patient(df, cfg, labels_np, pat_labels, unique_pat_i
                     model, train_loader_es, optimizer, loss_function, device
                 )
 
-            val_loss, val_acc, val_prec, val_recall, val_f1, val_balanced_acc, val_roc_auc = val_epoch(
+            val_loss, val_acc, val_prec, val_recall, val_f1, val_balanced_acc, val_roc_auc, val_mcc = val_epoch(
                 model, val_loader_es, loss_function, device
             )
             if using_cosine_scheduler:
@@ -1390,6 +1291,7 @@ def nested_cv_stratified_by_patient(df, cfg, labels_np, pat_labels, unique_pat_i
             per_fold_metrics['val_precision'][fold_idx].append(val_prec)
             per_fold_metrics['val_recall'][fold_idx].append(val_recall)
             per_fold_metrics['val_auc'][fold_idx].append(val_roc_auc)
+            per_fold_metrics['val_mcc'][fold_idx].append(val_mcc)
 
 
             print(f" Epoch {epoch+1}/{cfg.training['num_epochs']}: "
@@ -1444,7 +1346,7 @@ def nested_cv_stratified_by_patient(df, cfg, labels_np, pat_labels, unique_pat_i
         )
 
         # Original call to val_epoch for testing
-        # final_test_loss, _, _, _, _, _, _ = val_epoch(model, test_loader, loss_function, device)
+        # final_test_loss, _, _, _, _, _, _, _ = val_epoch(model, test_loader, loss_function, device)
         # Final evaluation on the *outer test set* of this fold
         (final_test_loss,
         final_test_acc,          # <- accuracy now
@@ -1452,11 +1354,12 @@ def nested_cv_stratified_by_patient(df, cfg, labels_np, pat_labels, unique_pat_i
         final_test_recall,
         final_test_f1,
         final_test_balanced_acc,
-        test_auc) = val_epoch(model, test_loader, loss_function, device)
+        test_auc,
+        test_mcc) = val_epoch(model, test_loader, loss_function, device)
 
         
         print(f" [FOLD {fold_idx+1} FINAL] Test Loss: {final_test_loss:.4f} | "
-            f"Test Acc: {final_test_acc:.4f} | Test AUC: {test_auc:.4f}"
+            f"Test Acc: {final_test_acc:.4f} | Test AUC: {test_auc:.4f} | Test MCC: {test_mcc:.4f}"
             f"Test Balanced Acc: {final_test_balanced_acc:.4f} | Test Precision: {final_test_prec:.4f} | Test Recall: {final_test_recall:.4f} | Test F1: {final_test_f1:.4f}")
         
         
@@ -1489,6 +1392,7 @@ def nested_cv_stratified_by_patient(df, cfg, labels_np, pat_labels, unique_pat_i
             "test_auc": test_auc,
             "test_precision": final_test_prec,
             "test_recall": final_test_recall,
+            "test_mcc": test_mcc,
             "best_lr": best_lr
         })
         
@@ -1504,6 +1408,7 @@ def nested_cv_stratified_by_patient(df, cfg, labels_np, pat_labels, unique_pat_i
             f"Test Acc = {res['test_acc']:.4f}, "
             f"Test F1 = {res['test_f1']:.4f}, "
             f"Test Balanced Acc = {res['test_balanced_acc']:.4f}, "
+            f"Test MCC: {res.get('test_mcc', 'N/A'):.4f}, "
             f"(Best LR={res['best_lr']:.6f})"
             )
     
@@ -1610,11 +1515,27 @@ def remove_projection_head(encoder: nn.Module) -> nn.Module:
             print(f"Encoder does not have attribute '{attr}' to remove.")
             return encoder
     # raise ValueError("Encoder does not have a known classifier head to remove.")
+    
+def _remove_linear_probe_head(backbone):
+        # if isinstance(self.backbone.fc, LinearProbeHead):
+        # print(self.backbone.fc.__class__.__name__)
+        if hasattr(backbone, "fc"):
+            if  backbone.fc.__class__.__name__ == "LinearProbeHead":
+                print("removing linear probe head")
+                backbone.fc = nn.Identity()
+            
+        elif hasattr(backbone, "classifier"):
+            if backbone.classifier.__class__.__name__ == "LinearProbeHead":
+                backbone.classifier = nn.Identity()
+        else:
+            raise RuntimeError(
+                    "Could not remove linear probe head"
+                )
         
                
 class BaseSSLClassifier(nn.Module):
     """
-    Wrap an SSL-pretrained encoder and “plug in” any classifier head.
+    Wrap an SSL-pretrained encoder and "plug in" any classifier head.
     
     Args:
         encoder:          a pretrained nn.Module (e.g. ResNet50 without its fc)

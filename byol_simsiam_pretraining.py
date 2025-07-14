@@ -318,14 +318,14 @@ def main() -> None:
     elif "MSA-P" in class_names:
         dataset_type = "MSAP_VS_PD"
     else:
-        dataset_type = "custom"  # Fallback for other datasets
+        raise ValueError("Unknown class names in config. Please specify the correct dataset type.")
 
     # Create new filename with method, dataset type, and loader type
     new_filename = f"{base_name}_{method}_{dataset_type}_{loader_type}{extension}"
     w_path = base_dir / new_filename
 
     w_path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(learner.net.state_dict(), w_path)
+    torch.save(learner.state_dict(), w_path)
     print(f"✓ Encoder weights saved to: {w_path}")
 
     end_time = time.time()

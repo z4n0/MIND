@@ -44,7 +44,6 @@ echo "Running on:   $(hostname)"
 echo "CUDA visible: $CUDA_VISIBLE_DEVICES"
 echo "Started at:   $(date)"
 echo "──────────────────────────────────────────────────────────────"
-
 # ───────────────────── 4) launch SimCLR pre-training  ─────────────────────
 cd "$SLURM_SUBMIT_DIR"          # project root (FOLDER_CINECA)
 
