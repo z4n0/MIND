@@ -1,0 +1,13 @@
+[2025-07-16 14:46:46 +0200] [44305] [INFO] Starting gunicorn 23.0.0
+[2025-07-16 14:46:46 +0200] [44305] [INFO] Listening at: http://127.0.0.1:5000 (44305)
+[2025-07-16 14:46:46 +0200] [44305] [INFO] Using worker: sync
+[2025-07-16 14:46:46 +0200] [44306] [INFO] Booting worker with pid: 44306
+[2025-07-16 14:46:46 +0200] [44307] [INFO] Booting worker with pid: 44307
+[2025-07-16 14:46:46 +0200] [44308] [INFO] Booting worker with pid: 44308
+[2025-07-16 14:46:46 +0200] [44309] [INFO] Booting worker with pid: 44309
+[2025-07-17 00:00:40 +0200] [44305] [INFO] Handling signal: term
+[2025-07-17 00:00:40 +0200] [44306] [INFO] Worker exiting (pid: 44306)
+[2025-07-17 00:00:40 +0200] [44307] [INFO] Worker exiting (pid: 44307)
+[2025-07-17 00:00:40 +0200] [44309] [INFO] Worker exiting (pid: 44309)
+[2025-07-17 00:00:40 +0200] [44308] [INFO] Worker exiting (pid: 44308)
+[2025-07-17 00:00:40 +0200] [44305] [INFO] Shutting down: Master

@@ -1,12 +1,13 @@
 # config.yaml
 dataset:
-  class_names: ["MSA-P", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
+  class_names: ["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
 
 data_splitting:
   random_seed: 42
   val_set_size: 0.2
   test_set_size: 0.10
   num_folds: 8
+  # lr_kfold_splits: 2
 
 data_augmentation:
   resize_spatial_size: [256,256]  # Tuple becomes list in YAML

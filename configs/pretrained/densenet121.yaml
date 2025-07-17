@@ -10,11 +10,11 @@ data_splitting:
 
 # Data Loading
 data_loading:
-  batch_size: 32  # Custom batch size for DenseNet
+  batch_size: 32  
   num_workers: 2  
 
 model:
-  model_name: "Densenet121"  # Specific model name
+  model_name: "Densenet121" 
   spatial_dims: 2
   in_channels: 3
   out_channels: 2
@@ -34,8 +34,8 @@ training:
 
 # Optimizer
 optimizer:
-  learning_rate: 2e-4  # Custom learning rate
-  optimizer_name: "AdamW"  # Changed optimizer
+  learning_rate: 2e-4
+  optimizer_name: "AdamW"
   weight_decay: 1e-4
   patience: 25
 

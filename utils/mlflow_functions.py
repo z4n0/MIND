@@ -356,7 +356,29 @@ def start_mlflow_ui(port: int = 6006) -> None:
     with open(log_file, "w") as f:
         subprocess.Popen(cmd, stdout=f, stderr=subprocess.STDOUT, close_fds=True)
     
+def start_mlflow_ui_locally(tracking_uri):
+    """
+    Start the MLflow UI in a separate process.
+    
+    Args:
+        tracking_uri (str): The tracking URI for MLflow.
+    """
+    if os.name == "posix":  # Linux
+        print("Linux detected, setting tracking URI")
+        
+        # Explicitly set tracking URI
+        # tracking_uri = tracking_uri  # Update this path to your actual directory
+        print("Final Tracking URI:", tracking_uri)
 
+        # Check if the directory exists
+        print("Does the directory exist?", os.path.exists(tracking_uri.replace("file:", "")))
+
+        # Start MLflow UI
+        os.system(f"nohup mlflow ui --backend-store-uri {tracking_uri} > mlflow.log 2>&1 &")
+    else:
+        raise NotImplementedError("MLflow UI launch is only implemented for Linux.")
+    
+    
 import mlflow, os, numpy as np, torch, shutil, yaml, pandas as pd
 from typing import Any, Dict, List, Optional
 from monai.transforms.compose import Compose

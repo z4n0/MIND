@@ -5,6 +5,7 @@
 /snelled_requirements.txt
 /tmp_gradcam
 /venv
+/.venv
 *.pth
 /learning_curves/*
 /__pycache__

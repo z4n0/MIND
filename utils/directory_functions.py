@@ -31,7 +31,7 @@ def get_data_directory(num_input_channels: int = 3) -> Path:
         └─ 4c_MIP/   (for 4-channel)
     """
     root = Path(_check_env("DATA_ROOT"))
-    sub  = "3c_MIP_new" if num_input_channels == 3 else "4c_MIP"
+    sub  = "3c_MIP" if num_input_channels == 3 else "4c_MIP"
     data_dir = root / sub
     if not data_dir.is_dir():
         raise FileNotFoundError(f"Expected dataset dir {data_dir} not found")

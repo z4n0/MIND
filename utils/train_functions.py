@@ -17,7 +17,7 @@ from sklearn.metrics import (
 from sklearn.utils import resample
 import matplotlib.pyplot as plt
 from configs.ConfigLoader import ConfigLoader
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp import GradScaler, autocast
 from torch.amp.autocast_mode import autocast
 
 
@@ -307,8 +307,6 @@ def val_epoch(model, loader, loss_function, device):
             precision, recall, f1, balanced_acc, mcc = 0.0, 0.0, 0.0, 0.0, 0.0
             roc_auc = 0.0
 
-
-    # Using placeholder 1 for roc_auc as in original code snippet provided last time
     # roc_auc_placeholder = 1
 
     return val_loss, accuracy, precision, recall, f1, balanced_acc, roc_auc, mcc

@@ -214,7 +214,7 @@ class NestedCVStratifiedByPatient:
         inner_pat_labels = df_pat_inner["label"].values
 
         inner_skf = StratifiedKFold(
-            n_splits= 5, #or Get from cfg
+            n_splits = 2, #or Get from cfg
             shuffle=True,
             random_state=self.cfg.data_splitting["random_seed"]
         )
@@ -358,7 +358,7 @@ class NestedCVStratifiedByPatient:
 
             print(f" Fold {fold_idx} Epoch {epoch+1}/{self.num_epochs}: "
                   f"Tr L: {train_loss:.4f}, Tr Acc: {train_acc:.4f}, "
-                  f"Val L: {val_loss:.4f}, Val Acc: {val_acc:.4f}, Val F1: {val_f1:.4f} lr: {current_lr:.6f}")
+                  f"Val L: {val_loss:.4f}, Val Acc: {val_acc:.4f}, Val Bal Acc: {val_bal_acc:.4f}, Val Roc AUC: {val_roc_auc:.4f}, Val_mcc: {val_mcc:.4f}, Val F1: {val_f1:.4f} lr: {current_lr:.6f}")
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss

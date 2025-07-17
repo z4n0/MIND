@@ -30,7 +30,7 @@ training:
   weighted_loss: false
   fine_tuning: false
   transfer_learning: true
-  freezed_layerIndex: null
+  freezed_layerIndex: 163
 
 # Optimizer
 optimizer:
