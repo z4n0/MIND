@@ -17,8 +17,8 @@ from sklearn.metrics import (
 from sklearn.utils import resample
 import matplotlib.pyplot as plt
 from configs.ConfigLoader import ConfigLoader
-from torch.amp import GradScaler, autocast
-from torch.amp.autocast_mode import autocast
+from torch.cuda.amp import GradScaler, autocast
+from torch.cuda.amp.autocast_mode import autocast
 
 
 def train_epoch(
@@ -96,7 +96,7 @@ def train_epoch(
         optimizer.zero_grad()
 
         # --- Automatic Mixed Precision Context (or regular context if AMP is not active) ---
-        with autocast(device_type=device.type, enabled=amp_active):
+        with autocast(enabled=amp_active):
             outputs = model(images_batch) # Directly use images_batch as in the provided version
             # Ensure labels_batch is compatible if loss expects float (unlikely for CrossEntropy)
             loss = loss_function(outputs, labels_batch)
@@ -457,7 +457,7 @@ def train_epoch_mixUp(model, loader, optimizer, loss_function, device, mixup_alp
     total = 0
     
     # Initialize gradient scaler for AMP
-    scaler = torch.amp.GradScaler()
+    scaler = torch.cuda.amp.GradScaler()
 
     for batch in loader:
         images_batch = batch["image"].to(device)
@@ -476,7 +476,7 @@ def train_epoch_mixUp(model, loader, optimizer, loss_function, device, mixup_alp
         # Forward pass with AMP
         optimizer.zero_grad()
         
-        with torch.amp.autocast():
+        with torch.cuda.amp.autocast():
             outputs = model(images_batch)
             # Mixup loss
             loss = mixup_criterion(loss_function, outputs, labels_a, labels_b, lam)

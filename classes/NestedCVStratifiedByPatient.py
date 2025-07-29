@@ -285,7 +285,7 @@ class NestedCVStratifiedByPatient:
         # Use a lambda to pass the extra arguments to objective
         study.optimize(
             lambda trial: self._objective(trial, X_train_outer, y_train_outer),
-            n_trials= 3 # Get from cfg
+            n_trials= 2 # Get from cfg
         )
         best_lr = study.best_params["lr"]
         print(f"  Best LR from inner CV = {best_lr:.6f}")

@@ -10,8 +10,8 @@ data_splitting:
 
 # Data Loading
 data_loading:
-  batch_size: 16  # Custom batch size for DenseNet
-  num_workers: 0  # Increased workers
+  batch_size: 32  # Custom batch size for DenseNet
+  num_workers: 2  # Increased workers
 
 model:
   model_name: "Resnet18"  # Specific model name
@@ -23,8 +23,8 @@ model:
   
 # Training
 training:
-  num_epochs: 200
-  early_stopping_patience: 60
+  num_epochs: 10
+  early_stopping_patience: 2
   mixup_alpha: 0
   oversample: true
   undersample: false
@@ -38,7 +38,7 @@ optimizer:
   learning_rate: 2e-4  # Custom learning rate
   optimizer_name: "AdamW"  # Changed optimizer
   weight_decay: 2e-4
-  patience: 30
+  patience: 2
 
 data_augmentation:
   use_color_transforms: false

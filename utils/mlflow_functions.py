@@ -426,6 +426,10 @@ def log_SSL_run_to_mlflow(
     """Log parameters, metrics and artifacts to MLflow (file store)."""
 
     # ------------------------------------------------------------------ URI
+    env_experiment_name = os.getenv("MLFLOW_EXPERIMENT_NAME")
+    if not env_experiment_name:
+        raise RuntimeError("MLFLOW_EXPERIMENT_NAME env-var missing")
+    
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
     if not tracking_uri:
         raise RuntimeError("MLFLOW_TRACKING_URI env-var missing")
@@ -443,7 +447,7 @@ def log_SSL_run_to_mlflow(
         pretrained_weights=pretrained_weights,
     )
     exp_suffix = "SSL" if ssl else "supervised"
-    exp_name = f"{'_vs_'.join(class_names)}_{cfg.get_model_input_channels()}c_{exp_suffix}"
+    exp_name = f"{env_experiment_name}_{'_vs_'.join(class_names)}_{cfg.get_model_input_channels()}c_{exp_suffix}"
     mlflow.set_experiment(exp_name)
 
     with mlflow.start_run(run_name=run_name):

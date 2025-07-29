@@ -10,7 +10,7 @@ data_splitting:
 
 # Data Loading
 data_loading:
-  batch_size: 16  # Custom batch size for DenseNet
+  batch_size: 32  # Custom batch size for DenseNet
   num_workers: 2  
 
 model:

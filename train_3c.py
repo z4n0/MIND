@@ -3,7 +3,7 @@
 train.py – single-flag launcher for CINECA
 
 Env-vars (export in run_train.slurm)
-    DATA_ROOT              = dataset root (e.g. $WORK/lzanotto/data)
+    DATA_ROOT              = dataset root (e.g. $WORK/lzanotto/data/SUBSLICE_MIPS)
     MLFLOW_TRACKING_URI    = file store   (e.g. file:$WORK/lzanotto/mlruns)
     MLFLOW_EXPERIMENT_NAME = optional experiment name
 Run:
@@ -16,6 +16,7 @@ import argparse, os, sys, pathlib, random, re, glob
 import numpy as np, pandas as pd, torch
 from sklearn.model_selection import train_test_split
 from pathlib import Path
+import torch.cuda
 import torch.backends.cudnn as cudnn
 from monai.utils.misc import set_determinism
 
@@ -106,6 +107,8 @@ def main():
     # cfg.set_transfer_learning(True) # or False
     
     # cfg.set_class_names(new_class_names)
+    #print torch version
+    print(f"Torch version: {torch.__version__}")
     print(f"Using configuration: {args.yaml}")
     class_names        = cfg.get_class_names()
     print(f"Class names: {class_names}")
