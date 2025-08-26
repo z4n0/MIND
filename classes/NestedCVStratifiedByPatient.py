@@ -153,6 +153,30 @@ class NestedCVStratifiedByPatient:
             raise ValueError(f"Could not extract patient ID from {image_path}")
 
     def _get_model_and_device(self, learning_rate_for_factory=None):
+        """
+        Set up and return the model and device for training/evaluation.
+        
+        This method handles model creation based on either the model manager or
+        model factory provided during class initialization. It also applies transfer
+        learning or fine-tuning settings if configured.
+        
+        Args:
+            learning_rate_for_factory (float, optional): Learning rate to pass to the model factory.
+                Only used when using a model_factory instead of model_manager. If None and using
+                model_factory, falls back to the learning rate from config.
+                
+        Returns:
+            tuple: A tuple containing:
+                - model (nn.Module): The instantiated model moved to the appropriate device
+                - device (torch.device): The device to use for computation
+                
+        Raises:
+            ValueError: If neither model_manager nor model_factory was provided during initialization
+            
+        Note:
+            When using model_factory, the learning rate is passed to the factory function.
+            When using model_manager, the model setup is delegated to the manager's setup_model method.
+        """
         torch.manual_seed(self.cfg.data_splitting["random_seed"])
         if self.model_manager is not None:
             # print(f"Using model manager: {self.model_manager}") # For debugging

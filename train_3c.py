@@ -170,10 +170,14 @@ def main():
             "Please ensure you have a compatible GPU and the necessary drivers installed."
         )
     # ---------- experiment -------------------------------------------------
+    # Create a unique run directory for each model to avoid race conditions
+    # folds models, confusion matrices and learning curves will be stored here
+    # such folder will be: <PROJ_ROOT>/runs/densenet121_<job_id> where densenet121 is taken from the .yaml file stem
     job_id = os.environ.get("SLURM_JOB_ID") or os.environ.get("SLURM_JOBID") or str(os.getpid())
-    run_tag = f"{Path(args.yaml).stem}_{cfg.get_model_input_channels()}c"
+    run_tag = f"{Path(args.yaml).stem}_{cfg.get_model_input_channels()}c" #eg densenet121_3c
+    # such folder will be: <PROJ_ROOT>/runs/densenet121_<job_id> where densenet121 is taken from the .yaml file stem
     RUN_DIR = (PROJ_ROOT / "runs" / f"{run_tag}_{job_id}").resolve()
-    RUN_DIR.mkdir(parents=True, exist_ok=True)
+    RUN_DIR.mkdir(parents=True, exist_ok=True) #creates the folder if it doesn't exist
     print(f"Run directory: {RUN_DIR}")
 
     experiment = NestedCVStratifiedByPatient(
@@ -226,6 +230,7 @@ def main():
         train_counts=train_counts,
         val_counts=val_counts,
         test_counts=test_counts,
+        output_dir=str(RUN_DIR),
     )
 
 if __name__ == "__main__":
