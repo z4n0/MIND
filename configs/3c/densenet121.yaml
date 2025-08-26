@@ -22,8 +22,8 @@ model:
   
 # Training
 training:
-  num_epochs: 10
-  early_stopping_patience: 5
+  num_epochs: 125
+  early_stopping_patience: 40
   mixup_alpha: 0  # Added mixup
   oversample: true
   undersample: false
@@ -37,7 +37,7 @@ optimizer:
   learning_rate: 2e-4  # Custom learning rate
   optimizer_name: "AdamW"  # Changed optimizer
   weight_decay: 1e-4
-  patience: 5
+  patience: 25
 
 # Data Augmentation
 data_augmentation:

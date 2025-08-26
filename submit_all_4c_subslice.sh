@@ -4,7 +4,7 @@
 set -euo pipefail
 
 SCRIPTS_DIR="slurm_files/subslice/4c"
-DELAY_MINUTES=30
+DELAY_MINUTES=15
 
 echo "→ Submitting all .slurm scripts in $SCRIPTS_DIR with ${DELAY_MINUTES} minute delay..."
 first_job=true

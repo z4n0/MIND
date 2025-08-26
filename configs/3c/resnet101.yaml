@@ -22,8 +22,8 @@ model:
   library: "torchvision"
 # Training
 training:
-  num_epochs: 100
-  early_stopping_patience: 19
+  num_epochs: 125
+  early_stopping_patience: 25
   mixup_alpha: 0
   oversample: true
   undersample: false
@@ -37,6 +37,7 @@ optimizer:
   learning_rate: 2e-4  # Custom learning rate
   optimizer_name: "AdamW"  # Changed optimizer
   weight_decay: 2e-4
-
+  patience: 25
+  
 data_augmentation:
   use_color_transforms: false

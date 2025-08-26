@@ -8,7 +8,7 @@ echo "--> Starting 3-channel subslice job submissions..."
 echo "--> Finished 3-channel subslice job submissions."
 
 echo "--> Pausing for 60 minutes before starting 4-channel jobs..."
-sleep $((60 * 60))
+sleep $((60 * 4))
 
 echo "--> Starting 4-channel subslice job submissions..."
 ./submit_all_4c_subslice.sh

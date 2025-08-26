@@ -23,8 +23,8 @@ model:
   
 # Training
 training:
-  num_epochs: 10
-  early_stopping_patience: 2
+  num_epochs: 125
+  early_stopping_patience: 40
   mixup_alpha: 0
   oversample: true
   undersample: false
@@ -38,7 +38,7 @@ optimizer:
   learning_rate: 2e-4  # Custom learning rate
   optimizer_name: "AdamW"  # Changed optimizer
   weight_decay: 2e-4
-  patience: 2
+  patience: 25
 
 data_augmentation:
   use_color_transforms: false
