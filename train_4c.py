@@ -197,8 +197,8 @@ def main():
     os.environ["MLFLOW_TRACKING_URI"] = MLFLOW_URI
     os.environ["MLFLOW_EXPERIMENT_NAME"] = EXPERIMENT_NAME
 
-    best_idx   = best_fold_idx(test_results)
-    best_model, _ = experiment._get_model_and_device()
+    best_idx   = best_fold_idx(test_results) # returns the index of the best fold
+    best_model, _ = experiment._get_model_and_device() 
     best_model.load_state_dict(
         torch.load(f"best_model_fold_{best_idx}.pth", map_location=device))
     best_model.eval()

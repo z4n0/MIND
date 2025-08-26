@@ -20,6 +20,8 @@ from utils.train_functions import train_epoch, val_epoch, freeze_layers_up_to, t
 # from utils.data_utils import make_loader, oversample_minority, undersample_majority
 # from utils.model_utils import print_model_summary
 from utils.transformations_functions import get_transforms, compute_dataset_mean_std
+from pathlib import Path # Added for Path operations
+
 class NestedCVStratifiedByPatient:
     """
     NestedCVStratifiedByPatient is a class that performs nested cross-validation on a dataset stratified by patient.
@@ -49,7 +51,7 @@ class NestedCVStratifiedByPatient:
         # per_fold_training_metrics, outer_fold_test_results = experiment.run_experiment()
     """
     def __init__(self, df, cfg, labels_np, pat_labels, unique_pat_ids, pretrained_weights,
-                 class_names, train_transforms=None, val_transforms=None, model_factory=None, model_manager=None, num_folds=None, compute_custom_normalization=False):
+                 class_names, train_transforms=None, val_transforms=None, model_factory=None, model_manager=None, num_folds=None, compute_custom_normalization=False, output_dir: str | None = None):
 
         self.df = df
         self._cfg = cfg
@@ -80,22 +82,40 @@ class NestedCVStratifiedByPatient:
         self.train_image_counts_per_fold = {}
         self.val_image_counts_per_fold = {}
         self._num_outer_images = None
+        self.output_dir = Path(output_dir or ".").resolve()
+        self.cm_dir = str(self.output_dir / "confusion_matrices")
+        self.learning_dir = str(self.output_dir / "learning_curves")
+        self._setup_directories()
 
         print(f"Detected {self.num_classes} unique classes.")
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device: torch.device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        )
 
-        self.per_fold_metrics = {
-            'train_loss': {}, 'val_loss': {}, 'train_accuracy': {},
-            'val_accuracy': {}, 'val_f1': {}, 'val_balanced_accuracy': {},
-            'val_precision': {}, 'val_recall': {}, 'val_auc': {}, 'val_mcc': {}
+        # Metrics for each fold, keyed by metric name and fold index
+        self.per_fold_metrics: dict[str, dict[int, float]] = {
+            'train_loss': {},
+            'val_loss': {},
+            'train_accuracy': {},
+            'val_accuracy': {},
+            'val_f1': {},
+            'val_balanced_accuracy': {},
+            'val_precision': {},
+            'val_recall': {},
+            'val_auc': {},
+            'val_mcc': {}
         }
-        self.fold_results = []
 
-        self.cm_dir = "confusion_matrices"
-        self.learning_dir = "learning_curves"
+        # Stores results for each fold (e.g., dicts of metrics or results)
+        self.fold_results: list[dict] = []
         self._setup_directories()
-        
+    
+    
+    def _setup_directories(self):
+        os.makedirs(self.cm_dir, exist_ok=True)
+        os.makedirs(self.learning_dir, exist_ok=True)
+    
     @property
     def cfg(self):
         return self._cfg
@@ -338,7 +358,7 @@ class NestedCVStratifiedByPatient:
 
         best_val_loss = float('inf')
         epochs_no_improve = 0
-        model_save_path = f'best_model_fold_{fold_idx}.pth'
+        model_save_path = str(self.output_dir / f"best_model_fold_{fold_idx}.pth")
 
         for epoch in range(self.num_epochs):
             current_lr = optimizer.param_groups[0]['lr']
@@ -373,7 +393,7 @@ class NestedCVStratifiedByPatient:
 
     def _evaluate_fold_on_test_set(self, fold_idx, model_path, loss_function_for_eval, X_test_outer, y_test_outer, best_lr_for_fold):
         model, device = self._get_model_and_device() # Get a fresh model instance
-        model.load_state_dict(torch.load(model_path))
+        model.load_state_dict(torch.load(str(model_path), map_location=device))
         model.eval()
 
         test_loader = make_loader(X_test_outer, y_test_outer, self.current_fold_val_transforms, self.cfg, shuffle=False)

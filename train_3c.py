@@ -170,6 +170,12 @@ def main():
             "Please ensure you have a compatible GPU and the necessary drivers installed."
         )
     # ---------- experiment -------------------------------------------------
+    job_id = os.environ.get("SLURM_JOB_ID") or os.environ.get("SLURM_JOBID") or str(os.getpid())
+    run_tag = f"{Path(args.yaml).stem}_{cfg.get_model_input_channels()}c"
+    RUN_DIR = (PROJ_ROOT / "runs" / f"{run_tag}_{job_id}").resolve()
+    RUN_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"Run directory: {RUN_DIR}")
+
     experiment = NestedCVStratifiedByPatient(
         df=df,
         cfg=cfg,
@@ -180,6 +186,7 @@ def main():
         class_names=class_names,
         model_manager=model_manager,
         num_folds=num_folds,
+        output_dir=str(RUN_DIR),
     )
 
     train_metrics, test_results = experiment.run_experiment()
@@ -197,9 +204,9 @@ def main():
     os.environ["MLFLOW_EXPERIMENT_NAME"] = EXPERIMENT_NAME
 
     best_idx   = best_fold_idx(test_results)
+    best_model_path = RUN_DIR / f"best_model_fold_{best_idx}.pth"
     best_model, _ = experiment._get_model_and_device()
-    best_model.load_state_dict(
-        torch.load(f"best_model_fold_{best_idx}.pth", map_location=device))
+    best_model.load_state_dict(torch.load(str(best_model_path), map_location=device))
     best_model.eval()
 
     log_SSL_run_to_mlflow(
