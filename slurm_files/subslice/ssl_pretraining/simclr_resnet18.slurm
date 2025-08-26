@@ -7,7 +7,7 @@
 #SBATCH --account=pMI24_EleBr_1
 #SBATCH --partition=boost_usr_prod
 #SBATCH --gres=gpu:1                    # 1 × A100 on "boost"
-#SBATCH --cpus-per-task=2               # dataloader / augmentations
+#SBATCH --cpus-per-task=8               # dataloader / augmentations
 #SBATCH --mem=32G                       # system RAM
 #SBATCH --time=01:00:00                 # hh:mm:ss
 # ––– temporary log file (renamed below) ––––––––––––––––––––––––––––––––––

@@ -20,7 +20,7 @@ data_augmentation:
 
 data_loading:
   batch_size: 8
-  num_workers: 0
+  num_workers: 4
 
 model:
   model_name: "base"

@@ -3,7 +3,7 @@
 #SBATCH --account=pMI24_EleBr_1
 #SBATCH --partition=boost_usr_prod
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=2
+#SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
 #SBATCH --time=00:55:00
 

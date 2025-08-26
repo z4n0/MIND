@@ -10,7 +10,7 @@ data_splitting:
 # Data Loading
 data_loading:
   batch_size: 32  # Custom batch size for DenseNet
-  num_workers: 0  # Increased workers
+  num_workers: 4  # Increased workers
 
 model:
   model_name: "Resnet18"  # Specific model name

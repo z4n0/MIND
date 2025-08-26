@@ -3,9 +3,9 @@
 #SBATCH --account=pMI24_EleBr_1
 #SBATCH --partition=boost_usr_prod
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
-#SBATCH --time=00:55:00
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=32G       # 32G is the minimum memory required for the model
+#SBATCH --time=01:35:00
 
 # --- 1) temporary log file -----------------------------------------------
 # At submission time SLURM doesn’t know the date, so we log to /tmp first

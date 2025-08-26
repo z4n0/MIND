@@ -23,7 +23,7 @@ model:
 # Data Loading
 data_loading:
   batch_size: 256  # Custom batch size for DenseNet
-  num_workers: 2  # Number of data loading workers
+  num_workers: 4  # Number of data loading workers
 
 data_augmentation:
   resize_spatial_size: [256, 256]           # [height, width] for input images

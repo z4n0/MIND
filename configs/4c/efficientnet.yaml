@@ -2,7 +2,7 @@ _base_: base.yaml
 
 data_loading:
   batch_size: 16
-  num_workers: 2
+  num_workers: 4
 
 model:
   model_name: "EfficientNet"
