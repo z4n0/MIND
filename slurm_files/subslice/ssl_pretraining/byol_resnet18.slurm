@@ -9,7 +9,7 @@
 #SBATCH --gres=gpu:1                    # 1 × A100 on "boost"
 #SBATCH --cpus-per-task=8               # dataloader / augmentations
 #SBATCH --mem=32G                       # system RAM
-#SBATCH --time=01:00:00                 # hh:mm:ss
+#SBATCH --time=01:50:00                 # hh:mm:ss
 # ––– temporary log file (renamed below) ––––––––––––––––––––––––––––––––––
 #SBATCH --output=/tmp/%x-%j.tmp.out
 

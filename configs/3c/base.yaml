@@ -1,6 +1,6 @@
 # config.yaml
 dataset:
-  class_names: ["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
+  class_names: ["MSA-P", "PD"] #["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
 
 data_splitting:
   random_seed: 42
@@ -10,7 +10,7 @@ data_splitting:
   # lr_kfold_splits: 2
 
 data_augmentation:
-  resize_spatial_size: [256,256]  # Tuple becomes list in YAML
+  resize_spatial_size: [512, 512]  # Tuple becomes list in YAML
   rand_flip_prob: 0.3
   rand_flip_spatial_axes: [0, 1]
   rand_rotate90_prob: 0.3

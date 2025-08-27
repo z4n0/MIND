@@ -422,9 +422,33 @@ def log_SSL_run_to_mlflow(
     train_counts: int = 0,
     val_counts: int = 0,
     test_counts: int = 0,
+    output_dir: Optional[str] = None,
 ) -> None:
-    """Log parameters, metrics and artifacts to MLflow (file store)."""
-
+    """
+    Log parameters, metrics and artifacts to MLflow (file store).
+    
+    Args:
+        cfg: Configuration object containing model and training parameters
+        model: The trained PyTorch model
+        class_names: List of class names
+        fold_results: Results from each cross-validation fold
+        per_fold_metrics: Metrics recorded for each fold during training
+        test_transforms: Transforms used for test data
+        test_images_paths_np: Array of test image paths
+        test_true_labels_np: Array of true labels for test images
+        yaml_path: Path to the configuration YAML file
+        color_transforms: Whether color transformations were used
+        model_library: Library used for the model ("torchvision" or "monai")
+        pretrained_weights: Source of pretrained weights if used
+        ssl: Whether self-supervised learning was used (bool flag)
+        encoder_type: Type of encoder used for SSL
+        freeze_encoder: Whether the encoder was frozen during training
+        execution_time: Total execution time in seconds
+        train_counts: Number of training samples
+        val_counts: Number of validation samples
+        test_counts: Number of test samples
+        output_dir: Directory where run outputs (models, plots) are stored
+    """
     # ------------------------------------------------------------------ URI
     env_experiment_name = os.getenv("MLFLOW_EXPERIMENT_NAME")
     if not env_experiment_name:
@@ -447,7 +471,7 @@ def log_SSL_run_to_mlflow(
         pretrained_weights=pretrained_weights,
     )
     exp_suffix = "SSL" if ssl else "supervised"
-    exp_name = f"{env_experiment_name}_{'_vs_'.join(class_names)}_{cfg.get_model_input_channels()}c_{exp_suffix}"
+    exp_name = f"{env_experiment_name}_{'_vs_'.join(class_names)}_{exp_suffix}"
     mlflow.set_experiment(exp_name)
 
     with mlflow.start_run(run_name=run_name):
@@ -534,14 +558,37 @@ def log_SSL_run_to_mlflow(
 
         # 4. learning curves (if produced)
         lc_dir = Path.cwd() / "learning_curves"
-        if lc_dir.is_dir():
+        # prefer output_dir if specified
+        if output_dir and Path(output_dir).joinpath("learning_curves").is_dir():
+            lc_dir = Path(output_dir) / "learning_curves"
+        elif lc_dir.is_dir():
+            # Use current working directory as fallback
+            pass
+        else:
+            raise RuntimeError("learning_curves directory not found")
+
+        if lc_dir and lc_dir.is_dir():
             mlflow.log_artifacts(str(lc_dir), artifact_path="learning_curves")
+            
+        # 5. confusion matrices (if produced)
+        cm_dir = Path.cwd() / "confusion_matrices"
+        # prefer output_dir if specified
+        if output_dir and Path(output_dir).joinpath("confusion_matrices").is_dir():
+            cm_dir = Path(output_dir) / "confusion_matrices"
+        elif cm_dir.is_dir():
+            # Use current working directory as fallback
+            pass
+        else:
+            cm_dir = None
+            
+        if cm_dir and cm_dir.is_dir():
+            mlflow.log_artifacts(str(cm_dir), artifact_path="confusion_matrices")
 
-        # 5. train.py backup
-        if Path("train.py").is_file():
-            mlflow.log_artifact("train.py", artifact_path="scripts")
+        # 6. train.py backup (was originally 5)
+        # if Path("train.py").is_file():
+        #     mlflow.log_artifact("train.py", artifact_path="scripts")
 
-        # 6. Grad-CAM / attention maps
+        # 7. Grad-CAM / attention maps
         try:
             if "vit" in cfg.get_model_name().lower():
                 if not ssl:
@@ -554,7 +601,7 @@ def log_SSL_run_to_mlflow(
                     )
             else:
                 if not ssl:
-                    tmp_dir = Path.cwd() / "tmp_gradcam"
+                    tmp_dir = Path(output_dir) / "tmp_gradcam" if output_dir else Path.cwd() / "tmp_gradcam"
                     tmp_dir.mkdir(exist_ok=True)
                     log_gradcam_to_mlflow(
                         model,
@@ -570,6 +617,8 @@ def log_SSL_run_to_mlflow(
                     )
         finally:
             # ensure temp dirs are cleaned even if log_artifacts() fails
+            if output_dir:
+                shutil.rmtree(Path(output_dir) / "tmp_gradcam", ignore_errors=True)
             shutil.rmtree(Path.cwd() / "tmp_gradcam", ignore_errors=True)
 
     # restore
@@ -691,7 +740,7 @@ def log_gradcam_to_mlflow(
             experiment_name=experiment_name
         )
         mlflow.log_artifacts(thresholded_gradcam_folder, artifact_path="gradcam_images_with_threshold")
-        shutil.rmtree(thresholded_gradcam_folder, ignore_errors=True)
     except Exception as e:
-        print(f"Error generating GradCAM with threshold: {e}")
-        
+        print(f"Error generating thresholded GradCAM images: {e}")
+    finally:
+        shutil.rmtree(thresholded_gradcam_folder, ignore_errors=True)

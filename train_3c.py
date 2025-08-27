@@ -19,6 +19,7 @@ from pathlib import Path
 import torch.cuda
 import torch.backends.cudnn as cudnn
 from monai.utils.misc import set_determinism
+import shutil  # added
 
 # ──────────────────────── PYTHONPATH ───────────────────────────────────────
 PROJ_ROOT = Path(__file__).resolve().parent
@@ -232,6 +233,14 @@ def main():
         test_counts=test_counts,
         output_dir=str(RUN_DIR),
     )
+
+    # ---------- cleanup ----------------------------------------------------
+    if os.environ.get("KEEP_RUN_DIR", "0").lower() not in ("1", "true", "yes"):
+        try:
+            print(f"Cleaning up run directory: {RUN_DIR}")
+            shutil.rmtree(RUN_DIR, ignore_errors=True)
+        except Exception as e:
+            print(f"Warning: failed to remove {RUN_DIR}: {e}")
 
 if __name__ == "__main__":
     main()
