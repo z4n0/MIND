@@ -18,6 +18,7 @@ from sklearn.model_selection import train_test_split
 from pathlib import Path
 import torch.backends.cudnn as cudnn
 from monai.utils.misc import set_determinism
+import shutil  # added
 
 # ──────────────────────── PYTHONPATH ───────────────────────────────────────
 PROJ_ROOT = Path(__file__).resolve().parent
@@ -155,28 +156,32 @@ def main():
     unique_pats = pat_df["patient_id"].values
     pat_labels  = pat_df["label"].values
 
+    # Reuse single job id for all weight variants
+    job_id = os.environ.get("SLURM_JOB_ID") or os.environ.get("SLURM_JOBID") or str(os.getpid())
+
     for pretrained_weights in available_weights:
         start_time = time.time()
         print(f"Running experiment with pretrained weights: {pretrained_weights}")
         cfg.set_pretrained_weights(pretrained_weights)
-        # ---------- transforms (as in notebook) --------------------------------
-        try: 
-            train_transforms, val_transforms, _ = tf.get_transforms(
-                cfg, color_transforms=False
-            )
+
+        # Transforms & model
+        try:
+            train_transforms, val_transforms, _ = tf.get_transforms(cfg, color_transforms=False)
             model_manager = ModelManager(cfg, library=cfg.get_model_library())
             model, device = model_manager.setup_model(len(class_names), pretrained_weights)
         except Exception as e:
-            print(f"Error in getting transforms: {e}")
-            print("Please check your configuration and transformations.")
-            return
-        # ---------- model ----------------------------------------
+            print(f"Setup failed for weights '{pretrained_weights}': {e}")
+            continue
+
         if device.type != "cuda":
-            raise RuntimeError(
-                "This script is intended to run on a CUDA-enabled GPU. "
-                "Please ensure you have a compatible GPU and the necessary drivers installed."
-            )
-        # ---------- experiment -------------------------------------------------
+            raise RuntimeError("CUDA required.")
+
+        # Per-weight run directory (isolated artifacts)
+        run_tag = f"{Path(args.yaml).stem}_{cfg.get_model_input_channels()}c_{pretrained_weights}"
+        RUN_DIR = (PROJ_ROOT / "runs" / f"{run_tag}_{job_id}").resolve()
+        RUN_DIR.mkdir(parents=True, exist_ok=True)
+        print(f"[{pretrained_weights}] Run directory: {RUN_DIR}")
+
         experiment = NestedCVStratifiedByPatient(
             df=df,
             cfg=cfg,
@@ -187,19 +192,28 @@ def main():
             class_names=class_names,
             model_manager=model_manager,
             num_folds=num_folds,
+            output_dir=str(RUN_DIR),
         )
 
         train_metrics, test_results = experiment.run_experiment()
         execution_time = time.time() - start_time
-        # ---------- MLflow logging --------------------------------------------
-        EXPERIMENT_NAME = f"supervised_learning_{num_channels}c"    
+
+        # Counts (parity with train_4c)
+        train_counts, val_counts = experiment.get_early_stopping_split_counts()
+        test_counts = experiment.num_outer_images
+        print(f"[{pretrained_weights}] Train counts per fold: {train_counts}")
+        print(f"[{pretrained_weights}] Val counts per fold: {val_counts}")
+        print(f"[{pretrained_weights}] Test count: {test_counts}")
+
+        # MLflow env
+        EXPERIMENT_NAME = f"supervised_learning_{cfg.get_model_input_channels()}c"
         os.environ["MLFLOW_TRACKING_URI"] = MLFLOW_URI
         os.environ["MLFLOW_EXPERIMENT_NAME"] = EXPERIMENT_NAME
 
-        best_idx   = best_fold_idx(test_results)
+        best_idx = best_fold_idx(test_results)
+        best_model_path = RUN_DIR / f"best_model_fold_{best_idx}.pth"
         best_model, _ = experiment._get_model_and_device()
-        best_model.load_state_dict(
-            torch.load(f"best_model_fold_{best_idx}.pth", map_location=device))
+        best_model.load_state_dict(torch.load(str(best_model_path), map_location=device))
         best_model.eval()
 
         log_SSL_run_to_mlflow(
@@ -208,7 +222,7 @@ def main():
             class_names=class_names,
             fold_results=test_results,
             per_fold_metrics=train_metrics,
-            test_transforms=val_transforms,            
+            test_transforms=val_transforms,   # using val_transforms for logging consistency
             test_images_paths_np=te_imgs,
             test_true_labels_np=te_y,
             yaml_path=str(PROJ_ROOT / args.yaml),
@@ -216,7 +230,19 @@ def main():
             model_library=model_library,
             pretrained_weights=pretrained_weights,
             execution_time=execution_time,
+            train_counts=train_counts,
+            val_counts=val_counts,
+            test_counts=test_counts,
+            output_dir=str(RUN_DIR),
         )
+
+        # Cleanup per weight
+        if os.environ.get("KEEP_RUN_DIR", "0").lower() not in ("1", "true", "yes"):
+            try:
+                print(f"[{pretrained_weights}] Cleaning up {RUN_DIR}")
+                shutil.rmtree(RUN_DIR, ignore_errors=True)
+            except Exception as e:
+                print(f"Warning: failed to remove {RUN_DIR}: {e}")
 
 if __name__ == "__main__":
     main()
