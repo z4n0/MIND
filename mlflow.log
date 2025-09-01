@@ -1,13 +1,13 @@
-[2025-09-01 16:58:39 +0200] [134340] [INFO] Starting gunicorn 23.0.0
-[2025-09-01 16:58:39 +0200] [134340] [ERROR] Connection in use: ('127.0.0.1', 5000)
-[2025-09-01 16:58:39 +0200] [134340] [ERROR] connection to ('127.0.0.1', 5000) failed: [Errno 98] Address already in use
-[2025-09-01 16:58:40 +0200] [134340] [ERROR] Connection in use: ('127.0.0.1', 5000)
-[2025-09-01 16:58:40 +0200] [134340] [ERROR] connection to ('127.0.0.1', 5000) failed: [Errno 98] Address already in use
-[2025-09-01 16:58:41 +0200] [134340] [ERROR] Connection in use: ('127.0.0.1', 5000)
-[2025-09-01 16:58:41 +0200] [134340] [ERROR] connection to ('127.0.0.1', 5000) failed: [Errno 98] Address already in use
-[2025-09-01 16:58:42 +0200] [134340] [ERROR] Connection in use: ('127.0.0.1', 5000)
-[2025-09-01 16:58:42 +0200] [134340] [ERROR] connection to ('127.0.0.1', 5000) failed: [Errno 98] Address already in use
-[2025-09-01 16:58:43 +0200] [134340] [ERROR] Connection in use: ('127.0.0.1', 5000)
-[2025-09-01 16:58:43 +0200] [134340] [ERROR] connection to ('127.0.0.1', 5000) failed: [Errno 98] Address already in use
-[2025-09-01 16:58:44 +0200] [134340] [ERROR] Can't connect to ('127.0.0.1', 5000)
+[2025-09-01 22:24:54 +0200] [164128] [INFO] Starting gunicorn 23.0.0
+[2025-09-01 22:24:54 +0200] [164128] [ERROR] Connection in use: ('127.0.0.1', 5000)
+[2025-09-01 22:24:54 +0200] [164128] [ERROR] connection to ('127.0.0.1', 5000) failed: [Errno 98] Address already in use
+[2025-09-01 22:24:55 +0200] [164128] [ERROR] Connection in use: ('127.0.0.1', 5000)
+[2025-09-01 22:24:55 +0200] [164128] [ERROR] connection to ('127.0.0.1', 5000) failed: [Errno 98] Address already in use
+[2025-09-01 22:24:56 +0200] [164128] [ERROR] Connection in use: ('127.0.0.1', 5000)
+[2025-09-01 22:24:56 +0200] [164128] [ERROR] connection to ('127.0.0.1', 5000) failed: [Errno 98] Address already in use
+[2025-09-01 22:24:57 +0200] [164128] [ERROR] Connection in use: ('127.0.0.1', 5000)
+[2025-09-01 22:24:57 +0200] [164128] [ERROR] connection to ('127.0.0.1', 5000) failed: [Errno 98] Address already in use
+[2025-09-01 22:24:58 +0200] [164128] [ERROR] Connection in use: ('127.0.0.1', 5000)
+[2025-09-01 22:24:58 +0200] [164128] [ERROR] connection to ('127.0.0.1', 5000) failed: [Errno 98] Address already in use
+[2025-09-01 22:24:59 +0200] [164128] [ERROR] Can't connect to ('127.0.0.1', 5000)
 Running the mlflow server failed. Please see the logs above for details.

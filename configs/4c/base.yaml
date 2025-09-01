@@ -19,7 +19,7 @@ data_augmentation:
   rand_gaussian_noise_std: 0.1
 
 data_loading:
-  batch_size: 32
+  batch_size: 64
   num_workers: 4
 
 model:

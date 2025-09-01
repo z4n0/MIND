@@ -268,7 +268,8 @@ def get_transforms(cfg, color_transforms=True, fold_specific_stats=None):
         normalization_params: A dictionary with keys 'subtrahend' and 'divisor'.
     
     Returns:
-        train_transforms, val_transforms, test_transforms
+        tuple (train_transforms, val_transforms, test_transforms)
+        each of these is a Compose object containing the necessary transformations list.
     """
     # select the normalization params if you are using a pretrained model
     is_pretrained = cfg.training["transfer_learning"]
