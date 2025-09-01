@@ -21,6 +21,7 @@ source "$HOME/venvs/tesi/bin/activate"
 export DATA_ROOT="$WORK/lzanotto/FOLDER_CINECA/data"
 export MLFLOW_TRACKING_URI="file:$WORK/lzanotto/FOLDER_CINECA/mlruns"
 export MLFLOW_EXPERIMENT_NAME="tesi_cv"
+export PRETRAINED_WEIGHTS_DIR="$WORK/lzanotto/FOLDER_CINECA/pretrained_weights/"
 
 # make your code (FOLDER_CINECA) importable
 export PYTHONPATH="$SLURM_SUBMIT_DIR:$PYTHONPATH"

@@ -77,6 +77,9 @@ def main():
     # ---------- env vars ---------------------------------------------------
     # DATA_ROOT  = Path(os.environ["DATA_ROOT"])
     MLFLOW_URI = os.environ["MLFLOW_TRACKING_URI"]
+    # print pretrained weights env variable path
+    PRETRAINED_WEIGHTS_DIR = os.environ["PRETRAINED_WEIGHTS_DIR"]
+    print(f"Pretrained weights folder: {PRETRAINED_WEIGHTS_DIR}")
     # ---------- reproducibility -------------------------------------------
     SEED = 42
     set_global_seed(SEED)
@@ -96,7 +99,7 @@ def main():
     #NOTE if you want to change the number of channels use
     # cfg.set_num_input_channels(3) # or 4
     #NOTE if you want to change the pretrained weights use
-    available_weights = ["imagenet-microscopynet", "microscopynet"] #"torchvision", "monai", 
+    available_weights = ["torchvision","imagenet-microscopynet"] #"torchvision", "monai", 
     #cfg.set_pretrained_weights("torchvision") # or "monai" or "imagenet-microscopynet" "microscopynet"
     #NOTE if you want to change the number of epochs use
     # cfg.set_num_epochs(100) # or any other number
