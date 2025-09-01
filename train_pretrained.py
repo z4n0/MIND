@@ -75,8 +75,8 @@ def main():
     args = parse()
     # start_time = time.time()
     # ---------- env vars ---------------------------------------------------
-    # DATA_ROOT  = Path(os.environ["DATA_ROOT"])
-    MLFLOW_URI = os.environ["MLFLOW_TRACKING_URI"]
+    DATA_ROOT  = Path(os.environ["DATA_ROOT"])
+    # MLFLOW_URI = os.environ["MLFLOW_TRACKING_URI"]
     # print pretrained weights env variable path
     PRETRAINED_WEIGHTS_DIR = os.environ["PRETRAINED_WEIGHTS_DIR"]
     print(f"Pretrained weights folder: {PRETRAINED_WEIGHTS_DIR}")
@@ -207,11 +207,6 @@ def main():
         print(f"[{pretrained_weights}] Train counts per fold: {train_counts}")
         print(f"[{pretrained_weights}] Val counts per fold: {val_counts}")
         print(f"[{pretrained_weights}] Test count: {test_counts}")
-
-        # MLflow env
-        EXPERIMENT_NAME = f"SL_pretrained_{cfg.get_model_input_channels()}c"
-        os.environ["MLFLOW_TRACKING_URI"] = MLFLOW_URI
-        os.environ["MLFLOW_EXPERIMENT_NAME"] = EXPERIMENT_NAME
 
         best_idx = best_fold_idx(test_results)
         best_model_path = RUN_DIR / f"best_model_fold_{best_idx}.pth"
