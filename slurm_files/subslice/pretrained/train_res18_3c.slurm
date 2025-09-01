@@ -21,12 +21,13 @@ source "$HOME/venvs/tesi/bin/activate"
 export DATA_ROOT="$WORK/lzanotto/FOLDER_CINECA/data/SUBSLICE_MIPS"
 export MLFLOW_TRACKING_URI="file:$WORK/lzanotto/FOLDER_CINECA/mlruns"
 export MLFLOW_EXPERIMENT_NAME="tesi_cv_subslice"
+export PRETRAINED_WEIGHTS_DIR=$WORK/pretrained_weights
 
 # make your code (FOLDER_CINECA) importable
 export PYTHONPATH="$SLURM_SUBMIT_DIR:$PYTHONPATH"
 
 # --- 4) rename log with timestamp -----------------------------------------
-ts=$(date +'%Y-%m-%d_%H-%M-%S')                  # e.g. 2025-06-19_14-42-33
+ts=$(date +'%Y-%m-%d_%H-%M-%S')                  #e.g. 2025-06-19_14-42-33
 log_dir="$SLURM_SUBMIT_DIR/logs"
 mkdir -p "$log_dir"
 

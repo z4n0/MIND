@@ -17,3 +17,4 @@ learning_curves*.png
 *.out
 lightning_logs/*
 runs/*
+pretrained_weights/*

@@ -1,12 +1,12 @@
 # config.yaml
 dataset:
-  class_names: ["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
+  class_names: ["MSA-P", "PD"] # ["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
 
 data_splitting:
   random_seed: 42
   val_set_size: 0.2
   test_set_size: 0.10
-  num_folds: 8
+  num_folds: 2
 
 data_augmentation:
   resize_spatial_size: [256,256]  # Tuple becomes list in YAML
@@ -19,7 +19,7 @@ data_augmentation:
   rand_gaussian_noise_std: 0.1
 
 data_loading:
-  batch_size: 32
+  batch_size: 64
   num_workers: 4
 
 model:

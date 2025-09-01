@@ -622,7 +622,7 @@ def log_SSL_run_to_mlflow(
             shutil.rmtree(Path.cwd() / "tmp_gradcam", ignore_errors=True)
 
     # restore
-    cfg.set_freezed_layer_index(None)
+    # cfg.set_freezed_layer_index(None)
 
 def log_attention_maps_to_mlflow(
     model: nn.Module,

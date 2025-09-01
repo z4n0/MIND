@@ -5,6 +5,8 @@ import torch.utils.model_zoo as model_zoo
 from torch.hub import load_state_dict_from_url
 from torchvision.models import resnet50, ResNet50_Weights
 import torchvision.models as tv_models
+from pathlib import Path
+import os
 # Make sure to install the pretrainedmodels package:
 # pip install pretrainedmodels
 import pretrainedmodels
@@ -118,7 +120,8 @@ def get_nasa_pretrained_model(
     assert model_name in available_nets, f"{model_name} is not a valid model to use nasa pretrained weights"
     if not hasattr(tv_models, model_name):
         raise ValueError(f"{model_name} is not a valid model in torchvision.models")
-    
+
+    # Get the constructor for the model defined by model_name
     constructor = getattr(tv_models, model_name)
     # 1) Instantiate model without default weights
     try:
@@ -126,9 +129,24 @@ def get_nasa_pretrained_model(
     except TypeError:
         model = constructor(pretrained=False)     # fallback for legacy versions
 
-    # 2) Download and load the custom state_dict
-    url = get_pretrained_microscopynet_url(model_name, pretrained_weights) # get the url of the pretrained nasa weights
-    state_dict = load_state_dict_from_url(url, progress=True, map_location=map_location)
+    # --- LOCAL FIRST -------------------------------------------------------
+    # Construct expected local filename: <model>_pretrained_<pretrained_weights>_v1.0.pth.tar
+    fname = f"{model_name}_pretrained_{pretrained_weights}_v1.0.pth.tar"
+    local_dir = os.environ.get("PRETRAINED_WEIGHTS_DIR", "") #get the local directory
+    local_path = Path(local_dir) / fname if local_dir else Path(fname)
+    
+    # Check if the local weights file exists
+    if local_path.exists():
+        print(f"[microscopy] Loading local weights: {local_path}")
+        state_dict = torch.load(local_path, map_location=map_location)
+        # unwrap if checkpoint saved as {'state_dict': {...}}
+        if isinstance(state_dict, dict) and 'state_dict' in state_dict:
+            state_dict = state_dict['state_dict']
+    else:# --- DOWNLOAD IF LOCAL NOT FOUND ---------------------------------------
+        print(f"[microscopy] Local file not found: {local_path} -> downloading")
+        url = get_pretrained_microscopynet_url(model_name, pretrained_weights)
+        state_dict = load_state_dict_from_url(url, progress=True, map_location=map_location)
+    
     model.load_state_dict(state_dict, strict=False)  # strict=False to allow partial loading
     model.eval()
 

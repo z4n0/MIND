@@ -407,9 +407,12 @@ class ConfigLoader:
             raise ValueError("Model configuration is not set")
         return self.model.get("pretrained_weights", None)
     
-    def set_pretrained_weights(self,weights: str) -> None:
-        "set the weights used by the model"
-        self.model.pretrained_weights= weights
+    def set_pretrained_weights(self, weights):
+        # Normalize both dict or object cases
+        if isinstance(self.model, dict):
+            self.model['pretrained_weights'] = weights
+        else:
+            self.model.pretrained_weights = weights
     
     def set_model_input_channels(self, in_channels: int) -> None:
         """Set the number of input channels for the model

@@ -96,7 +96,7 @@ def main():
     #NOTE if you want to change the number of channels use
     # cfg.set_num_input_channels(3) # or 4
     #NOTE if you want to change the pretrained weights use
-    available_weights = ["torchvision", "monai", "imagenet-microscopynet", "microscopynet"]
+    available_weights = ["imagenet-microscopynet", "microscopynet"] #"torchvision", "monai", 
     #cfg.set_pretrained_weights("torchvision") # or "monai" or "imagenet-microscopynet" "microscopynet"
     #NOTE if you want to change the number of epochs use
     # cfg.set_num_epochs(100) # or any other number
@@ -206,7 +206,7 @@ def main():
         print(f"[{pretrained_weights}] Test count: {test_counts}")
 
         # MLflow env
-        EXPERIMENT_NAME = f"supervised_learning_{cfg.get_model_input_channels()}c"
+        EXPERIMENT_NAME = f"SL_pretrained_{cfg.get_model_input_channels()}c"
         os.environ["MLFLOW_TRACKING_URI"] = MLFLOW_URI
         os.environ["MLFLOW_EXPERIMENT_NAME"] = EXPERIMENT_NAME
 

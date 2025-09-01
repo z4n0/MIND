@@ -1,0 +1,44 @@
+_base_: base.yaml 
+# inherits from base.yaml overwriting all the parameters following this line if they exist
+
+# Data Splitting
+data_splitting:
+  random_seed: 42
+  val_set_size: 0.15
+  test_set_size: 0.1
+
+
+# Data Loading
+data_loading:
+  batch_size: 32  
+  num_workers: 4  
+
+model:
+  model_name: "Densenet121" 
+  spatial_dims: 2
+  in_channels: 3
+  out_channels: 2
+  pretrained_weights: "monai"
+  
+# Training
+training:
+  num_epochs: 125
+  early_stopping_patience: 40
+  mixup_alpha: 0  # Added mixup
+  oversample: true
+  undersample: false
+  weighted_loss: false
+  fine_tuning: false
+  transfer_learning: false
+  freezed_layerIndex: 263
+
+# Optimizer
+optimizer:
+  learning_rate: 2e-4
+  optimizer_name: "AdamW"
+  weight_decay: 1e-4
+  patience: 25
+
+# Data Augmentation
+data_augmentation:
+  use_color_transforms: false

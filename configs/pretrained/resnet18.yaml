@@ -23,13 +23,13 @@ model:
 # Training
 training:
   num_epochs: 200
-  early_stopping_patience: 60
+  early_stopping_patience: 2
   mixup_alpha: 0
   oversample: true
   undersample: false
   weighted_loss: false
   fine_tuning: false
-  transfer_learning: false
+  transfer_learning: true
   freezed_layerIndex: 50
 
 # Optimizer
