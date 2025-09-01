@@ -23,7 +23,7 @@ model:
   
 # Data Loading
 data_loading:
-  batch_size: 127   # Reduced batch size to fit dataset size (127 images)
+  batch_size: 128   # Reduced batch size to fit dataset size (127 images)
   num_workers: 4   # Number of data loading workers
   loader_type: full-image #full-image or patch # Use Lightly's DataLoader for SimCLR
 
