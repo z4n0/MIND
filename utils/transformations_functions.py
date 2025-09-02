@@ -161,16 +161,16 @@ def _get_spatial_augmentations(cfg):
                 prob=cfg.data_augmentation["rand_rotate90_prob"], 
                 max_k=cfg.data_augmentation["rand_rotate90_max_k"]
             ),
-            Rand2DElasticd(
-                keys=["image"],
-                spacing=cfg.data_augmentation.get("rand_2d_elastic_spacing", (30, 30)), # Spacing for the grid control points
-                magnitude_range=cfg.data_augmentation.get("rand_2d_elastic_magnitude", (0.2, 1.5)), # Magnitude of the elastic deformation 
-                prob=0.20,
-                rotate_range=cfg.data_augmentation.get("rand_2d_elastic_rotate_range", (np.pi / 14)), # rotation range between -pi/12 and pi/12
-                scale_range=cfg.data_augmentation.get("rand_2d_elastic_scale_range", (0.93, 1.1)), #zoom range between 93% and 110%
-                mode='bilinear',
-                padding_mode='border',
-            ),
+            # Rand2DElasticd(
+            #     keys=["image"],
+            #     spacing=cfg.data_augmentation.get("rand_2d_elastic_spacing", (30, 30)), # Spacing for the grid control points
+            #     magnitude_range=cfg.data_augmentation.get("rand_2d_elastic_magnitude", (0.2, 1.5)), # Magnitude of the elastic deformation 
+            #     prob=0.20,
+            #     rotate_range=cfg.data_augmentation.get("rand_2d_elastic_rotate_range", (np.pi / 14)), # rotation range between -pi/12 and pi/12
+            #     scale_range=cfg.data_augmentation.get("rand_2d_elastic_scale_range", (0.93, 1.1)), #zoom range between 93% and 110%
+            #     mode='bilinear',
+            #     padding_mode='border',
+            # ),
         ]
     return spatial_transforms
 
