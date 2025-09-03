@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
-#SBATCH --time=01:55:00
+#SBATCH --time=02:55:00
 
 # --- 1) temporary log file -----------------------------------------------
 # At submission time SLURM doesn’t know the date, so we log to /tmp first
@@ -20,7 +20,7 @@ source "$HOME/venvs/tesi/bin/activate"
 # 3) project-specific environment
 export DATA_ROOT="$WORK/lzanotto/FOLDER_CINECA/data"
 export MLFLOW_TRACKING_URI="file:$WORK/lzanotto/FOLDER_CINECA/mlruns"
-export MLFLOW_EXPERIMENT_NAME="tesi_cv"
+export MLFLOW_EXPERIMENT_NAME="supervised_Single_MIP"
 
 # make your code (FOLDER_CINECA) importable
 export PYTHONPATH="$SLURM_SUBMIT_DIR:$PYTHONPATH"

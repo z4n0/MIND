@@ -204,9 +204,9 @@ def main():
     print("Validation counts per fold:", val_counts)
     print("Test count:", test_counts)
     # ---------- MLflow logging --------------------------------------------
-    EXPERIMENT_NAME = f"supervised_learning_{num_channels}c"    
+    # EXPERIMENT_NAME = f"supervised_learning_{num_channels}c"    
     os.environ["MLFLOW_TRACKING_URI"] = MLFLOW_URI
-    os.environ["MLFLOW_EXPERIMENT_NAME"] = EXPERIMENT_NAME
+    # os.environ["MLFLOW_EXPERIMENT_NAME"] = EXPERIMENT_NAME
 
     best_idx   = best_fold_idx(test_results)
     best_model_path = RUN_DIR / f"best_model_fold_{best_idx}.pth"
