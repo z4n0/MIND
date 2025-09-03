@@ -1,6 +1,6 @@
 # config.yaml
 dataset:
-  class_names: ["MSA-P", "PD"] # ["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
+  class_names: ["MSA", "PD"] #["MSA-P", "PD"] ##["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
 
 data_splitting:
   random_seed: 42
