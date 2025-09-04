@@ -28,10 +28,10 @@ model:
   in_channels: 3
   out_channels: 2
   dropout_prob: 0.1
-  library: "monai"
+  library: "torchvision"
 
 training:
-  num_epochs: 50
+  num_epochs: 150
   early_stopping_patience: 17
   mixup_alpha: 0
   oversample: true

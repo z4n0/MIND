@@ -479,6 +479,7 @@ def log_SSL_run_to_mlflow(
         mlflow.log_params(
             {
                 "epochs": cfg.training["num_epochs"],
+                "num_channels": cfg.model["in_channels"],
                 "batch_size": cfg.get_batch_size(),
                 "transfer_learning": cfg.training["transfer_learning"],
                 "fine_tuning": cfg.training["fine_tuning"],
