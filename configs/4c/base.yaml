@@ -1,5 +1,5 @@
 dataset:
-  class_names: ["MSA-P", "PD"] #["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
+  class_names: ["MSA", "PD"] #["MSA-P", "PD"] #["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
 
 # config.yaml
 data_splitting:

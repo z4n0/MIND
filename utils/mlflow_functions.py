@@ -470,6 +470,7 @@ def log_SSL_run_to_mlflow(
         model_library=model_library,
         pretrained_weights=pretrained_weights,
     )
+    
     exp_suffix = "SSL" if ssl else "supervised"
     exp_name = f"{env_experiment_name}_{'_vs_'.join(class_names)}_{exp_suffix}"
     mlflow.set_experiment(exp_name)

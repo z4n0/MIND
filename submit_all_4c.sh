@@ -4,6 +4,8 @@
 # submit_all.sh  –  sbatch every .slurm file under slurm_files/ with delay
 
 set -euo pipefail
+# Load SLURM module (required on CINECA systems)
+module load profile/deeplrn
 
 SCRIPTS_DIR="slurm_files/4c"
 DELAY_MINUTES=15

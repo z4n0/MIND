@@ -18,3 +18,4 @@ learning_curves*.png
 lightning_logs/*
 runs/*
 pretrained_weights/*
+*.csv
