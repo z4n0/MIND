@@ -18,7 +18,7 @@ model:
   spatial_dims: 2
   in_channels: 4
   out_channels: 2 #TODO should be called num_classes
-  library: "torchvision"  # Using torchvision for 4 channels support can use also monai
+  library: "monai"  # Using monai for 4 channels support can use also monai
 # Training
 training:
   num_epochs: 210

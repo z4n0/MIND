@@ -4,7 +4,7 @@ _base_: base.yaml
 # Data Splitting
 data_splitting:
   random_seed: 42
-  val_set_size: 0.17
+  val_set_size: 0.15
   test_set_size: 0.1
 
 

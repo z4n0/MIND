@@ -4,7 +4,7 @@ dataset:
 
 data_splitting:
   random_seed: 42
-  val_set_size: 0.2
+  val_set_size: 0.15
   test_set_size: 0.10
   num_folds: 8
 

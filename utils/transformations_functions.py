@@ -1,15 +1,15 @@
 import numpy as np
 from monai.transforms import (
     Compose,
-    LoadImaged,
-    EnsureChannelFirstd,
+    # LoadImaged,
+    # EnsureChannelFirstd,
     Resized,
     ScaleIntensityd,
     NormalizeIntensityd,
     RandFlipd,
     RandRotate90d,
     RandGaussianNoised,
-    RandRotated,
+    # RandRotated,
     RandAdjustContrastd,
     RandBiasFieldd,  # Simulates a smooth, spatially varying intensity bias field (common in microscopy due to uneven illumination). Highly recommended.
     EnsureTyped,
@@ -20,6 +20,7 @@ from monai.transforms import (
     AddCoordinateChannelsd,  # Adds channels representing spatial coordinates; can sometimes help CNNs learn spatial relationships.
     RandCoarseDropoutd,
     CenterSpatialCropd,
+    RandCropd,
     Rand2DElasticd,
     RandGridPatchd,
     ClipIntensityPercentilesd,  # Clip intensities at specified low and high percentiles to remove extreme outlier pixels.
@@ -309,29 +310,37 @@ def get_transforms(cfg, color_transforms=True, fold_specific_stats=None):
 
 def get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats):
     """
-    Generate training and validation transform lists for custom (non-pretrained or unsupported) models.
-
-    Args:
-        cfg: Configuration object/dictionary.
-        is_supported_by_torchvision (bool): Whether the model is supported by torchvision.
-        color_transforms (bool): Whether to include color/intensity augmentations.
-        fold_specific_stats (dict or None): Normalization stats (mean, std) for the current fold.
-
-    Returns:
-        Tuple[List[MapTransform], List[MapTransform]]: Training and validation transform lists.
+    Generate training and validation transform lists for custom models.
     """
     print(f"Model {cfg.get_model_name()} not supported using custom transforms")
     supported_by_torchvision = is_supported_by_torchvision(cfg.get_model_name())
     
+    # Pipeline di base che carica e ridimensiona
     train_transforms_list = _get_preNormalization_transforms_list(cfg, supported_by_torchvision)
 
+    # --- INSERISCI QUESTA PARTE ---
+    # Aggiungi il cropping casuale per forzare il modello a ignorare i bordi.
+    # Prima calcoliamo la dimensione del crop, ad esempio il 90% della dimensione dell'immagine.
+    original_size = cfg.data_augmentation["resize_spatial_size"]  # Es: (512, 512)
+    crop_percentage = 0.90
+    crop_size = (int(original_size[0] * crop_percentage), int(original_size[1] * crop_percentage))
+    
+    print(f"Applying random crop with size: {crop_size}")
+    train_transforms_list.append(
+        RandCropd(keys=["image"], roi_size=crop_size, random_size=False)
+    )
+    # -----------------------------
+
+    # Ora applica le altre aumentazioni spaziali sull'immagine croppata
     spatial_transforms = _get_spatial_augmentations(cfg)
     train_transforms_list.extend(spatial_transforms)
-    # Conditionally add color transforms if enabled
+
+    # Aggiungi le aumentazioni di intensità
     if color_transforms:
         intensity_transforms = _get_intensity_augmentations(cfg)
         train_transforms_list.extend(intensity_transforms)
         
+    # Applica la normalizzazione
     if fold_specific_stats:
         print(f"Applying fold-specific normalization with mean: {fold_specific_stats['mean']}, std: {fold_specific_stats['std']}")
         train_transforms_list.append(
@@ -342,15 +351,14 @@ def get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats):
                 channel_wise=True
             )
         )
-    else:
-        print("No fold-specific stats provided or incomplete; proceeding without specific normalization step (only ScaleIntensityd).")
-        # Optionally do per channel normalization ie z-score normalization
-        # train_transforms_list.append(NormalizeIntensityd(keys=["image"], subtrahend=None, divisor=None, channel_wise=True))
     
+    # Per la validazione, usiamo un crop centrale invece che casuale per avere risultati consistenti
     val_transforms_list = _get_preNormalization_transforms_list(cfg, supported_by_torchvision)
+    val_transforms_list.append(
+        CenterSpatialCropd(keys="image", roi_size=crop_size)
+    )
     
     if fold_specific_stats and fold_specific_stats.get("mean") is not None and fold_specific_stats.get("std") is not None:
-        print(f"Applying fold-specific normalization to validation data with mean: {fold_specific_stats['mean']}, std: {fold_specific_stats['std']}")
         val_transforms_list.append(
             NormalizeIntensityd(
                 keys=["image"],
@@ -359,6 +367,7 @@ def get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats):
                 channel_wise=True
             )
         )
+        
     return train_transforms_list, val_transforms_list
 
 def get_pretrained_model_transforms_list(cfg, color_transforms:bool)->Tuple[List[MapTransform], List[MapTransform]]:

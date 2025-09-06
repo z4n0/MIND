@@ -571,7 +571,33 @@ def log_SSL_run_to_mlflow(
 
         if lc_dir and lc_dir.is_dir():
             mlflow.log_artifacts(str(lc_dir), artifact_path="learning_curves")
-            
+        
+        # log the transformations functions .py
+        # Log source files (non-blocking)
+        # 2b. utils/transformations_functions.py
+        tf_path = None
+        try:
+            from utils import transformations_functions as tf_mod
+            tf_path = Path(tf_mod.__file__).resolve()
+        except Exception as e:
+            print(f"Warning: import utils.transformations_functions failed: {e}")
+
+        if tf_path and tf_path.is_file():
+            try:
+                mlflow.log_artifact(str(tf_path), artifact_path="scripts")
+            except Exception as e:
+                print(f"Warning: could not log {tf_path}: {e}")
+        else:
+            # Fallback: try repo-relative path
+            candidate = (Path(__file__).parent.parent / "utils" / "transformations_functions.py").resolve()
+            if candidate.is_file():
+                try:
+                    mlflow.log_artifact(str(candidate), artifact_path="scripts")
+                except Exception as e:
+                    print(f"Warning: could not log {candidate}: {e}")
+            else:
+                print(f"Warning: transformations_functions.py not found. Checked {tf_path} and {candidate}")
+
         # 5. confusion matrices (if produced)
         cm_dir = Path.cwd() / "confusion_matrices"
         # prefer output_dir if specified
