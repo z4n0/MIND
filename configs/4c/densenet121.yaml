@@ -17,7 +17,7 @@ model:
   spatial_dims: 2
   in_channels: 4
   out_channels: 2
-  library: "torchvision"  # Using MONAI for 4 channels support
+  library: "monai"  # Using MONAI for 4 channels support
   
 # Training
 training:
@@ -37,10 +37,5 @@ optimizer:
   optimizer_name: "AdamW"  # Changed optimizer
   weight_decay: 1e-4
   patience: 25
-
-# Data Augmentation
-data_augmentation:
-  use_color_transforms: false
-
 
 

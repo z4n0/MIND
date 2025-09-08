@@ -40,7 +40,9 @@ class ConfigLoader:
     num_epochs: Optional[int] = None
     freeze_layers: Optional[bool] = None
     pretrained_weights: Optional[str] = None
-    
+    crop_size: Optional[List[int]] = None
+    use_color_transforms: Optional[bool] = None
+
     def __init__(self, config_path=None):
         """
         Initialize configuration either from a path to YAML file or from direct parameters.
@@ -129,7 +131,13 @@ class ConfigLoader:
             if self.training["transfer_learning"] and self.training["fine_tuning"]:
                 raise ValueError("Choose either transfer learning OR fine tuning")
         
+    def get_color_transforms(self) -> Optional[bool]:
+        """Get whether to use color transformations"""
+        return self.use_color_transforms
     
+    def get_crop_size(self) -> Optional[List[int]]:
+        """Get the crop size for data augmentation"""
+        return self.crop_size
     
     # Dataset getters and setters
     def get_dataset(self) -> Optional[List[str]]:

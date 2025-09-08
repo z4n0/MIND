@@ -33,5 +33,3 @@ optimizer:
   weight_decay: 2e-4
   patience: 30
 
-data_augmentation:
-  use_color_transforms: false

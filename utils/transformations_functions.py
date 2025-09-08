@@ -20,9 +20,9 @@ from monai.transforms import (
     AddCoordinateChannelsd,  # Adds channels representing spatial coordinates; can sometimes help CNNs learn spatial relationships.
     RandCoarseDropoutd,
     CenterSpatialCropd,
-    RandCropd,
-    Rand2DElasticd,
-    RandGridPatchd,
+    # RandCropd,
+    # Rand2DElasticd,
+    # RandGridPatchd,
     ClipIntensityPercentilesd,  # Clip intensities at specified low and high percentiles to remove extreme outlier pixels.
     HistogramNormalized  # Standardizes image histograms, can be useful if illumination/staining varies significantly.
 )
@@ -260,7 +260,7 @@ def is_supported_by_torchvision(model_name:str)->bool:
     """
     return IMAGENET_WEIGHTS.get(model_name.lower(), None) is not None
 
-def get_transforms(cfg, color_transforms=True, fold_specific_stats=None):
+def get_transforms(cfg, color_transforms=False, fold_specific_stats=None):
     """
     Create and return the training, validation, and test transforms.
     
@@ -327,9 +327,8 @@ def get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats):
     
     print(f"Applying random crop with size: {crop_size}")
     train_transforms_list.append(
-        RandCropd(keys=["image"], roi_size=crop_size, random_size=False)
+        RandSpatialCropd(keys=["image"], roi_size=crop_size, random_size=False)
     )
-    # -----------------------------
 
     # Ora applica le altre aumentazioni spaziali sull'immagine croppata
     spatial_transforms = _get_spatial_augmentations(cfg)

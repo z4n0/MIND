@@ -39,5 +39,5 @@ optimizer:
   patience: 30
 
 # # Data Augmentation
-data_augmentation:
-  use_color_transforms: false
+# data_augmentation:
+#   use_color_transforms: false

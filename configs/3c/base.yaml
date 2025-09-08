@@ -1,5 +1,5 @@
 dataset:
-  class_names: ["MSA-P", "PD"] #["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
+  class_names: ["MSA", "PD"] #["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
 
 # config.yaml
 data_splitting:
@@ -17,6 +17,8 @@ data_augmentation:
   rand_gaussian_noise_prob: 0.5
   rand_gaussian_noise_mean: 0.0
   rand_gaussian_noise_std: 0.1
+  crop_size: [256, 256]  # New parameter for random cropping
+  use_color_transforms: false
 
 data_loading:
   batch_size: 64
@@ -53,3 +55,6 @@ scheduler:
   scheduler_patience: 9
   threshold: 1e-4
   min_lr: 1e-8
+
+  data_augmentation:
+    

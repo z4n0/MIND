@@ -9,7 +9,7 @@ data_splitting:
   num_folds: 8
 
 data_augmentation:
-  resize_spatial_size: [256,256]  # Tuple becomes list in YAML
+  resize_spatial_size: [512, 512]  # Tuple becomes list in YAML
   rand_flip_prob: 0.3
   rand_flip_spatial_axes: [0, 1]
   rand_rotate90_prob: 0.3
@@ -17,6 +17,8 @@ data_augmentation:
   rand_gaussian_noise_prob: 0.4
   rand_gaussian_noise_mean: 0.0
   rand_gaussian_noise_std: 0.1
+  crop_size: [256, 256]  # New parameter for random cropping
+  use_color_transforms: true
 
 data_loading:
   batch_size: 64
@@ -53,3 +55,4 @@ scheduler:
   scheduler_patience: 9
   threshold: 1e-4
   min_lr: 1e-8
+

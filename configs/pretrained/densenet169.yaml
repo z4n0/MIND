@@ -32,8 +32,3 @@ optimizer:
   optimizer_name: "AdamW"  # Changed optimizer
   weight_decay: 1e-4
   patience: 25
-
-# Data Augmentation
-data_augmentation:
-  use_color_transforms: false
-

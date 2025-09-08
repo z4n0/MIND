@@ -8,7 +8,7 @@ set -euo pipefail
 module load profile/deeplrn
 
 SCRIPTS_DIR="slurm_files/4c"
-DELAY_MINUTES=15
+DELAY_MINUTES=1
 
 echo "→ Submitting all .slurm scripts in $SCRIPTS_DIR with ${DELAY_MINUTES} minute delay..."
 first_job=true
