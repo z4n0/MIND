@@ -51,7 +51,8 @@ class NestedCVStratifiedByPatient:
         # per_fold_training_metrics, outer_fold_test_results = experiment.run_experiment()
     """
     def __init__(self, df, cfg, labels_np, pat_labels, unique_pat_ids, pretrained_weights,
-                 class_names, train_transforms=None, val_transforms=None, model_factory=None, model_manager=None, num_folds=None, compute_custom_normalization=False, output_dir: str | None = None):
+                 class_names, train_transforms=None, val_transforms=None, model_factory=None, model_manager=None, num_folds=None, compute_custom_normalization=False, output_dir: str | None = None,
+                 train_fn=None, val_fn=None):
 
         self.df = df
         self._cfg = cfg
@@ -62,6 +63,8 @@ class NestedCVStratifiedByPatient:
         self.class_names = class_names
         self.model_factory = model_factory # e.g., a function: def create_model(lr): ...
         self.model_manager = model_manager # e.g., an object with setup_model method
+        self.train_fn = train_fn if train_fn is not None else train_epoch
+        self.val_fn = val_fn if val_fn is not None else val_epoch
         self.num_folds = num_folds if num_folds is not None else self.cfg.data_splitting['num_folds']
         self.oversample = self.cfg.training.get("oversample", False)
         self.undersample = self.cfg.training.get("undersample", False)
@@ -85,6 +88,7 @@ class NestedCVStratifiedByPatient:
         self.output_dir = Path(output_dir or ".").resolve()
         self.cm_dir = str(self.output_dir / "confusion_matrices")
         self.learning_dir = str(self.output_dir / "learning_curves")
+        self.test_pat_ids_per_fold = {} #<-- ADDED: to store test patient ids for each fold
         self._setup_directories()
 
         print(f"Detected {self.num_classes} unique classes.")
@@ -138,6 +142,10 @@ class NestedCVStratifiedByPatient:
     def get_current_fold_transforms(self):
         return self.current_fold_train_transforms, self.current_fold_val_transforms, self.current_fold_test_transforms
 
+    def get_test_patient_ids_for_fold(self, fold_idx: int) -> np.ndarray:
+        """Returns the patient IDs used for the outer test set in a given fold."""
+        return self.test_pat_ids_per_fold.get(fold_idx)
+        
     def _determine_num_classes(self):
         return len(np.unique(self.labels_np))
 
@@ -316,8 +324,8 @@ class NestedCVStratifiedByPatient:
 
             for _ in range(inner_num_epochs):
                 # from utils.training_utils import train_epoch, val_epoch
-                train_loss_e, _ = train_epoch(model_inner, train_loader_inner, optimizer_inner, loss_function_inner, device_inner, print_batch_stats=False)
-                val_loss_e, _, _, _, _, _, _, _ = val_epoch(model_inner, val_loader_inner, loss_function_inner, device_inner)
+                train_loss_e, _ = self.train_fn(model_inner, train_loader_inner, optimizer_inner, loss_function_inner, device_inner)
+                val_loss_e, _, _, _, _, _, _, _ = self.val_fn(model_inner, val_loader_inner, loss_function_inner, device_inner)
                 if val_loss_e < best_inner_loss:
                     best_inner_loss = val_loss_e
             inner_val_losses.append(best_inner_loss)
@@ -390,9 +398,9 @@ class NestedCVStratifiedByPatient:
             if self.cfg.training.get("mixup_alpha", 0) > 0:
                 train_loss, train_acc = train_epoch_mixUp(model, train_loader_es, optimizer, loss_function, device, self.cfg.training["mixup_alpha"])
             else:
-                train_loss, train_acc = train_epoch(model, train_loader_es, optimizer, loss_function, device, print_batch_stats=False)
+                train_loss, train_acc = self.train_fn(model, train_loader_es, optimizer, loss_function, device)
 
-            val_loss, val_acc, val_prec, val_recall, val_f1, val_bal_acc, val_roc_auc, val_mcc = val_epoch(model, val_loader_es, loss_function, device)
+            val_loss, val_acc, val_prec, val_recall, val_f1, val_bal_acc, val_roc_auc, val_mcc = self.val_fn(model, val_loader_es, loss_function, device)
 
             if using_cosine_scheduler: scheduler.step(epoch)
             else: scheduler.step(val_loss)
@@ -427,7 +435,7 @@ class NestedCVStratifiedByPatient:
 
         # Using val_epoch for evaluation metrics
         (final_test_loss, final_test_acc, final_test_prec, final_test_recall,
-         final_test_f1, final_test_balanced_acc, test_auc, test_mcc) = val_epoch(model, test_loader, loss_function_for_eval, device)
+         final_test_f1, final_test_balanced_acc, test_auc, test_mcc) = self.val_fn(model, test_loader, loss_function_for_eval, device)
 
         print(f" [FOLD {fold_idx} FINAL] Test Loss: {final_test_loss:.4f} | Test Acc: {final_test_acc:.4f} | test Balanced Acc: {final_test_balanced_acc:.4f} | test F1: {final_test_f1:.4f} | Test AUC: {test_auc:.4f} | Test MCC: {test_mcc:.4f}")
 
@@ -475,6 +483,7 @@ class NestedCVStratifiedByPatient:
 
             train_patients = self.unique_pat_ids[train_pat_idx]
             test_patients = self.unique_pat_ids[test_pat_idx]
+            self.test_pat_ids_per_fold[fold_idx_actual] = test_patients #<-- ADDED: store test patient ids
 
             train_mask = self.df["patient_id"].isin(train_patients)
             test_mask = self.df["patient_id"].isin(test_patients)

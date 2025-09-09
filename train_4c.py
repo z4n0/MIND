@@ -76,7 +76,7 @@ def main():
     start_time = time.time()
     # ---------- env vars ---------------------------------------------------
     # DATA_ROOT  = Path(os.environ["DATA_ROOT"])
-    MLFLOW_URI = os.environ["MLFLOW_TRACKING_URI"]
+    # MLFLOW_URI = os.environ["MLFLOW_TRACKING_URI"]
     # ---------- reproducibility -------------------------------------------
     SEED = 42
     set_global_seed(SEED)
@@ -146,10 +146,8 @@ def main():
 
     images, labels = np.array(images), np.array(labels)
 
-    tr_imgs, te_imgs, tr_y, te_y = train_test_split(
-        images, labels,
-        test_size=cfg.get_test_ratio(),
-        stratify=labels, random_state=42)
+    # The initial train_test_split is removed to avoid data leakage.
+    # The cross-validation class will handle all data splitting internally.
 
     df = pd.DataFrame({"image_path": images,
                        "label": labels,
@@ -207,6 +205,15 @@ def main():
     best_model, _ = experiment._get_model_and_device()
     best_model.load_state_dict(torch.load(str(best_model_path), map_location=device))
     best_model.eval()
+
+    # Get the test data corresponding to the best fold directly from the experiment object
+    best_fold_test_pats = experiment.get_test_patient_ids_for_fold(best_idx)
+    if best_fold_test_pats is None:
+        raise ValueError(f"Could not retrieve test patient IDs for the best fold ({best_idx}).")
+        
+    best_fold_test_df = df[df['patient_id'].isin(best_fold_test_pats)]
+    te_imgs = best_fold_test_df['image_path'].values
+    te_y = best_fold_test_df['label'].values
 
     log_SSL_run_to_mlflow(
         cfg=cfg,

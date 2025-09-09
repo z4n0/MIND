@@ -500,34 +500,27 @@ class MonaiModelFactory():
 
     # Vision Transformer -------------------------------------------------
     def build_vit(self, num_classes):
+        """Builds a MONAI Vision Transformer model using parameters from the config."""
         print(f"Building MONAI ViT for classification with {self.input_channels}-channel input...")
-        img_size_cfg = self.cfg.get_image_shape()
-        print(f" -> Image size for ViT: {img_size_cfg}")
-        patch_size_cfg = self.cfg.get_patch_size()
-        print(f" -> Patch size for ViT: {patch_size_cfg}")
-
+        
+        # Get ViT parameters from the configuration file
+        model_params = self.cfg.get_model_params()
+        
         model = ViT(
             in_channels=self.input_channels,
-            img_size=img_size_cfg,
-            patch_size=patch_size_cfg,
-            hidden_size=128,
-            mlp_dim=256,
-            num_layers=4,
-            num_heads=4,
-            proj_type='conv',
-            pos_embed_type='learnable',
-            # Other ViT parameters (use defaults or get from cfg)
-            # embed_dim=768,
-            # num_heads=12,
-            # num_layers=12,
-            # mlp_dim=3072,
-            save_attn=True,
+            img_size=tuple(model_params['img_size']),
+            patch_size=tuple(model_params['patch_size']),
+            hidden_size=model_params['hidden_size'],
+            mlp_dim=model_params['mlp_dim'],
+            num_layers=model_params['num_layers'],
+            num_heads=model_params['num_heads'],
+            classification=True,
             num_classes=num_classes,
-            dropout_rate=self.cfg.get_dropout_prob(), # Example default
-            classification=True, # Ensure it's a classification ViT
+            save_attn=True, # Crucial for attention maps
             spatial_dims=2
         )
         
+        print(f" -> ViT configured with {num_classes} output classes.")
         return model
 
 def _adapt_first_conv(model: nn.Module, in_channels: int) -> nn.Module:

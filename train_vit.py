@@ -22,15 +22,18 @@ from monai.utils.misc import set_determinism
 import shutil
 
 # ──────────────────────── PYTHONPATH ───────────────────────────────────────
-PROJ_ROOT = Path(__file__).resolve().parent.parent # Go up one level from /notebooks
+PROJ_ROOT = Path(__file__).resolve().parent # Adjusted path assuming script is in root
 sys.path.insert(0, str(PROJ_ROOT))
 
 # ──────────────────────── project imports ─────────────────────────────────
+from classes.ModelManager import ModelManager
 from configs.ConfigLoader import ConfigLoader
-from monai.data import Dataset, DataLoader
-from monai.networks.nets import ViT
+# from monai.data import Dataset, DataLoader
+# from monai.networks.nets import ViT
 from utils.reproducibility_functions import set_global_seed
 import utils.transformations_functions as tf
+from classes.NestedCVStratifiedByPatient import NestedCVStratifiedByPatient
+from utils.mlflow_functions import log_SSL_run_to_mlflow
 
 # ───────────────────── CLI (one flag) ──────────────────────────────────────
 def parse():
@@ -44,8 +47,11 @@ def extract_patient_id(path: str) -> str:
     m = re.search(r'(\d{4})', path)
     return m.group(1) if m else "UNKNOWN"
 
+def best_fold_idx(results, metric="test_balanced_acc") -> int:
+    return int(np.argmax([r[metric] for r in results]))
+
 # ───────────────────── ViT Training & Validation Functions ─────────────────
-def train_epoch_vit(model, loader, optimizer, loss_function, device):
+def train_epoch_vit(model, loader, optimizer, loss_function, device, print_batch_stats=False):
     model.train()
     epoch_loss = 0.0
     correct = 0
@@ -63,6 +69,9 @@ def train_epoch_vit(model, loader, optimizer, loss_function, device):
         _, predicted = torch.max(outputs, dim=1)
         correct += (predicted == labels_batch).sum().item()
         total += labels_batch.size(0)
+
+        if print_batch_stats:
+            print(f"Batch loss: {loss.item():.4f}, Accuracy: {correct / total:.4f}")
     return epoch_loss / len(loader), correct / total
 
 def val_epoch_vit(model, loader, loss_function, device):
@@ -165,23 +174,6 @@ def get_data_directory(num_input_channels: int) -> Path:
         raise FileNotFoundError(f"Data folder not found: {data_dir}")
     return data_dir
 
-def setup_vit_model(cfg: ConfigLoader, num_classes: int, device: torch.device):
-    """Initializes the Vision Transformer model."""
-    model = ViT(
-        in_channels=cfg.get_model_input_channels(),
-        img_size=cfg.model['img_size'],
-        patch_size=cfg.model['patch_size'],
-        hidden_size=cfg.model['hidden_size'],
-        mlp_dim=cfg.model['mlp_dim'],
-        num_layers=cfg.model['num_layers'],
-        num_heads=cfg.model['num_heads'],
-        classification=True,
-        num_classes=num_classes,
-        save_attn=True, # Crucial for attention maps
-        spatial_dims=2
-    )
-    return model.to(device)
-
 # ───────────────────── main ────────────────────────────────────────────────
 def main():
     args = parse()
@@ -191,6 +183,11 @@ def main():
     SEED = 42
     set_global_seed(SEED)
     set_determinism(seed=SEED)
+    torch.manual_seed(SEED)
+    np.random.seed(SEED)
+    random.seed(SEED)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(SEED)
     cudnn.deterministic = True
     cudnn.benchmark = False
 
@@ -198,17 +195,29 @@ def main():
     cfg = ConfigLoader(str(PROJ_ROOT / args.yaml))
     print(f"Torch version: {torch.__version__}")
     print(f"Using configuration: {args.yaml}")
-
-    class_names = cfg.get_class_names()
-    num_channels = cfg.get_model_input_channels()
-    num_workers = cfg.get_num_workers()
-    batch_size = cfg.get_batch_size()
-    DATA_ROOT = get_data_directory(num_channels)
-
+    print(f"Torch version: {torch.__version__}")
+    print(f"Using configuration: {args.yaml}")
+    class_names        = cfg.get_class_names()
     print(f"Class names: {class_names}")
+    if class_names is None:
+        raise ValueError("class_names returned None. Please check your configuration.")
+
+    num_channels       = cfg.get_model_input_channels()
+    pretrained_weights = cfg.get_pretrained_weights()
+    num_epochs         = cfg.get_num_epochs()
+    num_workers        = cfg.get_num_workers()
+    batch_size         = cfg.get_batch_size()
+    num_folds          = cfg.get_num_folds()
+    model_library      = cfg.get_model_library()
+    DATA_ROOT          = get_data_directory(num_channels)
+
     print(f"Number of channels: {num_channels}")
+    print(f"Pretrained weights: {pretrained_weights}")
+    print(f"Number of epochs: {num_epochs}")
     print(f"Number of workers: {num_workers}")
     print(f"Batch size: {batch_size}")
+    print(f"Number of folds: {num_folds}")
+    print(f"Model library: {model_library}")
     print(f"Data directory: {DATA_ROOT}")
 
     # ---------- dataset ----------------------------------------------------
@@ -223,6 +232,8 @@ def main():
                 continue
             images.append(str(p))
             labels.append(lab)
+    
+    images, labels = np.array(images), np.array(labels)
 
     if len(images) == 0:
         raise FileNotFoundError(f"No images found in {DATA_ROOT} for classes {class_names}. Check your dataset.")
@@ -239,41 +250,110 @@ def main():
     unique_pats = pat_df["patient_id"].values
     pat_labels = pat_df["label"].values
 
-    # Split patients into train/val and test sets
-    train_val_pats, test_pats, _, _ = train_test_split(
-        unique_pats, pat_labels,
-        test_size=cfg.get_test_ratio(),
-        stratify=pat_labels,
-        random_state=cfg.get_random_seed()
-    )
-
-    # Get the full data for each split
-    train_val_df = df[df['patient_id'].isin(train_val_pats)]
-    test_df = df[df['patient_id'].isin(test_pats)]
-
-    print(f"Total patients: {len(unique_pats)}. Train/Val patients: {len(train_val_pats)}. Test patients: {len(test_pats)}.")
-    print(f"Total images: {len(df)}. Train/Val images: {len(train_val_df)}. Test images: {len(test_df)}.")
-
     # ---------- transforms -------------------------------------------------
     train_transforms, val_transforms, test_transforms = tf.get_transforms(
         cfg, color_transforms=True
     )
 
-    # ---------- device and model setup -------------------------------------
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # ---------- device setup -----------------------------------------------
+    model_manager = ModelManager(cfg, library=cfg.get_model_library())
+    model, device = model_manager.setup_model(len(class_names))
     if device.type != "cuda":
-        print("Warning: CUDA not available, running on CPU. This will be slow.")
+        raise RuntimeError(
+            "This script is intended to run on a CUDA-enabled GPU. "
+            "Please ensure you have a compatible GPU and the necessary drivers installed."
+        )
+    # ---------- experiment -------------------------------------------------
+    job_id = os.environ.get("SLURM_JOB_ID") or str(os.getpid())
+    run_tag = f"{Path(args.yaml).stem}_{cfg.get_model_input_channels()}c"
+    RUN_DIR = (PROJ_ROOT / "runs" / f"{run_tag}_{job_id}").resolve()
+    RUN_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"Run directory: {RUN_DIR}")
 
-    model = setup_vit_model(cfg, len(class_names), device)
-    print(f"Model '{model.__class__.__name__}' initialized and moved to {device}.")
+    experiment = NestedCVStratifiedByPatient(
+        df=df,
+        cfg=cfg,
+        labels_np=np.array(labels),
+        pat_labels=pat_labels,
+        unique_pat_ids=unique_pats,
+        class_names=class_names,
+        model_manager=model_manager,
+        num_folds=num_folds,
+        output_dir=str(RUN_DIR),
+        train_fn=train_epoch_vit,
+        val_fn=val_epoch_vit,
+        pretrained_weights=None # ViT from MONAI is not pretrained
+    )
 
-    # ---------- Next Steps -------------------------------------------------
-    print("\nScript foundation is ready.")
-    print("Next steps will involve implementing:")
-    print("1. Nested cross-validation loop using the train_val_df.")
-    print("2. Final evaluation on the test_df.")
-    print("3. Attention map generation and saving.")
-    print("4. Comprehensive MLflow logging.")
+    train_metrics, test_results = experiment.run_experiment()
+    execution_time = time.time() - start_time
+
+    # Get counts for logging
+    train_counts, val_counts = experiment.get_early_stopping_split_counts()
+    test_counts = {f"fold_{i}": len(pats) for i, pats in experiment.test_pat_ids_per_fold.items()}
+
+
+    print("\n--- Experiment Finished ---")
+    print(f"Total execution time: {execution_time:.2f} seconds")
+    print("Test results per fold:", test_results)
+
+    # ---------- MLflow logging --------------------------------------------
+    # 1. Find the best model from the cross-validation run
+    best_fold_idx = best_fold_idx(test_results)
+    best_model_path = RUN_DIR / f"best_model_fold_{best_fold_idx}.pth"
+
+    if best_model_path.exists():
+        print(f"Loading best model from fold {best_fold_idx} for MLflow logging...")
+        # Load the best model state
+        best_model, _ = model_manager.setup_model(len(class_names))
+        best_model.load_state_dict(torch.load(best_model_path))
+
+        # Get the test data and transforms for the best fold
+        test_pats_for_best_fold = experiment.get_test_patient_ids_for_fold(best_fold_idx)
+        if test_pats_for_best_fold is None:
+            raise ValueError(f"Could not retrieve test patient IDs for the best fold ({best_fold_idx}).")
+
+        test_df_for_best_fold = df[df['patient_id'].isin(test_pats_for_best_fold)]
+        te_imgs = test_df_for_best_fold['image_path'].values
+        te_y = test_df_for_best_fold['label'].values
+        
+        # Note: We need the transforms for the specific fold, but get_current_fold_transforms
+        # only holds the last fold's transforms. For logging, using the general val_transforms
+        # is a reasonable approximation if normalization is consistent (e.g., ImageNet stats).
+        _, val_transforms, _ = tf.get_transforms(cfg, color_transforms=True)
+
+
+        log_SSL_run_to_mlflow(
+            cfg=cfg,
+            model=best_model,
+            class_names=class_names,
+            fold_results=test_results,
+            per_fold_metrics=train_metrics,
+            test_transforms=val_transforms, # Using val_transforms as a proxy
+            test_images_paths_np=te_imgs,
+            test_true_labels_np=te_y,
+            yaml_path=str(PROJ_ROOT / args.yaml),
+            color_transforms=True, # ViT uses color transforms
+            model_library=model_library,
+            pretrained_weights=pretrained_weights,
+            execution_time=execution_time,
+            train_counts=train_counts,
+            val_counts=val_counts,
+            test_counts=test_counts,
+            output_dir=str(RUN_DIR),
+        )
+    else:
+        print("Could not find the best model file to log artifacts.")
+
+
+    # ---------- cleanup ----------------------------------------------------
+    if os.environ.get("KEEP_RUN_DIR", "0").lower() not in ("1", "true", "yes"):
+        try:
+            print(f"Cleaning up run directory: {RUN_DIR}")
+            shutil.rmtree(RUN_DIR, ignore_errors=True)
+        except Exception as e:
+            print(f"Warning: failed to remove {RUN_DIR}: {e}")
+
 
 if __name__ == "__main__":
     main()
