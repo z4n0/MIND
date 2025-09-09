@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=densenet169_4c_tesi
+#SBATCH --job-name=d169_4c_tesi
 #SBATCH --account=pMI24_EleBr_1
 #SBATCH --partition=boost_usr_prod
 #SBATCH --gres=gpu:1

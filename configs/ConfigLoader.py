@@ -422,16 +422,6 @@ class ConfigLoader:
         else:
             self.model.pretrained_weights = weights
     
-    def set_model_input_channels(self, in_channels: int) -> None:
-        """Set the number of input channels for the model
-        
-        Args:
-            in_channels: Number of input channels
-        """
-        if self.model is None:
-            self.model = {}
-        self.model["in_channels"] = in_channels
-    
     def get_num_classes(self) -> int:
         """Get the number of output classes for the model"""
         if self.model is None:

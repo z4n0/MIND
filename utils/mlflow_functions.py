@@ -296,6 +296,7 @@ def load_model_for_run(run_id: str, experiment_id: str, base_folder: str, device
 
 def create_run_name(cfg=None, color_transforms=False, model_library="", pretrained_weights=None):
     import datetime
+    color_transforms = cfg.data_augmentation["use_color_transforms"] if cfg is not None else color_transforms
     model_name = cfg.model["model_name"]
     components = [model_name]
 
@@ -493,7 +494,7 @@ def log_SSL_run_to_mlflow(
                 "train_counts": train_counts,
                 "val_counts": val_counts,
                 "test_counts": test_counts,
-                "color_transforms": color_transforms,
+                "color_transforms": cfg.data_augmentation["use_color_transforms"],
                 "freezed_layer_index": cfg.get_freezed_layer_index(),
             }
         )
@@ -553,6 +554,10 @@ def log_SSL_run_to_mlflow(
             )
         # 2. config YAML
         mlflow.log_artifact(yaml_path, artifact_path="config")
+        # Log base.yaml from the same directory if it exists
+        base_yaml_path = Path(yaml_path).parent / 'base.yaml'
+        if base_yaml_path.is_file():
+            mlflow.log_artifact(str(base_yaml_path), artifact_path="config")
 
         # 3. CV box-plot
         fig_box = generate_cv_results_figure(fold_results, "test")
@@ -572,8 +577,6 @@ def log_SSL_run_to_mlflow(
         if lc_dir and lc_dir.is_dir():
             mlflow.log_artifacts(str(lc_dir), artifact_path="learning_curves")
         
-        # log the transformations functions .py
-        # Log source files (non-blocking)
         # 2b. utils/transformations_functions.py
         tf_path = None
         try:
