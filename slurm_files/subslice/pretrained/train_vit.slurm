@@ -36,6 +36,9 @@ final_log="$log_dir/${SLURM_JOB_NAME}_${ts}_${SLURM_JOB_ID}.out"
 # move the file that SLURM already opened for us
 mv "$tmp_log" "$final_log" 2>/dev/null || true
 
+# Re-establish the link to the new log file for all subsequent output
+exec > >(tee -a "$final_log") 2>&1
+
 # --- 5) launch training ---------------------------------------------------
 echo "--- START ---"
 echo "SLURM_JOB_ID: $SLURM_JOB_ID"

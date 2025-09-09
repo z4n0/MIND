@@ -299,19 +299,19 @@ def main():
 
     # ---------- MLflow logging --------------------------------------------
     # 1. Find the best model from the cross-validation run
-    best_fold_idx = best_fold_idx(test_results)
-    best_model_path = RUN_DIR / f"best_model_fold_{best_fold_idx}.pth"
+    best_idx = best_fold_idx(test_results)
+    best_model_path = RUN_DIR / f"best_model_fold_{best_idx}.pth"
 
     if best_model_path.exists():
-        print(f"Loading best model from fold {best_fold_idx} for MLflow logging...")
+        print(f"Loading best model from fold {best_idx} for MLflow logging...")
         # Load the best model state
         best_model, _ = model_manager.setup_model(len(class_names))
         best_model.load_state_dict(torch.load(best_model_path))
 
         # Get the test data and transforms for the best fold
-        test_pats_for_best_fold = experiment.get_test_patient_ids_for_fold(best_fold_idx)
+        test_pats_for_best_fold = experiment.get_test_patient_ids_for_fold(best_idx)
         if test_pats_for_best_fold is None:
-            raise ValueError(f"Could not retrieve test patient IDs for the best fold ({best_fold_idx}).")
+            raise ValueError(f"Could not retrieve test patient IDs for the best fold ({best_idx}).")
 
         test_df_for_best_fold = df[df['patient_id'].isin(test_pats_for_best_fold)]
         te_imgs = test_df_for_best_fold['image_path'].values
@@ -344,8 +344,6 @@ def main():
         )
     else:
         print("Could not find the best model file to log artifacts.")
-
-
     # ---------- cleanup ----------------------------------------------------
     if os.environ.get("KEEP_RUN_DIR", "0").lower() not in ("1", "true", "yes"):
         try:

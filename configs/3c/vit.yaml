@@ -18,7 +18,7 @@ model:
   model_name: "ViT"
   library: "monai"
   spatial_dims: 2
-  in_channels: 4 # Or 3, depending on the dataset
+  in_channels: 3 # Or 3, depending on the dataset
   out_channels: 2 # Depends on the number of classes
   # --- ViT Specific Parameters ---
   img_size: [448, 448] # Should match the input size from transforms and be divisible by patch_size
@@ -27,6 +27,7 @@ model:
   mlp_dim: 3072        # Dimension of the MLP layer (e.g., ViT-Base)
   num_layers: 12       # Number of transformer blocks (e.g., ViT-Base)
   num_heads: 12        # Number of attention heads (e.g., ViT-Base)
+
 
 # Training
 training:

@@ -503,17 +503,14 @@ class MonaiModelFactory():
         """Builds a MONAI Vision Transformer model using parameters from the config."""
         print(f"Building MONAI ViT for classification with {self.input_channels}-channel input...")
         
-        # Get ViT parameters from the configuration file
-        model_params = self.cfg.get_model_params()
-        
         model = ViT(
             in_channels=self.input_channels,
-            img_size=tuple(model_params['img_size']),
-            patch_size=tuple(model_params['patch_size']),
-            hidden_size=model_params['hidden_size'],
-            mlp_dim=model_params['mlp_dim'],
-            num_layers=model_params['num_layers'],
-            num_heads=model_params['num_heads'],
+            img_size=tuple(self.cfg.model['img_size']),
+            patch_size=tuple(self.cfg.model['patch_size']),
+            hidden_size=self.cfg.model['hidden_size'],
+            mlp_dim=self.cfg.model['mlp_dim'],
+            num_layers=self.cfg.model['num_layers'],
+            num_heads=self.cfg.model['num_heads'],
             classification=True,
             num_classes=num_classes,
             save_attn=True, # Crucial for attention maps
