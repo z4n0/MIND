@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
-#SBATCH --time=03:55:00
+#SBATCH --time=04:55:00
 
 # --- 1) temporary log file -----------------------------------------------
 # At submission time SLURM doesn’t know the date, so we log to /tmp first

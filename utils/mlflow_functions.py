@@ -26,6 +26,7 @@ def get_mlrun_base_folder(gdrive, kaggle,linux):
         base_folder = uri.replace("file:///", "")
         return base_folder
 
+
 # 3. Function to Get Experiment ID from Name
 def get_experiment_id_byName(experiment_name):
     """Retrieves the experiment ID from the experiment name."""
@@ -475,6 +476,8 @@ def log_SSL_run_to_mlflow(
     exp_suffix = "SSL" if ssl else "supervised"
     exp_name = f"{env_experiment_name}_{'_vs_'.join(class_names)}_{exp_suffix}"
     mlflow.set_experiment(exp_name)
+    import datetime
+    now = datetime.datetime.now()
 
     with mlflow.start_run(run_name=run_name):
         # --------------------- PARAMS
@@ -496,6 +499,11 @@ def log_SSL_run_to_mlflow(
                 "test_counts": test_counts,
                 "color_transforms": cfg.data_augmentation["use_color_transforms"],
                 "freezed_layer_index": cfg.get_freezed_layer_index(),
+                # Add date and time parameters
+                "creation_date": now.strftime("%m-%d"),
+                "creation_time": now.strftime("%H:%M:%S"),
+                # "creation_datetime": now.strftime("%Y-%m-%d %H:%M:%S"),
+                # "creation_timestamp": now.timestamp(),  # Unix timestamp for sorting
             }
         )
         mlflow.log_param(

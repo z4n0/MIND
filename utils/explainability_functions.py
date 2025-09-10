@@ -178,13 +178,10 @@ def generate_and_save_gradcam_batch(
     return cam_output_dir
 
 
-def visualize_gradcam_for_single_image(model, test_loader, gradcam_obj, min_max_normalization, threshold=0.5, overlay_alpha_DAPI=0.2):
+def visualize_gradcam_for_single_image(model, test_loader, gradcam_obj, min_max_normalization, threshold=0.5, overlay_alpha_DAPI=0.2, random_seed=None):
     """
-    Retrieves a single image from the test_loader, generates GradCAM heatmaps,
-    and visualizes the results. Supports both 3‑channel images (order: Green, Blue, Red)
-    and 4‑channel images (order: Green, Blue, Gray, Red). For 3‑channel images, the channels
-    are reordered to (Red, Green, Blue); for 4‑channel images, an RGB composite is created from 
-    channels [3, 0, 1] with the extra (gray) channel (index 2) overlayed as grayscale with transparency.
+    Retrieves a random image from the test_loader, generates GradCAM heatmaps,
+    and visualizes the results. Supports both 3‑channel and 4‑channel images.
     
     Args:
         model: The PyTorch model.
@@ -192,25 +189,63 @@ def visualize_gradcam_for_single_image(model, test_loader, gradcam_obj, min_max_
         gradcam_obj: An initialized GradCAM object (e.g., GradCAM or GradCAM++).
         min_max_normalization: Function to normalize an array to [0, 1].
         threshold (float): Threshold for heatmap thresholding (default 0.5).
-        overlay_alpha_DAPI (float): Transparency for overlaying the extra (gray) channel in the case of 4‑channel images.
+        overlay_alpha_DAPI (float): Transparency for overlaying the extra (gray) channel.
+        random_seed (int, optional): Seed for random selection. Set for reproducibility.
     """
     import numpy as np
     import torch
+    import random
 
-    # Get device from model.
+    # Set random seed if provided
+    if random_seed is not None:
+        random.seed(random_seed)
+        np.random.seed(random_seed)
+        torch.manual_seed(random_seed)
+
+    # Get device from model
     device = next(model.parameters()).device
     model.eval()
 
-    # Get one batch from test_loader.
-    example_batch = next(iter(test_loader))
+    # Get the total number of batches
+    num_batches = len(test_loader)
+    
+    # Choose a random batch
+    batch_idx = random.randint(0, num_batches - 1)
+    
+    # Iterate to the selected batch
+    for i, batch_data in enumerate(test_loader):
+        if i == batch_idx:
+            # We've reached our randomly chosen batch
+            example_batch = batch_data
+            break
+    
     images = example_batch["image"].to(device)  # (B, C, H, W)
     labels = example_batch["label"].to(device)  # (B,)
     print(f"Images batch shape: {images.shape}")
 
-    # Use the first image.
-    single_image = images[0].unsqueeze(0)  # shape: (1, C, H, W)
-    single_label = labels[0].unsqueeze(0)
+    # Choose a random image within the batch
+    img_idx = random.randint(0, images.shape[0] - 1)
+    print(f"Selected random image {img_idx} from batch {batch_idx}")
     
+    # Use the selected image
+    single_image = images[img_idx].unsqueeze(0)  # shape: (1, C, H, W)
+    single_label = labels[img_idx].unsqueeze(0)
+    
+    # ==================== ADD THIS DEBUGGING BLOCK ====================
+    print("\n--- Model Output Debug ---")
+    with torch.no_grad():
+        # Get the raw scores (logits) from the model
+        logits = model(single_image)
+        
+        # Get the probabilities after softmax
+        probabilities = torch.softmax(logits, dim=1)
+        predicted_class = torch.argmax(probabilities, dim=1)
+
+        print(f"Raw Logits: {logits.cpu().numpy()}")
+        print(f"Probabilities: {probabilities.cpu().numpy()}")
+        print(f"Predicted Class: {predicted_class.item()}")
+    print("--------------------------\n")
+    # =================================================================
     # Generate GradCAM heatmap.
     cam_result = gradcam_obj(x=single_image)  # expected shape: (1, 1, H, W)
     print("GradCAM output shape:", cam_result.shape)
