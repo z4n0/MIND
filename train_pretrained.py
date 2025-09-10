@@ -99,7 +99,7 @@ def main():
     #NOTE if you want to change the number of channels use
     # cfg.set_num_input_channels(3) # or 4
     #NOTE if you want to change the pretrained weights use
-    available_weights = ["microscopynet"] #"torchvision", "monai", ,"microscopynet"
+    available_weights = ["torchvision"] #"torchvision", "monai", ,"microscopynet"
     #cfg.set_pretrained_weights("torchvision") # or "monai" or "imagenet-microscopynet" "microscopynet"
     #NOTE if you want to change the number of epochs use
     # cfg.set_num_epochs(100) # or any other number
