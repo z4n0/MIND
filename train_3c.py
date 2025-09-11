@@ -20,6 +20,11 @@ import torch.cuda
 import torch.backends.cudnn as cudnn
 from monai.utils.misc import set_determinism
 import shutil  # added
+import warnings
+
+# Suppress specific UserWarnings from PyTorch AMP
+warnings.filterwarnings("ignore", message=".*`torch.cuda.amp.autocast(args...)` is deprecated.*", category=UserWarning)
+warnings.filterwarnings("ignore", message=".*`torch.cuda.amp.GradScaler(args...)` is deprecated.*", category=UserWarning)
 
 # ──────────────────────── PYTHONPATH ───────────────────────────────────────
 PROJ_ROOT = Path(__file__).resolve().parent

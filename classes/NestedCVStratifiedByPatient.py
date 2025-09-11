@@ -523,8 +523,12 @@ class NestedCVStratifiedByPatient:
                 self.current_fold_test_transforms = self.val_transforms # Assuming test uses the same as val
 
             # 1. Tune Learning Rate
-            print(f"--- Starting Hyperparameter Tuning for Fold {fold_display_idx} ---")
-            best_lr = self._tune_learning_rate(X_train_outer, y_train_outer)
+            if self.cfg.get_discover_lr():
+                print(f"--- Starting Hyperparameter Tuning for Fold {fold_display_idx} ---")
+                best_lr = self._tune_learning_rate(X_train_outer, y_train_outer)
+            else:
+                best_lr = self.cfg.get_manual_lr() # Default if not specified
+                print(f"Using fixed learning rate from config: {best_lr:.6f}")
 
             # 2. Train Final Model for the Fold
             print(f"--- Starting Final Model Training for Fold {fold_display_idx} with LR={best_lr:.6f} ---")

@@ -42,6 +42,7 @@ class ConfigLoader:
     pretrained_weights: Optional[str] = None
     crop_size: Optional[List[int]] = None
     use_color_transforms: Optional[bool] = None
+    discover_lr: Optional[bool] = None
 
     def __init__(self, config_path=None):
         """
@@ -151,6 +152,21 @@ class ConfigLoader:
             dataset: List of dataset names or paths
         """
         self.dataset = dataset
+
+    def get_discover_lr(self) -> Optional[bool]:
+        """Get whether to use learning rate finder"""
+        if self.training is None:
+            raise ValueError("Training configuration is not set")
+        discover_lr = self.training.get("discover_lr", False)  # Default to False if not present
+        print(f"discover_lr is {discover_lr}")
+        return discover_lr
+    
+    def get_manual_lr(self) -> Optional[float]:
+        """Get the manually set learning rate"""
+        if self.optimizer is None:
+            raise ValueError("Optimizer configuration is not set")
+
+        return self.optimizer["learning_rate"]
 
     def get_class_names(self) -> Optional[List[str]]:
         """Restituisce sempre la lista di classi, qualunque sia

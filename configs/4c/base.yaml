@@ -1,5 +1,5 @@
 dataset:
-  class_names: ["MSA", "PD"] #["MSA-P", "PD"] #["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
+  class_names: ["MSA-P", "PD"] #["MSA-P", "PD"] #["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
 
 # config.yaml
 data_splitting:
@@ -18,7 +18,7 @@ data_augmentation:
   rand_gaussian_noise_mean: 0.0
   rand_gaussian_noise_std: 0.1
   crop_size: [256, 256]  # New parameter for random cropping
-  use_color_transforms: true
+  use_color_transforms: false
 
 data_loading:
   batch_size: 64
@@ -43,6 +43,7 @@ training:
   fine_tuning: false
   transfer_learning: false
   freezed_layerIndex: null  # null in YAML = None in Python
+  discover_lr: false
 
 optimizer:
   learning_rate: 1e-4  # Will be adjusted automatically

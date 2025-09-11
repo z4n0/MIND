@@ -19,6 +19,11 @@ import matplotlib.pyplot as plt
 from configs.ConfigLoader import ConfigLoader
 from torch.cuda.amp import GradScaler, autocast
 from torch.cuda.amp.autocast_mode import autocast
+import warnings
+
+# Suppress specific UserWarnings from PyTorch AMP
+warnings.filterwarnings("ignore", message=".*`torch.cuda.amp.autocast(args...)` is deprecated.*", category=UserWarning)
+warnings.filterwarnings("ignore", message=".*`torch.cuda.amp.GradScaler(args...)` is deprecated.*", category=UserWarning)
 
 
 def train_epoch(

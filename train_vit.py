@@ -305,8 +305,9 @@ def main():
     if best_model_path.exists():
         print(f"Loading best model from fold {best_idx} for MLflow logging...")
         # Load the best model state
-        best_model, _ = model_manager.setup_model(len(class_names))
-        best_model.load_state_dict(torch.load(best_model_path))
+        best_model, device = model_manager.setup_model(len(class_names))
+        best_model.load_state_dict(torch.load(best_model_path, map_location=device))
+        best_model.to(device)
 
         # Get the test data and transforms for the best fold
         test_pats_for_best_fold = experiment.get_test_patient_ids_for_fold(best_idx)

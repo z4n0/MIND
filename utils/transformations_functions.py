@@ -31,7 +31,7 @@ from monai.transforms.compose import Compose
 from monai.transforms.spatial.dictionary import Resized, RandFlipd, RandRotate90d, Rand2DElasticd
 from monai.transforms.intensity.dictionary import ScaleIntensityd, NormalizeIntensityd, RandGaussianNoised, RandHistogramShiftd, RandAdjustContrastd
 from monai.transforms.utility.dictionary import LambdaD,EnsureTyped
-from timm import is_model_pretrained
+# from timm import is_model_pretrained
 import torch
 from classes.PrintShapeTransform import PrintShapeTransform
 from monai.data.dataset import Dataset
@@ -146,6 +146,8 @@ def _get_spatial_augmentations(cfg):
     """
     Get the list of spatial augmentation transforms.
     """
+    H = cfg.data_augmentation["resize_spatial_size"][0]
+    W = cfg.data_augmentation["resize_spatial_size"][1]
     spatial_transforms = [
             RandFlipd(
                 keys="image", 
@@ -172,6 +174,14 @@ def _get_spatial_augmentations(cfg):
             #     mode='bilinear',
             #     padding_mode='border',
             # ),
+            # RandCoarseDropoutd(
+            #     keys=["image"],
+            #     holes=1,
+            #     spatial_size=(int(0.1*H), int(0.1*W)),  # bind H,W from cfg or use relative
+            #     max_holes=3,
+            #     fill_value=0.0,
+            #     prob=0.10
+            # ),
         ]
     return spatial_transforms
 
@@ -180,8 +190,8 @@ def _get_intensity_augmentations(cfg):
     Get the list of intensity augmentation transforms.
     """
     intensity_transforms = [
-            RandHistogramShiftd(keys=["image"], prob=0.25), # num_control_points=(4, 7)
-            RandAdjustContrastd(keys=["image"], prob=0.3, gamma=(0.5, 1.2)),
+            RandHistogramShiftd(keys=["image"], prob=0.2, num_control_points=(3,5)), # num_control_points=(4, 7)
+            RandAdjustContrastd(keys=["image"], prob=0.25, gamma=(0.9, 1.1)),
             RandGaussianNoised(
                     keys="image", 
                     prob=cfg.data_augmentation["rand_gaussian_noise_prob"],
@@ -208,8 +218,8 @@ def compute_dataset_mean_std(image_paths: list[str], cfg, is_supported_by_torchv
     
     # Use batch_size from cfg if available, else a default.
     # Handle potential missing num_workers in cfg for this specific loader.
-    batch_size = cfg.data_loading.get("batch_size", 8)
-    num_workers = cfg.data_loading.get("num_workers", 1)
+    batch_size = cfg.get_batch_size() if cfg.data_loading.get("batch_size", None) is not None else 16
+    num_workers = cfg.get_num_workers() if cfg.data_loading.get("num_workers", None) is not None else 4
 
     loader = DataLoader(dataset, batch_size=batch_size,
                         shuffle=False, num_workers=num_workers)
@@ -350,6 +360,14 @@ def get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats):
                 channel_wise=True
             )
         )
+    else: #do normal channel wise normalization with mean 0.5 and std 0.5
+        print("NO FOLD SPECIFIC STATS provided, using default x channel normalization")
+        train_transforms_list.append(
+            NormalizeIntensityd(
+                keys=["image"],
+                channel_wise=True,
+            )
+        )
     
     # Per la validazione, usiamo un crop centrale invece che casuale per avere risultati consistenti
     val_transforms_list = _get_preNormalization_transforms_list(cfg, supported_by_torchvision)
@@ -364,6 +382,14 @@ def get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats):
                 subtrahend=torch.tensor(fold_specific_stats["mean"]),
                 divisor=torch.tensor(fold_specific_stats["std"]),
                 channel_wise=True
+            )
+        )
+    else:
+        print("NO FOLD SPECIFIC STATS provided, using default x channel normalization")
+        val_transforms_list.append(
+            NormalizeIntensityd(
+                keys=["image"],
+                channel_wise=True,
             )
         )
         
