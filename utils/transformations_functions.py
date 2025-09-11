@@ -336,9 +336,9 @@ def get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats):
     crop_size = (int(original_size[0] * crop_percentage), int(original_size[1] * crop_percentage))
     
     print(f"Applying random crop with size: {crop_size}")
-    train_transforms_list.append(
-        RandSpatialCropd(keys=["image"], roi_size=crop_size, random_size=False)
-    )
+    # train_transforms_list.append(
+    #     RandSpatialCropd(keys=["image"], roi_size=crop_size, random_size=False)
+    # )
 
     # Ora applica le altre aumentazioni spaziali sull'immagine croppata
     spatial_transforms = _get_spatial_augmentations(cfg)
@@ -371,9 +371,9 @@ def get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats):
     
     # Per la validazione, usiamo un crop centrale invece che casuale per avere risultati consistenti
     val_transforms_list = _get_preNormalization_transforms_list(cfg, supported_by_torchvision)
-    val_transforms_list.append(
-        CenterSpatialCropd(keys="image", roi_size=crop_size)
-    )
+    # val_transforms_list.append(
+    #     CenterSpatialCropd(keys="image", roi_size=crop_size)
+    # )
     
     if fold_specific_stats and fold_specific_stats.get("mean") is not None and fold_specific_stats.get("std") is not None:
         val_transforms_list.append(

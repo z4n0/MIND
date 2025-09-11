@@ -8,7 +8,7 @@ data_splitting:
 
 # Data Loading
 data_loading:
-  batch_size: 16  # ViT can be memory-intensive, start with a smaller batch size
+  batch_size: 32  # ViT can be memory-intensive, start with a smaller batch size
   num_workers: 4
 
 data_augmentation:
@@ -31,8 +31,8 @@ model:
 
 # Training
 training:
-  num_epochs: 150
-  early_stopping_patience: 25
+  num_epochs: 450
+  early_stopping_patience: 50
   mixup_alpha: 0
   oversample: false
   undersample: false
