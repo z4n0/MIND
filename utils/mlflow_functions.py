@@ -414,6 +414,7 @@ def log_SSL_run_to_mlflow(
     test_true_labels_np: np.ndarray,
     yaml_path: str,
     *,
+    device: Optional[torch.device] = None,  # <-- Make device optional
     color_transforms: bool = False,
     model_library: str = "torchvision",
     pretrained_weights: Optional[str] = None,
@@ -637,6 +638,7 @@ def log_SSL_run_to_mlflow(
                         test_true_labels_np,
                         test_transforms,
                         cfg,
+                        device=device,  # <-- Pass the device along
                     )
             else:
                 if not ssl:
@@ -669,6 +671,7 @@ def log_attention_maps_to_mlflow(
     test_true_labels_np: np.ndarray,
     test_transforms: Compose,
     cfg,
+    device: Optional[torch.device] = None,  # <-- Accept optional device
 ):
     import shutil
     if "vit" not in cfg.get_model_name().lower():
@@ -676,8 +679,14 @@ def log_attention_maps_to_mlflow(
         
     from utils.train_functions import make_loader
     
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # If device is not provided, determine it here for backward compatibility
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
+    # Ensure the model is on the correct device
+    model.to(device)
+    model.eval()
+
     # Define test_loader before using it
     test_loader = make_loader(
         test_images_paths_np,

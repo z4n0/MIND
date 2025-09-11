@@ -335,7 +335,7 @@ def get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats):
     crop_percentage = 0.95
     crop_size = (int(original_size[0] * crop_percentage), int(original_size[1] * crop_percentage))
     
-    print(f"Applying random crop with size: {crop_size}")
+    # print(f"Applying random crop with size: {crop_size}")
     # train_transforms_list.append(
     #     RandSpatialCropd(keys=["image"], roi_size=crop_size, random_size=False)
     # )

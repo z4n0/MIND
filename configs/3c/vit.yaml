@@ -21,18 +21,18 @@ model:
   in_channels: 3 # Or 3, depending on the dataset
   out_channels: 2 # Depends on the number of classes
   # --- ViT Specific Parameters ---
-  img_size: [448, 448] # Should match the input size from transforms and be divisible by patch_size
+  img_size: [512,512] # Should match the input size from transforms and be divisible by patch_size
   patch_size: [32, 32]
-  hidden_size: 768     # Embedding dimension (e.g., ViT-Base)
-  mlp_dim: 3072        # Dimension of the MLP layer (e.g., ViT-Base)
-  num_layers: 12       # Number of transformer blocks (e.g., ViT-Base)
-  num_heads: 12        # Number of attention heads (e.g., ViT-Base)
+  hidden_size: 128     # Embedding dimension (e.g., ViT-Base)
+  mlp_dim: 256        # Dimension of the MLP layer (e.g., ViT-Base)
+  num_layers: 4      # Number of transformer blocks (e.g., ViT-Base)
+  num_heads: 4        # Number of attention heads (e.g., ViT-Base)
 
 
 # Training
 training:
   num_epochs: 450
-  early_stopping_patience: 50
+  early_stopping_patience: 2
   mixup_alpha: 0
   oversample: false
   undersample: false
@@ -40,10 +40,11 @@ training:
   fine_tuning: false
   transfer_learning: false
   freezed_layerIndex: null
+  use_color_transforms: true
 
 # Optimizer
 optimizer:
   learning_rate: 1e-4
   optimizer_name: "AdamW"
   weight_decay: 1e-5
-  patience: 20 # For ReduceLROnPlateau scheduler
+  patience: 25 # For ReduceLROnPlateau scheduler

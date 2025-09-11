@@ -165,8 +165,10 @@ class ConfigLoader:
         """Get the manually set learning rate"""
         if self.optimizer is None:
             raise ValueError("Optimizer configuration is not set")
-
-        return self.optimizer["learning_rate"]
+        # Ensure the learning rate is always returned as a float
+        lr = self.optimizer.get("learning_rate", 1e-4)  # Default if not specified
+        print(f"manual lr is {lr}")
+        return float(lr)
 
     def get_class_names(self) -> Optional[List[str]]:
         """Restituisce sempre la lista di classi, qualunque sia

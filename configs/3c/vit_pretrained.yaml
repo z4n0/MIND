@@ -17,16 +17,18 @@ data_augmentation:
 model:
   model_name: "ViT"
   library: "monai"
+  vit_name: 'vit-b_32' 
   spatial_dims: 2
-  in_channels: 4 # Or 3, depending on the dataset
+  in_channels: 3 # Or 3, depending on the dataset
   out_channels: 2 # Depends on the number of classes
   # --- ViT Specific Parameters ---
   img_size: [512,512] # Should match the input size from transforms and be divisible by patch_size
   patch_size: [32, 32]
-  hidden_size: 768     # Embedding dimension (e.g., ViT-Base)
-  mlp_dim: 3072        # Dimension of the MLP layer (e.g., ViT-Base)
-  num_layers: 12       # Number of transformer blocks (e.g., ViT-Base)
-  num_heads: 12        # Number of attention heads (e.g., ViT-Base)
+  hidden_size: 768
+  mlp_dim: 3072
+  num_layers: 12
+  num_heads: 12
+
 
 # Training
 training:
@@ -37,8 +39,9 @@ training:
   undersample: false
   weighted_loss: false
   fine_tuning: false
-  transfer_learning: false
+  transfer_learning: true
   freezed_layerIndex: null
+  use_color_transforms: true
 
 # Optimizer
 optimizer:

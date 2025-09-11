@@ -321,10 +321,11 @@ def main():
         # Note: We need the transforms for the specific fold, but get_current_fold_transforms
         # only holds the last fold's transforms. For logging, using the general val_transforms
         # is a reasonable approximation if normalization is consistent (e.g., ImageNet stats).
-        _, val_transforms, _ = tf.get_transforms(cfg, color_transforms=True)
+        _, val_transforms, _ = tf.get_transforms(cfg, color_transforms=False)
 
 
         log_SSL_run_to_mlflow(
+            device=device,
             cfg=cfg,
             model=best_model,
             class_names=class_names,
