@@ -26,17 +26,24 @@ from monai.transforms import (
     ClipIntensityPercentilesd,  # Clip intensities at specified low and high percentiles to remove extreme outlier pixels.
     HistogramNormalized  # Standardizes image histograms, can be useful if illumination/staining varies significantly.
 )
+import random
+import torch
+from typing import List, Tuple
+from monai.transforms import OneOf
+from monai.transforms.intensity.dictionary import (
+    RandHistogramShiftd, RandAdjustContrastd, RandGaussianNoised,
+    RandBiasFieldd, RandCoarseDropoutd
+)
+from monai.transforms.utility.dictionary import LambdaD, Identityd
 
 from monai.transforms.compose import Compose
 from monai.transforms.spatial.dictionary import Resized, RandFlipd, RandRotate90d, Rand2DElasticd
 from monai.transforms.intensity.dictionary import ScaleIntensityd, NormalizeIntensityd, RandGaussianNoised, RandHistogramShiftd, RandAdjustContrastd
 from monai.transforms.utility.dictionary import LambdaD,EnsureTyped
 # from timm import is_model_pretrained
-import torch
 from classes.PrintShapeTransform import PrintShapeTransform
 from monai.data.dataset import Dataset
 from monai.data.dataloader import DataLoader
-import torch
 from torchvision.models import DenseNet121_Weights, DenseNet169_Weights, DenseNet201_Weights, ResNet50_Weights, ResNet18_Weights
 from classes.CustomTiffFileReader import CustomTiffFileReader
 from typing import List, Tuple
@@ -185,21 +192,141 @@ def _get_spatial_augmentations(cfg):
         ]
     return spatial_transforms
 
-def _get_intensity_augmentations(cfg):
+# ---------- helpers ----------
+
+def _poisson_gaussian_lambda(
+    keys=("image",), gain_range=(30.0, 80.0), sigma_range=(0.005, 0.015)
+):
     """
-    Get the list of intensity augmentation transforms.
+    Poisson–Gaussian noise: y = Poisson(gain * x)/gain + N(0, sigma), x in [0,1].
     """
-    intensity_transforms = [
-            RandHistogramShiftd(keys=["image"], prob=0.2, num_control_points=(3,5)), # num_control_points=(4, 7)
-            RandAdjustContrastd(keys=["image"], prob=0.25, gamma=(0.9, 1.1)),
-            RandGaussianNoised(
-                    keys="image", 
-                    prob=cfg.data_augmentation["rand_gaussian_noise_prob"],
-                    mean=cfg.data_augmentation["rand_gaussian_noise_mean"],
-                    std=cfg.data_augmentation["rand_gaussian_noise_std"]
-                ),
+    def _fn(x: torch.Tensor) -> torch.Tensor:
+        x = x.float().clamp(0, 1)
+        g = random.uniform(*gain_range)
+        s = random.uniform(*sigma_range)
+        y = torch.poisson(x * g) / g
+        y = y + s * torch.randn_like(y)
+        return y.clamp(0, 1)
+    return LambdaD(keys=keys, func=_fn)
+
+
+def _weak_bleedthrough_lambda(keys=("image",), max_frac=0.05):
+    """
+    Very small channel mixing on RGB to mimic spectral cross-talk.
+    """
+    def _fn(x: torch.Tensor) -> torch.Tensor:
+        x = x.float()
+        if x.ndim != 3 or x.shape[0] < 3:
+            return x
+        C = 3
+        M = torch.eye(C, dtype=x.dtype, device=x.device)
+        for i in range(C):
+            for j in range(C):
+                if i != j:
+                    M[i, j] = random.uniform(0.0, max_frac)
+        mixed = (M @ x[:C].reshape(C, -1)).reshape_as(x[:C])
+        x = torch.cat([mixed.clamp(0, 1), x[C:]], dim=0)
+        return x
+    return LambdaD(keys=keys, func=_fn)
+
+
+# ---------- main block ----------
+
+def _get_intensity_augmentations(cfg, preset: str = "medium") -> List:
+    """
+    Confocal-friendly photometric augs using OneOf(+Identityd) so that
+    *at most one* op is applied per image with a controllable overall prob.
+    Presets: "light" (recommended), "medium" (if underfitting), "heavy" (ablate).
+    """
+    # image size for gentle dropout (optional)
+    H, W = cfg.data_augmentation["resize_spatial_size"]
+    preset = cfg.get_intensity_augmentation_preset()
+
+    if preset == "light":
+        # Overall apply probability ≈ 0.6 via Identityd weight
+        intensity_one = OneOf(
+            transforms=[
+                Identityd(keys=["image"]),  # "do nothing" branch
+                RandHistogramShiftd(keys=["image"], prob=1.0, num_control_points=(3, 5)),
+                RandAdjustContrastd(keys=["image"],  prob=1.0, gamma=(0.95, 1.05)),
+                _poisson_gaussian_lambda(keys=("image",), gain_range=(30.0, 80.0),
+                                         sigma_range=(0.005, 0.015)),
+                RandBiasFieldd(keys=["image"], prob=1.0, degree=2, coeff_range=(0.01, 0.03)),
+                _weak_bleedthrough_lambda(keys=("image",), max_frac=0.05),
+            ],
+            weights=[0.40, 0.20, 0.18, 0.12, 0.06, 0.04],   # sums arbitrary; acts as probabilities
+        )
+        extras = [
+            RandCoarseDropoutd(  # rare, small occlusion; optional
+                keys=["image"], prob=0.05,
+                holes=1, max_holes=2,
+                spatial_size=(int(0.08 * H), int(0.08 * W)),
+                fill_value=0.0,
+            )
         ]
-    return intensity_transforms 
+
+    elif preset == "medium":
+        intensity_one = OneOf(
+            transforms=[
+                Identityd(keys=["image"]),
+                RandHistogramShiftd(keys=["image"], prob=1.0, num_control_points=(4, 6)),
+                RandAdjustContrastd(keys=["image"],  prob=1.0, gamma=(0.90, 1.10)),
+                _poisson_gaussian_lambda(keys=("image",), gain_range=(20.0, 70.0),
+                                         sigma_range=(0.008, 0.02)),
+                RandBiasFieldd(keys=["image"], prob=1.0, degree=2, coeff_range=(0.015, 0.04)),
+                _weak_bleedthrough_lambda(keys=("image",), max_frac=0.07),
+                RandGaussianNoised(keys="image", prob=1.0, mean=0.0, std=0.015),
+            ],
+            weights=[0.30, 0.20, 0.18, 0.14, 0.08, 0.06, 0.04],
+        )
+        extras = [
+            RandCoarseDropoutd(keys=["image"], prob=0.07,
+                               holes=1, max_holes=2,
+                               spatial_size=(int(0.08 * H), int(0.08 * W)))
+        ]
+
+    elif preset == "heavy":  # for ablation/diagnostics only
+        intensity_one = OneOf(
+            transforms=[
+                Identityd(keys=["image"]),
+                RandHistogramShiftd(keys=["image"], prob=1.0, num_control_points=(4, 7)),
+                RandAdjustContrastd(keys=["image"],  prob=1.0, gamma=(0.85, 1.15)),
+                _poisson_gaussian_lambda(keys=("image",), gain_range=(10.0, 60.0),
+                                         sigma_range=(0.01, 0.03)),
+                RandBiasFieldd(keys=["image"], prob=1.0, degree=3, coeff_range=(0.02, 0.06)),
+                _weak_bleedthrough_lambda(keys=("image",), max_frac=0.10),
+                RandGaussianNoised(keys="image", prob=1.0, mean=0.0, std=0.02),
+            ],
+            weights=[0.25, 0.20, 0.18, 0.15, 0.10, 0.07, 0.05],
+        )
+        extras = [
+            RandCoarseDropoutd(keys=["image"], prob=0.10,
+                               holes=1, max_holes=3,
+                               spatial_size=(int(0.1 * H), int(0.1 * W)))
+        ]
+
+    else:
+        raise ValueError(f"Unknown preset: {preset}")
+
+    return [intensity_one] + extras
+
+
+# def _get_intensity_augmentations(cfg):
+#     """
+#     Get the list of intensity augmentation transforms.
+#     """
+#     intensity_transforms = [
+#             RandHistogramShiftd(keys=["image"], prob=0.2, num_control_points=(3,5)), # num_control_points=(4, 7)
+#             RandAdjustContrastd(keys=["image"], prob=0.25, gamma=(0.9, 1.1)),
+#             RandGaussianNoised(
+#                     keys="image", 
+#                     prob=cfg.data_augmentation["rand_gaussian_noise_prob"],
+#                     mean=cfg.data_augmentation["rand_gaussian_noise_mean"],
+#                     std=cfg.data_augmentation["rand_gaussian_noise_std"]
+#                 ),
+            
+#         ]
+#     return intensity_transforms 
 
 # Compute global normalization parameters from your training set
 # global_mean, global_std = compute_dataset_mean_std(train_images_paths, cfg)
@@ -439,6 +566,19 @@ def get_convert_to_tensor_transform_list():
         EnsureTyped(keys=["label"], data_type="tensor", dtype=torch.int64),
     ]
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 def check_normalization(img, mean_val, std_val, tolerance=0.12, threshold=0.990):
     """
     Check that most of the image data falls within [mean - 3*std, mean + 3*std].
@@ -468,7 +608,6 @@ def check_normalization(img, mean_val, std_val, tolerance=0.12, threshold=0.990)
         )
     print("EVERYTHING IS FINE")
         
-
 def preview_transform_output(
     pipeline: Compose,
     input_shape: Tuple[int, int, int],

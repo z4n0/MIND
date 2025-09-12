@@ -500,6 +500,7 @@ def log_SSL_run_to_mlflow(
                 "test_counts": test_counts,
                 "color_transforms": cfg.data_augmentation["use_color_transforms"],
                 "freezed_layer_index": cfg.get_freezed_layer_index(),
+                "use_lr_discovery": cfg.get_discover_lr(),
                 # Add date and time parameters
                 "creation_date": now.strftime("%m-%d"),
                 "creation_time": now.strftime("%H:%M:%S"),

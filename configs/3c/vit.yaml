@@ -13,6 +13,7 @@ data_loading:
 
 data_augmentation:
   crop_size: [448, 448] # This overrides the crop_size from base.yaml to match img_size
+  use_color_transforms: true
 
 model:
   model_name: "ViT"
@@ -40,7 +41,7 @@ training:
   fine_tuning: false
   transfer_learning: false
   freezed_layerIndex: null
-  use_color_transforms: true
+  discover_lr: false
 
 # Optimizer
 optimizer:

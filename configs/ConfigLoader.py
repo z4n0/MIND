@@ -152,6 +152,15 @@ class ConfigLoader:
             dataset: List of dataset names or paths
         """
         self.dataset = dataset
+        
+    def get_intensity_augmentation_preset(self) -> Optional[str]:
+        """Get the intensity augmentation preset"""
+        if self.data_augmentation is None:
+            raise ValueError("Data augmentation configuration is not set")
+        if "intensity_augmentation_preset" not in self.data_augmentation:
+            raise ValueError("intensity_augmentation_preset is not set in data augmentation configuration")
+        print(f"intensity_augmentation_preset is {self.data_augmentation['intensity_augmentation_preset']}")
+        return self.data_augmentation["intensity_augmentation_preset"]
 
     def get_discover_lr(self) -> Optional[bool]:
         """Get whether to use learning rate finder"""
