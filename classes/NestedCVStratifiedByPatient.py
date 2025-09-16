@@ -89,6 +89,7 @@ class NestedCVStratifiedByPatient:
         self._num_outer_images = None
         self.output_dir = Path(output_dir or ".").resolve()
         self.cm_dir = str(self.output_dir / "confusion_matrices")
+        self.cm_patient_dir = str(self.output_dir / "confusion_matrices" / "patient")
         self.learning_dir = str(self.output_dir / "learning_curves")
         self.test_pat_ids_per_fold = {} #<-- to store test patient ids for each fold
         
@@ -126,6 +127,7 @@ class NestedCVStratifiedByPatient:
         the configured `output_dir` so concurrent runs don't clash.
         """
         os.makedirs(self.cm_dir, exist_ok=True)
+        os.makedirs(self.cm_patient_dir, exist_ok=True)
         os.makedirs(self.learning_dir, exist_ok=True)
 
     def _compute_patient_level_metrics(self, X_test_outer, y_test_outer, eval_results, fold_idx: int) -> dict:
@@ -186,12 +188,12 @@ class NestedCVStratifiedByPatient:
 
             # Save patient-level confusion matrices
             cm_fig_major = plot_confusion_matrix(metrics_major['confusion_matrix'], self.class_names, f'Patient CM (Majority) Fold {fold_idx}')
-            cm_path_major = os.path.join(self.cm_dir, f"confusion_matrix_patient_majority_fold_{fold_idx}.png")
+            cm_path_major = os.path.join(self.cm_patient_dir, f"confusion_matrix_patient_majority_fold_{fold_idx}.png")
             cm_fig_major.savefig(cm_path_major, dpi=100, bbox_inches='tight')
             plt.close(cm_fig_major)
 
             cm_fig_soft = plot_confusion_matrix(metrics_soft['confusion_matrix'], self.class_names, f'Patient CM (Soft) Fold {fold_idx}')
-            cm_path_soft = os.path.join(self.cm_dir, f"confusion_matrix_patient_soft_fold_{fold_idx}.png")
+            cm_path_soft = os.path.join(self.cm_patient_dir, f"confusion_matrix_patient_soft_fold_{fold_idx}.png")
             cm_fig_soft.savefig(cm_path_soft, dpi=100, bbox_inches='tight')
             plt.close(cm_fig_soft)
 

@@ -37,7 +37,7 @@ model:
   
 training:
   num_epochs: 50
-  early_stopping_patience: 17
+  early_stopping_patience: 2
   mixup_alpha: 0
   oversample: true
   undersample: false

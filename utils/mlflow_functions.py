@@ -721,6 +721,14 @@ def log_run_to_mlflow(
         if cm_dir and cm_dir.is_dir():
             mlflow.log_artifacts(str(cm_dir), artifact_path="confusion_matrices")
 
+        # 5b. patient-level confusion matrices (nested under confusion_matrices/patient)
+        if output_dir:
+            cm_patient_dir = Path(output_dir) / "confusion_matrices" / "patient"
+        else:
+            cm_patient_dir = Path.cwd() / "confusion_matrices" / "patient"
+        if cm_patient_dir.is_dir():
+            mlflow.log_artifacts(str(cm_patient_dir), artifact_path="confusion_matrices/patient")
+
         # 6. train.py backup (was originally 5)
         # if Path("train.py").is_file():
         #     mlflow.log_artifact("train.py", artifact_path="scripts")
@@ -735,7 +743,7 @@ def log_run_to_mlflow(
                         test_true_labels_np,
                         test_transforms,
                         cfg,
-                        device=device,  # <-- Pass the device along
+                        device=device,  
                     )
             else:
                 if not ssl:
