@@ -28,8 +28,8 @@ def extract_images_features(
 
     features_list = []
     #create a list of dictionaries with the image path so that loadImaged works
-    train_data = [{"image": img} for img in images_paths] 
-    
+    train_data = [{"image": img, "label": 0} for img in images_paths] 
+
     for data in train_data:
         transformed = transforms(data)
         img_tensor = transformed["image"].to(device)

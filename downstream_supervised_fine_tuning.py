@@ -37,7 +37,7 @@ from configs.ConfigLoader import ConfigLoader
 from classes.ModelManager import ModelManager
 from classes.NestedCVStratifiedByPatient import NestedCVStratifiedByPatient
 from utils.reproducibility_functions import set_global_seed
-from utils.mlflow_functions import log_SSL_run_to_mlflow
+from utils.mlflow_functions import log_run_to_mlflow
 from utils.train_functions import remove_projection_head, SSLClassifierModule, solve_cuda_oom
 import utils.transformations_functions as tf
 
@@ -356,7 +356,7 @@ def main():
 
     execution_time = time.time() - start_time
     
-    log_SSL_run_to_mlflow(
+    log_run_to_mlflow(
         cfg=cfg,
         model=best_model,
         class_names=class_names,

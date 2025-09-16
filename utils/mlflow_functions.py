@@ -120,7 +120,7 @@ def get_transform_params(transform_list):
 
     return params
 
-def load_mlflow_model(tracking_uri: str, experiment_name: str, gdrive: bool = False, kaggle: bool = False, linux: bool = True) -> torch.nn.Module:
+def load_mlflow_model_by_name(tracking_uri: str, experiment_name: str, gdrive: bool = False, kaggle: bool = False, linux: bool = True) -> torch.nn.Module:
     """
     Load a PyTorch model from MLflow given the tracking URI and experiment name.
     
@@ -403,7 +403,7 @@ from utils.train_functions import make_loader
 from utils.data_visualization_functions import min_max_normalization
 
 # ---------------------------------------------------------------------------
-def log_SSL_run_to_mlflow(
+def log_run_to_mlflow(
     cfg,
     model: nn.Module,
     class_names: List[str],
@@ -501,6 +501,10 @@ def log_SSL_run_to_mlflow(
                 "color_transforms": cfg.data_augmentation["use_color_transforms"],
                 "freezed_layer_index": cfg.get_freezed_layer_index(),
                 "use_lr_discovery": cfg.get_discover_lr(),
+                "lr_discovery_folds": cfg.get_lr_discovery_folds(),
+                "mixup_alpha": cfg.get_mixup_alpha(),
+                # "use_color_transforms": cfg.data_augmentation["use_color_transforms"],
+                "intensity_augmentation_preset": cfg.data_augmentation["intensity_augmentation_preset"],
                 # Add date and time parameters
                 "creation_date": now.strftime("%m-%d"),
                 "creation_time": now.strftime("%H:%M:%S"),
@@ -554,6 +558,98 @@ def log_SSL_run_to_mlflow(
                 "exec_time_min": execution_time / 60.0,
             }
         )
+
+        # --------------------- PATIENT-LEVEL METRICS (if present)
+        try:
+            # Safely extract arrays if keys are available in fold_results
+            major_bal = [r["patient_major_bal_acc"] for r in fold_results if r.get("patient_major_bal_acc") is not None]
+            soft_bal  = [r["patient_soft_bal_acc"] for r in fold_results if r.get("patient_soft_bal_acc") is not None]
+            major_auc = [r["patient_major_auc"] for r in fold_results if r.get("patient_major_auc") is not None]
+            soft_auc  = [r["patient_soft_auc"] for r in fold_results if r.get("patient_soft_auc") is not None]
+            major_mcc = [r["patient_major_mcc"] for r in fold_results if r.get("patient_major_mcc") is not None]
+            soft_mcc  = [r["patient_soft_mcc"] for r in fold_results if r.get("patient_soft_mcc") is not None]
+            major_prec= [r["patient_major_precision"] for r in fold_results if r.get("patient_major_precision") is not None]
+            soft_prec = [r["patient_soft_precision"] for r in fold_results if r.get("patient_soft_precision") is not None]
+            major_rec = [r["patient_major_recall"] for r in fold_results if r.get("patient_major_recall") is not None]
+            soft_rec  = [r["patient_soft_recall"] for r in fold_results if r.get("patient_soft_recall") is not None]
+
+            metrics_to_log = {}
+            if major_bal:
+                arr = np.asarray(major_bal, dtype=float)
+                metrics_to_log.update({
+                    "mean_patient_major_bal_acc": float(arr.mean()),
+                    "std_patient_major_bal_acc": float(arr.std()),
+                })
+            if soft_bal:
+                arr = np.asarray(soft_bal, dtype=float)
+                metrics_to_log.update({
+                    "mean_patient_soft_bal_acc": float(arr.mean()),
+                    "std_patient_soft_bal_acc": float(arr.std()),
+                })
+            if major_auc:
+                arr = np.asarray(major_auc, dtype=float)
+                metrics_to_log.update({
+                    "mean_patient_major_auc": float(arr.mean()),
+                    "std_patient_major_auc": float(arr.std()),
+                })
+            if soft_auc:
+                arr = np.asarray(soft_auc, dtype=float)
+                metrics_to_log.update({
+                    "mean_patient_soft_auc": float(arr.mean()),
+                    "std_patient_soft_auc": float(arr.std()),
+                })
+            if major_mcc:
+                arr = np.asarray(major_mcc, dtype=float)
+                metrics_to_log.update({
+                    "mean_patient_major_mcc": float(arr.mean()),
+                    "std_patient_major_mcc": float(arr.std()),
+                })
+            if soft_mcc:
+                arr = np.asarray(soft_mcc, dtype=float)
+                metrics_to_log.update({
+                    "mean_patient_soft_mcc": float(arr.mean()),
+                    "std_patient_soft_mcc": float(arr.std()),
+                })
+            if major_prec:
+                arr = np.asarray(major_prec, dtype=float)
+                metrics_to_log.update({
+                    "mean_patient_major_precision": float(arr.mean()),
+                    "std_patient_major_precision": float(arr.std()),
+                })
+            if soft_prec:
+                arr = np.asarray(soft_prec, dtype=float)
+                metrics_to_log.update({
+                    "mean_patient_soft_precision": float(arr.mean()),
+                    "std_patient_soft_precision": float(arr.std()),
+                })
+            if major_rec:
+                arr = np.asarray(major_rec, dtype=float)
+                metrics_to_log.update({
+                    "mean_patient_major_recall": float(arr.mean()),
+                    "std_patient_major_recall": float(arr.std()),
+                })
+            if soft_rec:
+                arr = np.asarray(soft_rec, dtype=float)
+                metrics_to_log.update({
+                    "mean_patient_soft_recall": float(arr.mean()),
+                    "std_patient_soft_recall": float(arr.std()),
+                })
+
+            if metrics_to_log:
+                mlflow.log_metrics(metrics_to_log)
+        except Exception as e:
+            print(f"Warning: failed to log patient-level metrics: {e}")
+
+        # --------------------- PER-FOLD IMAGE-LEVEL METRICS (optional, concise)
+        # Log per-fold mcc/auc/precision/recall so you can inspect in MLflow UI
+        try:
+            for i, r in enumerate(fold_results):
+                for k in ("test_mcc", "test_auc", "test_precision", "test_recall"):
+                    v = r.get(k)
+                    if v is not None:
+                        mlflow.log_metric(f"{k}_fold_{i}", float(v))
+        except Exception as e:
+            print(f"Warning: failed to log per-fold metrics: {e}")
 
         # --------------------- ARTIFACTS
         # 1. model (always push CPU version)

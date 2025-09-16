@@ -150,7 +150,7 @@ class TorchvisionModelFactory():
         return list(self.builders.keys())
         
     def create_model(self, model_name, pretrained_weights=None, num_classes=2):
-        print(f"pretrained_weights? {pretrained_weights} pretrained? {self.pretrained}")
+        print(f" pretrained? {self.pretrained} hence using weights: {pretrained_weights}")
         # Make case-insensitive lookup
         model_name_key = None
         for key in self.builders.keys():

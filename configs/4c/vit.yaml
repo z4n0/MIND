@@ -22,11 +22,11 @@ model:
   out_channels: 2 # Depends on the number of classes
   # --- ViT Specific Parameters ---
   img_size: [512,512] # Should match the input size from transforms and be divisible by patch_size
-  patch_size: [32, 32]
-  hidden_size: 768     # Embedding dimension (e.g., ViT-Base)
-  mlp_dim: 3072        # Dimension of the MLP layer (e.g., ViT-Base)
-  num_layers: 12       # Number of transformer blocks (e.g., ViT-Base)
-  num_heads: 12        # Number of attention heads (e.g., ViT-Base)
+  patch_size: [16,16]
+  hidden_size: 128     # Embedding dimension (e.g., ViT-Base)
+  mlp_dim: 256        # Dimension of the MLP layer (e.g., ViT-Base)
+  num_layers: 4      # Number of transformer blocks (e.g., ViT-Base)
+  num_heads: 4        # Number of attention heads (e.g., ViT-Base)
 
 # Training
 training:

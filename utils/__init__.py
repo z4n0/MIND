@@ -55,7 +55,7 @@ from .mlflow_functions import (
     get_experiment_id_byName,
     get_run_name_by_id,
     print_run_ids_and_names,
-    load_mlflow_model,
+    load_mlflow_model_by_name,
     log_folds_results_to_csv,
     start_mlflow_ui,
 )
@@ -98,7 +98,7 @@ __all__ = [
     'get_data_directory',
     'get_base_directory',
     'get_tracking_uri',
-    'load_mlflow_model',
+    'load_mlflow_model_by_name',
     'print_run_ids_and_names',
     
     # Data extraction functions

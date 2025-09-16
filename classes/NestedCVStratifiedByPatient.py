@@ -71,9 +71,11 @@ class NestedCVStratifiedByPatient:
         self.num_classes = self._determine_num_classes()
         self.val_set_size = self.cfg.data_splitting.get("val_set_size", 0.15)
         self.num_epochs = self.cfg.training.get("num_epochs", 100)
+        self.lr_discovery_folds = self.cfg.data_splitting.get("lr_discovery_folds", 4)
         self.is_supported_by_torchvision = self.pretrained_weights is not None
         self.train_transforms = train_transforms
         self.val_transforms = val_transforms
+        self.random_seed = self.cfg.data_splitting.get("random_seed", 42)
         #store current fold's transforms
         self.current_fold_train_transforms = None
         self.current_fold_val_transforms = None
@@ -88,7 +90,8 @@ class NestedCVStratifiedByPatient:
         self.output_dir = Path(output_dir or ".").resolve()
         self.cm_dir = str(self.output_dir / "confusion_matrices")
         self.learning_dir = str(self.output_dir / "learning_curves")
-        self.test_pat_ids_per_fold = {} #<-- ADDED: to store test patient ids for each fold
+        self.test_pat_ids_per_fold = {} #<-- to store test patient ids for each fold
+        
         self._setup_directories()
 
         print(f"Detected {self.num_classes} unique classes.")
@@ -117,8 +120,110 @@ class NestedCVStratifiedByPatient:
     
     
     def _setup_directories(self):
+        """Create output subdirectories for metrics and plots for this run.
+
+        Creates `confusion_matrices/` and `learning_curves/` inside
+        the configured `output_dir` so concurrent runs don't clash.
+        """
         os.makedirs(self.cm_dir, exist_ok=True)
         os.makedirs(self.learning_dir, exist_ok=True)
+
+    def _compute_patient_level_metrics(self, X_test_outer, y_test_outer, eval_results, fold_idx: int) -> dict:
+        """
+        Aggregate per-image predictions to patient-level via:
+          - majority vote over predicted classes
+          - soft vote via mean of per-image probability vectors
+
+        Saves patient-level confusion matrices and prints metrics.
+
+        Returns a dict with patient-level metrics for both schemes.
+        metrics are: accuracy, balanced_accuracy, f1
+        """
+        from collections import defaultdict, Counter
+        from utils.test_functions import calculate_classification_metrics
+
+        try:
+            # Extract patient ids aligned with dataloader order (shuffle=False)
+            patient_ids = np.array([self._extract_patient_id(p) for p in X_test_outer])
+            preds_img = np.array(eval_results.get('predictions'))          # [N]
+            probs_img = eval_results.get('probs')
+            probs_img = np.array(probs_img) if probs_img is not None else None  # [N, C]
+            true_img  = np.array(y_test_outer)                             # [N]
+
+            # Group indices by patient
+            pat_to_indices: dict[str, list[int]] = defaultdict(list)
+            for i, pid in enumerate(patient_ids):
+                pat_to_indices[pid].append(i)
+
+            # Majority vote and soft-vote predictions per patient
+            pat_true: dict[str, int] = {}
+            pat_pred_major: dict[str, int] = {}
+            pat_pred_soft: dict[str, int] = {}
+            for pid, idxs in pat_to_indices.items():
+                # Patient true label as majority of slice labels
+                pat_true[pid] = int(Counter(true_img[idxs]).most_common(1)[0][0])
+                # Majority vote on slice predictions
+                pat_pred_major[pid] = int(Counter(preds_img[idxs]).most_common(1)[0][0])
+                # Soft vote: mean probabilities across slices
+                if probs_img is not None and len(probs_img) == len(true_img):
+                    mean_probs = probs_img[idxs].mean(axis=0)
+                    pat_pred_soft[pid] = int(mean_probs.argmax())
+                else:
+                    pat_pred_soft[pid] = pat_pred_major[pid]
+
+            # Build arrays in stable patient order
+            ordered_pids = sorted(pat_true.keys())
+            y_pat_true  = np.array([pat_true[pid] for pid in ordered_pids])
+            y_pat_major = np.array([pat_pred_major[pid] for pid in ordered_pids])
+            y_pat_soft  = np.array([pat_pred_soft[pid] for pid in ordered_pids])
+
+            # Compute patient-level metrics
+            metrics_major = calculate_classification_metrics(y_pat_true, y_pat_major, class_names=self.class_names)
+            metrics_soft  = calculate_classification_metrics(y_pat_true, y_pat_soft,  class_names=self.class_names)
+
+            print(f" [FOLD {fold_idx} PATIENT] Majority: Acc={metrics_major['accuracy']:.4f} | BalAcc={metrics_major['balanced_accuracy']:.4f} | F1={metrics_major['f1']:.4f}")
+            print(f" [FOLD {fold_idx} PATIENT] Soft    : Acc={metrics_soft['accuracy']:.4f} | BalAcc={metrics_soft['balanced_accuracy']:.4f} | F1={metrics_soft['f1']:.4f}")
+
+            # Save patient-level confusion matrices
+            cm_fig_major = plot_confusion_matrix(metrics_major['confusion_matrix'], self.class_names, f'Patient CM (Majority) Fold {fold_idx}')
+            cm_path_major = os.path.join(self.cm_dir, f"confusion_matrix_patient_majority_fold_{fold_idx}.png")
+            cm_fig_major.savefig(cm_path_major, dpi=100, bbox_inches='tight')
+            plt.close(cm_fig_major)
+
+            cm_fig_soft = plot_confusion_matrix(metrics_soft['confusion_matrix'], self.class_names, f'Patient CM (Soft) Fold {fold_idx}')
+            cm_path_soft = os.path.join(self.cm_dir, f"confusion_matrix_patient_soft_fold_{fold_idx}.png")
+            cm_fig_soft.savefig(cm_path_soft, dpi=100, bbox_inches='tight')
+            plt.close(cm_fig_soft)
+
+            return {
+                # Balanced accuracy (requested primary)
+                "patient_major_bal_acc": float(metrics_major['balanced_accuracy']),
+                "patient_soft_bal_acc": float(metrics_soft['balanced_accuracy']),
+                # AUC/MCC (if available)
+                "patient_major_auc": float(metrics_major.get('auc')) if metrics_major.get('auc') is not None else None,
+                "patient_soft_auc": float(metrics_soft.get('auc')) if metrics_soft.get('auc') is not None else None,
+                "patient_major_mcc": float(metrics_major.get('mcc')) if metrics_major.get('mcc') is not None else None,
+                "patient_soft_mcc": float(metrics_soft.get('mcc')) if metrics_soft.get('mcc') is not None else None,
+                # Precision/Recall
+                "patient_major_precision": float(metrics_major['precision']),
+                "patient_soft_precision": float(metrics_soft['precision']),
+                "patient_major_recall": float(metrics_major['recall']),
+                "patient_soft_recall": float(metrics_soft['recall']),
+            }
+        except Exception as e:
+            print(f"Warning: patient-level aggregation failed: {e}")
+            return {
+                "patient_major_bal_acc": None,
+                "patient_soft_bal_acc": None,
+                "patient_major_auc": None,
+                "patient_soft_auc": None,
+                "patient_major_mcc": None,
+                "patient_soft_mcc": None,
+                "patient_major_precision": None,
+                "patient_soft_precision": None,
+                "patient_major_recall": None,
+                "patient_soft_recall": None,
+            }
     
     @property
     def cfg(self):
@@ -140,6 +245,11 @@ class NestedCVStratifiedByPatient:
         return self.train_image_counts_per_fold, self.val_image_counts_per_fold
 
     def get_current_fold_transforms(self):
+        """Return the train/val/test transforms for the current outer fold.
+
+        Returns:
+            tuple: (train_transforms, val_transforms, test_transforms)
+        """
         return self.current_fold_train_transforms, self.current_fold_val_transforms, self.current_fold_test_transforms
 
     def get_test_patient_ids_for_fold(self, fold_idx: int) -> np.ndarray:
@@ -147,13 +257,23 @@ class NestedCVStratifiedByPatient:
         return self.test_pat_ids_per_fold.get(fold_idx)
         
     def _determine_num_classes(self):
+        """Infer the number of classes from the provided labels array."""
         return len(np.unique(self.labels_np))
 
     def _setup_directories(self):
+        """Create (idempotently) the confusion-matrix and learning-curve dirs."""
         os.makedirs(self.cm_dir, exist_ok=True)
         os.makedirs(self.learning_dir, exist_ok=True)
 
     def _extract_patient_id(self, image_path):
+        """Extract a patient identifier from an image path using regex.
+
+        Args:
+            image_path (str): Full path to the image file.
+
+        Returns:
+            str: Extracted patient identifier.
+        """
         match = re.search(r'(\d{4})', image_path) # Example regex
         if match:
             return match.group(1)
@@ -221,6 +341,11 @@ class NestedCVStratifiedByPatient:
         return self.per_fold_val_images_paths[fold_idx]
 
     def _get_loss_function(self, y_train_data_for_weighting):
+        """Return a CrossEntropyLoss, optionally weighted by class imbalance.
+
+        If `training.weighted_loss` is True and no over/undersampling is used,
+        compute class weights on the provided training labels.
+        """
         if (self.cfg.training.get("weighted_loss", False) and
             not (self.cfg.training.get("oversample", False) or self.cfg.training.get("undersample", False))):
             unique_labels = np.unique(y_train_data_for_weighting)
@@ -235,6 +360,7 @@ class NestedCVStratifiedByPatient:
             return nn.CrossEntropyLoss()
 
     def _get_optimizer(self, model, learning_rate):
+        """Build the optimizer (Adam) over trainable parameters."""
         trainable_params = [p for p in model.parameters() if p.requires_grad]
         return optim.Adam(
             trainable_params,
@@ -243,6 +369,12 @@ class NestedCVStratifiedByPatient:
         )
 
     def _get_scheduler(self, optimizer):
+        """Return LR scheduler and a flag indicating epoch-stepped scheduling.
+
+        Returns:
+            tuple[torch.optim.lr_scheduler._LRScheduler, bool]:
+                (scheduler, using_cosine_scheduler)
+        """
         if self.cfg.get_model_name().lower() == "vit": 
             print("Using CosineAnnealingWarmRestarts scheduler")
             from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
@@ -255,6 +387,7 @@ class NestedCVStratifiedByPatient:
             return optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=patience, factor=0.5), False
 
     def _objective(self, trial, X_train_outer_fold, y_train_outer_fold):
+        """Optuna objective: inner CV to evaluate candidate learning rates."""
         candidate_lr = trial.suggest_float("lr", 5e-6, 2e-3, log=True)
 
         df_outer_train_fold = pd.DataFrame({"image_path": X_train_outer_fold, "label": y_train_outer_fold})
@@ -266,9 +399,9 @@ class NestedCVStratifiedByPatient:
         inner_pat_labels = df_pat_inner["label"].values
 
         inner_skf = StratifiedKFold(
-            n_splits = 2, #or Get from cfg
+            n_splits = self.lr_discovery_folds, #or Get from cfg
             shuffle=True,
-            random_state=self.cfg.data_splitting["random_seed"]
+            random_state=random_seed
         )
         inner_val_losses = []
 
@@ -332,6 +465,7 @@ class NestedCVStratifiedByPatient:
         return float(np.mean(inner_val_losses))
 
     def _tune_learning_rate(self, X_train_outer, y_train_outer):
+        """Run Optuna to select the best LR using inner CV on training patients."""
         sampler = optuna.samplers.TPESampler(seed=self.cfg.data_splitting["random_seed"])
         study = optuna.create_study(direction="minimize", sampler=sampler)
         # Use a lambda to pass the extra arguments to objective
@@ -344,6 +478,7 @@ class NestedCVStratifiedByPatient:
         return best_lr
     
     def _append_fold_metrics(self, fold_idx, train_loss, val_loss, train_acc, val_acc, val_f1, val_bal_acc, val_prec, val_recall, val_auc, val_mcc):
+                """Append a single epoch's metrics into the per-fold history."""
                 self.per_fold_metrics['train_loss'][fold_idx].append(train_loss)
                 self.per_fold_metrics['val_loss'][fold_idx].append(val_loss)
                 self.per_fold_metrics['train_accuracy'][fold_idx].append(train_acc)
@@ -356,17 +491,18 @@ class NestedCVStratifiedByPatient:
                 self.per_fold_metrics['val_mcc'][fold_idx].append(val_mcc)
 
     def _train_model_with_early_stopping(self, fold_idx, X_train_outer, y_train_outer, best_lr):
+        """Train on outer-train with an early-stopping split and return best model path."""
         X_train_es, X_val_es, y_train_es, y_val_es = train_test_split(
             X_train_outer, y_train_outer,
             test_size=self.val_set_size,
             stratify=y_train_outer, # Stratify by original labels of this subset
-            random_state=self.cfg.data_splitting["random_seed"]
+            random_state=self.random_seed
         )
         self.train_image_counts_per_fold[fold_idx] = len(X_train_es)
         self.val_image_counts_per_fold[fold_idx] = len(X_val_es)
         print(f"X_train_es: {X_train_es.shape} | X_val_es: {X_val_es.shape}")
         print(f"Early stopping split: Train images: {len(X_train_es)}, Validation images: {len(X_val_es)}")
-        # Handle over/undersampling (assuming functions are imported)
+        
         self.per_fold_val_images_paths[fold_idx] = X_val_es
         
         if self.oversample:
@@ -424,6 +560,9 @@ class NestedCVStratifiedByPatient:
         return model_save_path, loss_function # Return loss_function for test eval
 
     def _evaluate_fold_on_test_set(self, fold_idx, model_path, loss_function_for_eval, X_test_outer, y_test_outer, best_lr_for_fold):
+        """Load best checkpoint for the fold and evaluate on the outer test split.
+        return final_test_loss, final_test_acc, final_test_prec, final_test_recall, final_test_f1, final_test_balanced_acc, test_auc, test_mcc, patient_metrics
+        """
         model, device = self._get_model_and_device() # Get a fresh model instance
         model.load_state_dict(torch.load(str(model_path), map_location=device))
         model.eval()
@@ -439,8 +578,16 @@ class NestedCVStratifiedByPatient:
 
         print(f" [FOLD {fold_idx} FINAL] Test Loss: {final_test_loss:.4f} | Test Acc: {final_test_acc:.4f} | test Balanced Acc: {final_test_balanced_acc:.4f} | test F1: {final_test_f1:.4f} | Test AUC: {test_auc:.4f} | Test MCC: {test_mcc:.4f}")
 
-        # Assuming evaluate_model is general enough
+        # Assuming evaluate_model
         eval_results = evaluate_model(model=model, dataloader=test_loader, class_names=self.class_names, return_misclassified=True)
+
+        # Patient-level aggregation via dedicated helper
+        patient_metrics = self._compute_patient_level_metrics(
+            X_test_outer=X_test_outer,
+            y_test_outer=y_test_outer,
+            eval_results=eval_results,
+            fold_idx=fold_idx,
+        )
         
         # Plot learning curves for the fold
         fig_learning_curves = plot_learning_curves(
@@ -462,10 +609,26 @@ class NestedCVStratifiedByPatient:
             "fold": fold_idx, "test_loss": final_test_loss, "test_acc": final_test_acc,
             "test_f1": final_test_f1, "test_balanced_acc": final_test_balanced_acc,
             "test_auc": test_auc, "test_precision": final_test_prec,
-            "test_recall": final_test_recall, "test_mcc": test_mcc, "best_lr": best_lr_for_fold
+            "test_recall": final_test_recall, "test_mcc": test_mcc, "best_lr": best_lr_for_fold,
+            #--------- Patient-level metrics (balanced acc, auc, mcc, precision, recall) ---------
+            "patient_major_bal_acc": patient_metrics.get("patient_major_bal_acc"),
+            "patient_soft_bal_acc": patient_metrics.get("patient_soft_bal_acc"),
+            "patient_major_auc": patient_metrics.get("patient_major_auc"),
+            "patient_soft_auc": patient_metrics.get("patient_soft_auc"),
+            "patient_major_mcc": patient_metrics.get("patient_major_mcc"),
+            "patient_soft_mcc": patient_metrics.get("patient_soft_mcc"),
+            "patient_major_precision": patient_metrics.get("patient_major_precision"),
+            "patient_soft_precision": patient_metrics.get("patient_soft_precision"),
+            "patient_major_recall": patient_metrics.get("patient_major_recall"),
+            "patient_soft_recall": patient_metrics.get("patient_soft_recall"),
         })
+        
 
     def run_experiment(self):
+        """Execute outer CV with optional LR tuning per fold and collect metrics.
+        
+            return self.per_fold_metrics, self.fold_results
+        """
         outer_skf = StratifiedKFold(
             n_splits=self.num_folds,
             shuffle=True,
@@ -543,6 +706,7 @@ class NestedCVStratifiedByPatient:
 
     
     def _print_summary(self):
+        """Print per-fold and aggregate results for the completed CV run."""
         print("\n-------------------------------------------------")
         print("Cross-validation results (outer folds):")
         for res in self.fold_results:

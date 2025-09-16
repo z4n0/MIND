@@ -16,7 +16,7 @@ from monai.transforms import (
     RandSpatialCropd,
     LambdaD,
     RandHistogramShiftd,
-    DataStatsd,  # Computes statistics (min, max, mean, std) of the image intensities.
+    DataStatsd,  # Computes statistics (min, max, mean std) of the image intensities.
     AddCoordinateChannelsd,  # Adds channels representing spatial coordinates; can sometimes help CNNs learn spatial relationships.
     RandCoarseDropoutd,
     CenterSpatialCropd,
@@ -120,7 +120,7 @@ def from_GBR_to_RGB(image: torch.Tensor) -> torch.Tensor:
                          "expected 3D (C,H,W) or 4D (B,C,H,W)")
         
 
-def _get_preNormalization_transforms_list(cfg, is_supported_by_torchvision=False)->List[MapTransform]:
+def get_preNormalization_transforms_list(cfg, is_supported_by_torchvision=False)->List[MapTransform]:
     """
         Get the list of transforms to be applied before normalization.
         Only Loading, Resizing, Scaling transformations have to be here
@@ -155,6 +155,7 @@ def _get_spatial_augmentations(cfg):
     """
     H = cfg.data_augmentation["resize_spatial_size"][0]
     W = cfg.data_augmentation["resize_spatial_size"][1]
+    crop_size = (int(0.95*H), int(0.95*W))
     spatial_transforms = [
             RandFlipd(
                 keys="image", 
@@ -171,6 +172,11 @@ def _get_spatial_augmentations(cfg):
                 prob=cfg.data_augmentation["rand_rotate90_prob"], 
                 max_k=cfg.data_augmentation["rand_rotate90_max_k"]
             ),
+            # RandSpatialCropd(
+            #     keys="image",
+            #     roi_size=crop_size,
+            #     random_center=True,
+            # ),
             # Rand2DElasticd(
             #     keys=["image"],
             #     spacing=cfg.data_augmentation.get("rand_2d_elastic_spacing", (30, 30)), # Spacing for the grid control points
@@ -241,6 +247,10 @@ def _get_intensity_augmentations(cfg, preset: str = "medium") -> List:
     # image size for gentle dropout (optional)
     H, W = cfg.data_augmentation["resize_spatial_size"]
     preset = cfg.get_intensity_augmentation_preset()
+
+    # Allow disabling intensity augs via preset
+    if preset is None or preset is False or str(preset).lower() in ("none", "off", "no", "0"):
+        return []
 
     if preset == "light":
         # Overall apply probability ≈ 0.6 via Identityd weight
@@ -340,7 +350,7 @@ def compute_dataset_mean_std(image_paths: list[str], cfg, is_supported_by_torchv
     #the images to be in the exact same state as they would be just before the NormalizeIntensityd transform 
     # is applied in your main training/validation pipeline. (disregarding transformations which do not change pixel intensities)
     """
-    minimal_transforms_for_stats = Compose(_get_preNormalization_transforms_list(cfg,is_supported_by_torchvision=is_supported_by_torchvision))
+    minimal_transforms_for_stats = Compose(get_preNormalization_transforms_list(cfg,is_supported_by_torchvision=is_supported_by_torchvision))
     dataset = Dataset(data=[{"image": img_path, "label": 0} for img_path in image_paths], transform=minimal_transforms_for_stats)
     
     # Use batch_size from cfg if available, else a default.
@@ -410,7 +420,7 @@ def get_transforms(cfg, color_transforms=False, fold_specific_stats=None):
         each of these is a Compose object containing the necessary transformations list.
     """
     # select the normalization params if you are using a pretrained model
-    is_pretrained = cfg.training["transfer_learning"]
+    is_pretrained = cfg.get_transfer_learning()
     print(f"Using pretrained model: {is_pretrained}")
     
     # Initialize transform lists
@@ -418,8 +428,8 @@ def get_transforms(cfg, color_transforms=False, fold_specific_stats=None):
     val_transforms_list = []
     supported_by_torchvision = is_supported_by_torchvision(cfg.get_model_name())
     
-    print(f"Using pretrained model: {is_pretrained} and supported by torchvision: {is_supported_by_torchvision} with color transforms: {color_transforms}")
-
+    print(f"Using pretrained model: {is_pretrained} and supported by torchvision: {supported_by_torchvision} with color transforms: {color_transforms}")
+    # train_transforms_list, val_transforms_list = get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats)
     if not supported_by_torchvision or not is_pretrained: 
         print("the model is not supported by torchvision or is not pretrained")
         # ie. if you are not using a pretrained model or using a pretrained model that is not supported by torchvision you can use custom transforms
@@ -453,7 +463,7 @@ def get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats):
     supported_by_torchvision = is_supported_by_torchvision(cfg.get_model_name())
     
     # Pipeline di base che carica e ridimensiona
-    train_transforms_list = _get_preNormalization_transforms_list(cfg, supported_by_torchvision)
+    train_transforms_list = get_preNormalization_transforms_list(cfg, supported_by_torchvision)
 
     # --- INSERISCI QUESTA PARTE ---
     # Aggiungi il cropping casuale per forzare il modello a ignorare i bordi.
@@ -462,10 +472,10 @@ def get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats):
     crop_percentage = 0.95
     crop_size = (int(original_size[0] * crop_percentage), int(original_size[1] * crop_percentage))
     
-    # print(f"Applying random crop with size: {crop_size}")
-    # train_transforms_list.append(
-    #     RandSpatialCropd(keys=["image"], roi_size=crop_size, random_size=False)
-    # )
+    print(f"Applying random crop with size: {crop_size}")
+    train_transforms_list.append(
+        RandSpatialCropd(keys=["image"], roi_size=crop_size, random_size=False)
+    )
 
     # Ora applica le altre aumentazioni spaziali sull'immagine croppata
     spatial_transforms = _get_spatial_augmentations(cfg)
@@ -497,10 +507,10 @@ def get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats):
         )
     
     # Per la validazione, usiamo un crop centrale invece che casuale per avere risultati consistenti
-    val_transforms_list = _get_preNormalization_transforms_list(cfg, supported_by_torchvision)
-    # val_transforms_list.append(
-    #     CenterSpatialCropd(keys="image", roi_size=crop_size)
-    # )
+    val_transforms_list = get_preNormalization_transforms_list(cfg, supported_by_torchvision)
+    val_transforms_list.append(
+        CenterSpatialCropd(keys="image", roi_size=crop_size),   
+    )
     
     if fold_specific_stats and fold_specific_stats.get("mean") is not None and fold_specific_stats.get("std") is not None:
         val_transforms_list.append(
@@ -542,7 +552,7 @@ def get_pretrained_model_transforms_list(cfg, color_transforms:bool)->Tuple[List
     print(f"Using Imagenet/micronet pretrained model--> using torchvision transforms")
     print(imagenet_weights.transforms().describe())
     # Training transforms for pretrained models
-    train_transforms_list = _get_preNormalization_transforms_list(cfg, supported_by_torchvision)
+    train_transforms_list = get_preNormalization_transforms_list(cfg, supported_by_torchvision)
     train_transforms_list.extend(_get_spatial_augmentations(cfg))
     
     if color_transforms:
@@ -555,7 +565,7 @@ def get_pretrained_model_transforms_list(cfg, color_transforms:bool)->Tuple[List
     # train_transforms_list.append(PrintShapeTransform(keys=["image"]))
 
     # Validation transforms for pretrained models
-    val_transforms_list = _get_preNormalization_transforms_list(cfg, supported_by_torchvision)
+    val_transforms_list = get_preNormalization_transforms_list(cfg, supported_by_torchvision)
     val_transforms_list.append(LambdaD(keys="image", func=torchvision_norm_transforms))
     
     return train_transforms_list, val_transforms_list
@@ -565,19 +575,6 @@ def get_convert_to_tensor_transform_list():
         EnsureTyped(keys=["image"], data_type="tensor", dtype=torch.float32),
         EnsureTyped(keys=["label"], data_type="tensor", dtype=torch.int64),
     ]
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 def check_normalization(img, mean_val, std_val, tolerance=0.12, threshold=0.990):
     """

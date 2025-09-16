@@ -332,7 +332,7 @@ from monai.transforms.utility.dictionary import DataStatsd
 
 #     return transforms
 
-from utils.transformations_functions import _get_preNormalization_transforms_list
+from utils.transformations_functions import get_preNormalization_transforms_list
 
 def get_byol_transforms_dict(cfg, normalize_intensity=True):
     """
@@ -343,7 +343,7 @@ def get_byol_transforms_dict(cfg, normalize_intensity=True):
     #     cfg, is_supported_by_torchvision=False
     # )
     
-    base = _get_preNormalization_transforms_list(
+    base = get_preNormalization_transforms_list(
         cfg, is_supported_by_torchvision=False
     )
     

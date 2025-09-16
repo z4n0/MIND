@@ -7,7 +7,6 @@ data_splitting:
   val_set_size: 0.15
   test_set_size: 0.1
 
-
 # Data Loading
 data_loading:
   batch_size: 32  

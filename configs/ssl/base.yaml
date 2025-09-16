@@ -7,6 +7,8 @@ data_splitting:
   val_set_size: 0.2
   test_set_size: 0.10
   num_folds: 6
+  lr_discovery_folds: 4
+
 
 data_augmentation:
   resize_spatial_size: [512, 512]  # Tuple becomes list in YAML
@@ -18,6 +20,8 @@ data_augmentation:
   rand_gaussian_noise_mean: 0.0
   rand_gaussian_noise_std: 0.1
   crop_size: [256, 256]  # New parameter for random cropping
+  use_color_transforms: false
+  intensity_augmentation_preset: "heavy"  # Options: "none", "light", "medium", "heavy"
 
 data_loading:
   batch_size: 32

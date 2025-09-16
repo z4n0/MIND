@@ -29,7 +29,7 @@ from configs.ConfigLoader import ConfigLoader
 from classes.ModelManager import ModelManager
 from classes.NestedCVStratifiedByPatient import NestedCVStratifiedByPatient
 from utils.reproducibility_functions import set_global_seed
-from utils.mlflow_functions import log_SSL_run_to_mlflow
+from utils.mlflow_functions import log_run_to_mlflow
 import utils.transformations_functions as tf   # <-- transforms factory
 
 # ───────────────────── CLI (one flag) ──────────────────────────────────────
@@ -44,6 +44,9 @@ def extract_patient_id(path: str) -> str:
     return m.group(1) if m else "UNKNOWN"
 
 def best_fold_idx(results, metric="test_balanced_acc") -> int:
+    return int(np.argmax([r[metric] for r in results]))
+
+def best_fold_idx_patient(results, metric="patient_major_bal_acc") -> int:
     return int(np.argmax([r[metric] for r in results]))
 
 def get_data_directory(num_input_channels: int) -> Path:
@@ -200,6 +203,7 @@ def main():
     print("Validation counts per fold:", val_counts)
     print("Test count:", test_counts)
     # ---------- MLflow logging --------------------------------------------
+    best_idx_patient = best_fold_idx_patient(test_results) #TODO select the best fold based on patient-level metrics
     best_idx   = best_fold_idx(test_results)
     best_model_path = RUN_DIR / f"best_model_fold_{best_idx}.pth"
     best_model, _ = experiment._get_model_and_device()
@@ -215,7 +219,7 @@ def main():
     te_imgs = best_fold_test_df['image_path'].values
     te_y = best_fold_test_df['label'].values
 
-    log_SSL_run_to_mlflow(
+    log_run_to_mlflow(
         cfg=cfg,
         model=best_model,
         class_names=class_names,

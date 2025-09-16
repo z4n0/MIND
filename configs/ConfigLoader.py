@@ -43,6 +43,14 @@ class ConfigLoader:
     crop_size: Optional[List[int]] = None
     use_color_transforms: Optional[bool] = None
     discover_lr: Optional[bool] = None
+    lr_discovery_folds: Optional[int] = None
+    mixup_alpha: Optional[float] = None
+    oversample: Optional[bool] = None
+    undersample: Optional[bool] = None
+    weighted_loss: Optional[bool] = None
+    transfer_learning: Optional[bool] = None
+    fine_tuning: Optional[bool] = None
+    freezed_layer_index: Optional[int] = None
 
     def __init__(self, config_path=None):
         """
@@ -131,6 +139,14 @@ class ConfigLoader:
             self.training["pretrained"] = self.training["transfer_learning"] or self.training["fine_tuning"]
             if self.training["transfer_learning"] and self.training["fine_tuning"]:
                 raise ValueError("Choose either transfer learning OR fine tuning")
+            
+    def get_lr_discovery_folds(self) -> Optional[int]:
+        """Get the number of folds for learning rate discovery"""
+        return self.data_splitting.get("lr_discovery_folds", 4)
+    
+    def get_mixup_alpha(self) -> Optional[float]:
+        """Get the mixup alpha"""
+        return self.training.get("mixup_alpha", 0)
         
     def get_color_transforms(self) -> Optional[bool]:
         """Get whether to use color transformations"""

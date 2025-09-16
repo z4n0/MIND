@@ -30,7 +30,7 @@ training:
   undersample: false
   weighted_loss: false
   fine_tuning: false
-  transfer_learning: false
+  transfer_learning: true
   freezed_layerIndex: null
 
 # Optimizer

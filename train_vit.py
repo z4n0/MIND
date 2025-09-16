@@ -33,7 +33,7 @@ from configs.ConfigLoader import ConfigLoader
 from utils.reproducibility_functions import set_global_seed
 import utils.transformations_functions as tf
 from classes.NestedCVStratifiedByPatient import NestedCVStratifiedByPatient
-from utils.mlflow_functions import log_SSL_run_to_mlflow
+from utils.mlflow_functions import log_run_to_mlflow
 
 # ───────────────────── CLI (one flag) ──────────────────────────────────────
 def parse():
@@ -324,7 +324,7 @@ def main():
         _, val_transforms, _ = tf.get_transforms(cfg, color_transforms=False)
 
 
-        log_SSL_run_to_mlflow(
+        log_run_to_mlflow(
             device=device,
             cfg=cfg,
             model=best_model,

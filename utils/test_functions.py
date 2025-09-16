@@ -1,5 +1,6 @@
 from sklearn.metrics import classification_report, precision_score, recall_score  # <-- Add this
 from sklearn.metrics import accuracy_score, f1_score, balanced_accuracy_score, confusion_matrix
+from sklearn.metrics import matthews_corrcoef, roc_auc_score
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
@@ -9,7 +10,7 @@ from utils.data_extraction_functions import extract_labels_meaning
 # Reusable Evaluation Utilities
 # =============================================================================
 
-def calculate_classification_metrics(true_labels, predictions, confidences=None, class_names=None):
+def calculate_classification_metrics(true_labels, predictions, confidences=None, class_names=None, probs=None):
     """
     Calculate comprehensive classification metrics for both binary and multi-class tasks.
 
@@ -45,6 +46,25 @@ def calculate_classification_metrics(true_labels, predictions, confidences=None,
         'balanced_accuracy': balanced_accuracy_score(true_labels, predictions),
         'confusion_matrix': confusion_matrix(true_labels, predictions)
     }
+
+    # MCC
+    try:
+        metrics['mcc'] = matthews_corrcoef(true_labels, predictions)
+    except Exception:
+        pass
+
+    # AUC: prefer full probability vectors if available
+    try:
+        n_classes = len(np.unique(true_labels))
+        if probs is not None:
+            if n_classes == 2:
+                metrics['auc'] = roc_auc_score(true_labels, probs[:, 1])
+            else:
+                metrics['auc'] = roc_auc_score(true_labels, probs, multi_class='ovr', average='macro')
+        elif confidences is not None and n_classes == 2:
+            metrics['auc'] = roc_auc_score(true_labels, confidences)
+    except Exception:
+        pass
     
     # Confidence-related metrics (optional)
     if confidences is not None:
@@ -207,7 +227,8 @@ def evaluate_model(model, dataloader, class_names, device=None, return_misclassi
         'predictions': [],    # Model's predicted class indices
         'true_labels': [],    # Ground truth labels
         'confidences': [],    # Confidence scores for predictions
-        'misclassified': []   # Stores problematic cases if requested
+        'misclassified': [],  # Stores problematic cases if requested
+        'probs': [],    # Model's predicted probabilities
     }
 
     # Set model to evaluation mode (disables dropout/batchnorm)
@@ -232,6 +253,8 @@ def evaluate_model(model, dataloader, class_names, device=None, return_misclassi
 
             # Convert logits to probabilities using softmax
             probs = torch.softmax(outputs, dim=1)
+            probs_np = probs.cpu().numpy()
+            results['probs'].extend(probs_np)
 
             # Get confidence scores and predicted class indices
             confs, preds = torch.max(probs, dim=1)
@@ -263,7 +286,7 @@ def evaluate_model(model, dataloader, class_names, device=None, return_misclassi
                 results['misclassified'].extend(misclassified)
 
     # Convert lists to numpy arrays for easier analysis
-    for key in ['predictions', 'true_labels', 'confidences']:
+    for key in ['predictions', 'true_labels', 'confidences', 'probs']:
         results[key] = np.array(results[key])
 
     # Calculate performance metrics
@@ -271,7 +294,8 @@ def evaluate_model(model, dataloader, class_names, device=None, return_misclassi
         results['true_labels'],
         results['predictions'],
         confidences=results['confidences'],
-        class_names=class_names
+        class_names=class_names,
+        probs=results.get('probs')
     )
 
     # Return appropriate data based on request
