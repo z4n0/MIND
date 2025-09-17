@@ -546,7 +546,12 @@ class NestedCVStratifiedByPatient:
             # if self.cfg.training.get("mixup_alpha", 0) > 0:
             #     train_loss, train_acc = train_epoch_mixUp(model, train_loader_es, optimizer, loss_function, device, self.cfg.training["mixup_alpha"])
             # else:
-            train_loss, train_acc = self.train_fn(model, train_loader_es, optimizer, loss_function, device, mixup_alpha=self.cfg.training.get("mixup_alpha", 0))
+            if self.cfg.get_mixup_alpha() > 0:
+                print(f"Training with Mixup")
+            else:
+                print(f"Training without Mixup")
+            
+            train_loss, train_acc = self.train_fn(model, train_loader_es, optimizer, loss_function, device, mixup_alpha=self.cfg.get_mixup_alpha())
 
             val_loss, val_acc, val_prec, val_recall, val_f1, val_bal_acc, val_roc_auc, val_mcc = self.val_fn(model, val_loader_es, loss_function, device)
 
