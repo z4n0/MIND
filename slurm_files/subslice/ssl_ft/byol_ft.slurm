@@ -20,7 +20,7 @@ source "$HOME/venvs/tesi/bin/activate"
 # 3) project-specific environment
 export DATA_ROOT="$WORK/lzanotto/FOLDER_CINECA/data/SUBSLICE_MIPS"
 export MLFLOW_TRACKING_URI="file:$WORK/lzanotto/FOLDER_CINECA/mlruns"
-export MLFLOW_EXPERIMENT_NAME="tesi_cv_subslice"
+export MLFLOW_EXPERIMENT_NAME="SSL_FT_DS2"
 
 # make your code (FOLDER_CINECA) importable
 export PYTHONPATH="$SLURM_SUBMIT_DIR:$PYTHONPATH"

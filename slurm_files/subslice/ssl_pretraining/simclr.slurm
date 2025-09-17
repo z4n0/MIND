@@ -23,7 +23,7 @@ export DATA_ROOT="$WORK/lzanotto/FOLDER_CINECA/data/SUBSLICE_MIPS"
 echo "DATA_ROOT will be: $WORK/lzanotto/FOLDER_CINECA/data/SUBSLICE_MIPS"
 export PYTHONPATH="$SLURM_SUBMIT_DIR:$PYTHONPATH"    # make code importable
 export MLFLOW_TRACKING_URI="file:$WORK/lzanotto/FOLDER_CINECA/mlruns"
-export MLFLOW_EXPERIMENT_NAME="tesi_cv_subslice"
+export MLFLOW_EXPERIMENT_NAME="SSL_PRETRAINING_DS2"
 
 # ───────────────────── 3) rename Slurm log with timestamp ─────────────────
 ts=$(date +'%Y-%m-%d_%H-%M-%S')                 # e.g. 2025-06-30_21-18-05
