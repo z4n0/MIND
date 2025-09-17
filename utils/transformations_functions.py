@@ -455,7 +455,9 @@ def get_transforms(cfg, color_transforms=False, fold_specific_stats=None):
     
     return train_transforms, val_transforms, test_transforms
 
-def get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats, crop = False):
+from configs.ConfigLoader import ConfigLoader
+
+def get_custom_transforms_lists(cfg: ConfigLoader, color_transforms: bool, fold_specific_stats: dict, crop: bool = False):
     """
     Generate training and validation transform lists for custom models.
     """
@@ -468,9 +470,11 @@ def get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats, crop
     # --- INSERISCI QUESTA PARTE ---
     # Aggiungi il cropping casuale per forzare il modello a ignorare i bordi.
     # Prima calcoliamo la dimensione del crop, ad esempio il 90% della dimensione dell'immagine.
+    crop = cfg.get_use_crop()
+    
     if crop:
-        original_size = cfg.data_augmentation["resize_spatial_size"]  # Es: (512, 512)
-        crop_percentage = 0.95
+        original_size = cfg.get_crop_size()  # Es: (512, 512)
+        crop_percentage = cfg.get_crop_percentage()
         crop_size = (int(original_size[0] * crop_percentage), int(original_size[1] * crop_percentage))
     
         print(f"Applying random crop with size: {crop_size}")

@@ -20,6 +20,8 @@ data_augmentation:
   rand_gaussian_noise_std: 0.1
   crop_size: [256, 256]  # New parameter for random cropping
   use_color_transforms: false
+  use_crop: false
+  crop_percentage: 0.95
 
 data_loading:
   batch_size: 64

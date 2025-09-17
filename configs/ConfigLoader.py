@@ -51,6 +51,8 @@ class ConfigLoader:
     transfer_learning: Optional[bool] = None
     fine_tuning: Optional[bool] = None
     freezed_layer_index: Optional[int] = None
+    use_crop: Optional[bool] = None
+    crop_percentage: Optional[float] = None
 
     def __init__(self, config_path=None):
         """
@@ -140,6 +142,15 @@ class ConfigLoader:
             if self.training["transfer_learning"] and self.training["fine_tuning"]:
                 raise ValueError("Choose either transfer learning OR fine tuning")
             
+    def get_use_crop(self) -> Optional[bool]:
+        """Get whether to use crop"""
+        return self.data_augmentation["use_crop"]
+    
+    def get_crop_percentage(self) -> Optional[float]:
+        """Get the crop percentage"""
+        return self.data_augmentation["crop_percentage"]
+
+            
     def get_lr_discovery_folds(self) -> Optional[int]:
         """Get the number of folds for learning rate discovery"""
         return self.data_splitting.get("lr_discovery_folds", 4)
@@ -153,12 +164,28 @@ class ConfigLoader:
         return self.use_color_transforms
     
     def get_crop_size(self) -> Optional[List[int]]:
-        """Get the crop size for data augmentation"""
-        return self.crop_size
-    
+        """
+        Get the crop size for data augmentation.
+
+        Returns:
+            Optional[List[int]]: The crop size if set, otherwise None.
+
+        Raises:
+            ValueError: If data_augmentation configuration is not set.
+        """
+        if self.data_augmentation is None:
+            raise ValueError("Data augmentation configuration is not set")
+        return self.data_augmentation.get("crop_size", None)
+
     # Dataset getters and setters
     def get_dataset(self) -> Optional[List[str]]:
-        """Get the dataset configuration"""
+        """
+        Get the dataset configuration.
+
+        Returns:
+            Optional[List[str]]: The dataset configuration if set, otherwise None.
+        """
+        return self.dataset
         return self.dataset
     
     def set_dataset(self, dataset: List[str]) -> None:

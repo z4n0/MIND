@@ -21,6 +21,8 @@ data_augmentation:
   crop_size: [256, 256]  # New parameter for random cropping
   use_color_transforms: false
   intensity_augmentation_preset: "none"  # Options: "none", "light", "medium", "heavy"
+  use_crop: false
+  crop_percentage: 0.95
 
 data_loading:
   batch_size: 64
