@@ -19,8 +19,8 @@ data_augmentation:
   rand_gaussian_noise_mean: 0.0
   rand_gaussian_noise_std: 0.1
   crop_size: [256, 256]  # New parameter for random cropping
-  use_color_transforms: false
-  intensity_augmentation_preset: "none"  # Options: "none", "light", "medium", "heavy"
+  use_color_transforms: true
+  intensity_augmentation_preset: "medium"  # Options: "none", "light", "medium", "heavy"
   use_crop: false
   crop_percentage: 0.95
 
@@ -34,7 +34,7 @@ model:
   in_channels: 4
   out_channels: 2
   dropout_prob: 0.1
-  patch_size: [32, 32]  # New parameter
+  patch_size: [16, 16]  # New parameter
   library: "torchvision"
   
 training:

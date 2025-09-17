@@ -35,7 +35,7 @@ from monai.transforms.intensity.dictionary import (
     RandBiasFieldd, RandCoarseDropoutd
 )
 from monai.transforms.utility.dictionary import LambdaD, Identityd
-
+from configs.ConfigLoader import ConfigLoader
 from monai.transforms.compose import Compose
 from monai.transforms.spatial.dictionary import Resized, RandFlipd, RandRotate90d, Rand2DElasticd
 from monai.transforms.intensity.dictionary import ScaleIntensityd, NormalizeIntensityd, RandGaussianNoised, RandHistogramShiftd, RandAdjustContrastd
@@ -148,6 +148,27 @@ def get_preNormalization_transforms_list(cfg, is_supported_by_torchvision=False)
         print(f"Using pretrained model: {is_model_pretrained} and supported by torchvision: {bool(is_supported_by_torchvision)} hence the resizing and scaling is handled by torchvision.Weights.Transforms")
 
     return base_transforms_list
+
+def new_get_preNormalization_transforms_list(cfg:ConfigLoader)->List[MapTransform]:
+    """
+        Get the list of transforms to be applied before normalization.
+        Only Loading, Resizing, Scaling transformations have to be here
+        ie all transformations that can also be applied to the validation set
+        
+        if is_supported_by_torchvision is True, then the resizing and scaling is handled by torchvision
+    """
+    base_transforms_list = [
+        CustomTiffFileReader(keys=["image"]), # loads the image from the path as a numpy array (C,H,W) in GBR format
+        EnsureTyped(keys=["image"], data_type="tensor", dtype=torch.float32), # Ensure image is a tensor
+        EnsureTyped(keys=["label"], data_type="tensor", dtype=torch.int64), # Ensure label is a tensor
+        LambdaD(keys="image", func=from_GBR_to_RGB), # Ensure the tensor is in RGB format (since pre-trained models expect RGB)
+        Resized(keys="image", spatial_size=cfg.get_spatial_size(),
+                        mode='bilinear', size_mode='all'), # bilinear interpolation during resizing ie for each pixel is taken the average of the 4 nearest pixels
+        ScaleIntensityd(keys="image"),  # scales intensities to [0,1] before computing stats since most color transforms expect [0,1] range
+    ]
+
+    return base_transforms_list
+
 
 def _get_spatial_augmentations(cfg):
     """
@@ -436,7 +457,7 @@ def get_transforms(cfg, color_transforms=False, fold_specific_stats=None):
         train_transforms_list, val_transforms_list = get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats)
     elif supported_by_torchvision and is_pretrained: # If you are using a pretrained model(even if it's micronet), use the torchvision transforms
         print("the model is supported by torchvision and is pretrained")
-        train_transforms_list, val_transforms_list = get_pretrained_model_transforms_list(cfg, color_transforms)
+        train_transforms_list, val_transforms_list = get_pretrained_model_transforms_list_without_crop(cfg, color_transforms)
     else: # Fallback or unsupported pretrained model
         raise ValueError(f"Model {cfg.get_model_name()} is marked pretrained but not supported by torchvision or has no specific transform pipeline defined. Falling back to basic transforms without specific normalization.")
     
@@ -455,11 +476,9 @@ def get_transforms(cfg, color_transforms=False, fold_specific_stats=None):
     
     return train_transforms, val_transforms, test_transforms
 
-from configs.ConfigLoader import ConfigLoader
-
 def get_custom_transforms_lists(cfg: ConfigLoader, color_transforms: bool, fold_specific_stats: dict, crop: bool = False):
     """
-    Generate training and validation transform lists for custom models.
+    Generate training and validation transform lists for custom models. ie not pretrained models
     """
     print(f"Model {cfg.get_model_name()} not supported using custom transforms")
     supported_by_torchvision = is_supported_by_torchvision(cfg.get_model_name())
@@ -538,41 +557,72 @@ def get_custom_transforms_lists(cfg: ConfigLoader, color_transforms: bool, fold_
         
     return train_transforms_list, val_transforms_list
 
-def get_pretrained_model_transforms_list(cfg, color_transforms:bool)->Tuple[List[MapTransform], List[MapTransform]]:
-    """
-    Get the transforms for pretrained models.
-    """
-    supported_by_torchvision = is_supported_by_torchvision(cfg.get_model_name())
-    imagenet_weights = IMAGENET_WEIGHTS.get(cfg.get_model_name().lower(), None) # Check if the model is supported by torchvision
-    torchvision_norm_transforms = imagenet_weights.transforms() # resize 256x256, center crop, convert to tensor, normalize using imagenet mean and std
-        # these are the default transforms for imagenet weights
-        # def forward(self, img: Tensor) -> Tensor:
-            # img = F.resize(img, self.resize_size, interpolation=self.interpolation, antialias=self.antialias)
-            # img = F.center_crop(img, self.crop_size)
-            # if not isinstance(img, Tensor):
-            #     img = F.pil_to_tensor(img)
-            # img = F.convert_image_dtype(img, torch.float) #Converts the image to floating point and SCALES to [0.0, 1.0].
-            # img = F.normalize(img, mean=self.mean, std=self.std)
-            # return img
+# def get_pretrained_model_transforms_list(cfg, color_transforms:bool)->Tuple[List[MapTransform], List[MapTransform]]:
+#     """
+#     Get the transforms for pretrained models.
+#     """
+#     supported_by_torchvision = is_supported_by_torchvision(cfg.get_model_name())
+#     imagenet_weights = IMAGENET_WEIGHTS.get(cfg.get_model_name().lower(), None) # Check if the model is supported by torchvision
+#     torchvision_norm_transforms = imagenet_weights.transforms() # resize 256x256, center crop, convert to tensor, normalize using imagenet mean and std
+#         # these are the default transforms for imagenet weights
+#         # def forward(self, img: Tensor) -> Tensor:
+#             # img = F.resize(img, self.resize_size, interpolation=self.interpolation, antialias=self.antialias)
+#             # img = F.center_crop(img, self.crop_size)
+#             # if not isinstance(img, Tensor):
+#             #     img = F.pil_to_tensor(img)
+#             # img = F.convert_image_dtype(img, torch.float) #Converts the image to floating point and SCALES to [0.0, 1.0].
+#             # img = F.normalize(img, mean=self.mean, std=self.std)
+#             # return img
             
-    print(f"Using Imagenet/micronet pretrained model--> using torchvision transforms")
-    print(imagenet_weights.transforms().describe())
-    # Training transforms for pretrained models
-    train_transforms_list = get_preNormalization_transforms_list(cfg, supported_by_torchvision)
-    train_transforms_list.extend(_get_spatial_augmentations(cfg))
+#     print(f"Using Imagenet/micronet pretrained model--> using torchvision transforms")
+#     print(imagenet_weights.transforms().describe())
+#     # Training transforms for pretrained models
+#     train_transforms_list = get_preNormalization_transforms_list(cfg, supported_by_torchvision)
+#     train_transforms_list.extend(_get_spatial_augmentations(cfg))
     
+#     if color_transforms:
+#         train_transforms_list.extend(_get_intensity_augmentations(cfg))
+    
+#     # Apply torchvision transforms (includes resize, crop, ToTensor (if applicable), and ImageNet normalization)
+#     # NOTE: resize,crop,Tensor conversion,scaling are applied before the normalization hence this reapplication should not have any effect
+#     # even if reapplied
+#     train_transforms_list.append(LambdaD(keys="image", func=torchvision_norm_transforms))
+#     # train_transforms_list.append(PrintShapeTransform(keys=["image"]))
+
+#     # Validation transforms for pretrained models
+#     val_transforms_list = get_preNormalization_transforms_list(cfg, supported_by_torchvision)
+#     val_transforms_list.append(LambdaD(keys="image", func=torchvision_norm_transforms))
+    
+#     return train_transforms_list, val_transforms_list
+
+
+def get_pretrained_model_transforms_list_without_crop(cfg, color_transforms:bool)->Tuple[List[MapTransform], List[MapTransform]]:
+    """
+    Get the transforms for pretrained models without crop.
+    """
+    from monai.transforms import Resized, ScaleIntensityd, NormalizeIntensityd
+
+    imagenet_weights = IMAGENET_WEIGHTS.get(cfg.get_model_name().lower(), None)
+    # pull mean/std from torchvision weights
+    tv_t = imagenet_weights.transforms()
+    mean = torch.tensor(tv_t.mean)
+    std  = torch.tensor(tv_t.std)
+
+    # Force pre-normalization to include resize and scale (no center crop)
+    train_transforms_list = new_get_preNormalization_transforms_list(cfg)
+    train_transforms_list.extend(_get_spatial_augmentations(cfg))
     if color_transforms:
         train_transforms_list.extend(_get_intensity_augmentations(cfg))
-    
-    # Apply torchvision transforms (includes resize, crop, ToTensor (if applicable), and ImageNet normalization)
-    # NOTE: resize,crop,Tensor conversion,scaling are applied before the normalization hence this reapplication should not have any effect
-    # even if reapplied
-    train_transforms_list.append(LambdaD(keys="image", func=torchvision_norm_transforms))
-    # train_transforms_list.append(PrintShapeTransform(keys=["image"]))
-
-    # Validation transforms for pretrained models
-    val_transforms_list = get_preNormalization_transforms_list(cfg, supported_by_torchvision)
-    val_transforms_list.append(LambdaD(keys="image", func=torchvision_norm_transforms))
+    # Apply ImageNet normalization on [0,1]-scaled tensor
+    train_transforms_list.append(
+        NormalizeIntensityd(keys=["image"], subtrahend=mean, divisor=std, channel_wise=True)
+    )
+    # -----------------------------------------------------------------------
+    # Validation: resize-only + ImageNet norm (no crop)
+    val_transforms_list = new_get_preNormalization_transforms_list(cfg)
+    val_transforms_list.append(
+        NormalizeIntensityd(keys=["image"], subtrahend=mean, divisor=std, channel_wise=True)
+    )
     
     return train_transforms_list, val_transforms_list
 
