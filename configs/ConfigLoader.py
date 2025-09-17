@@ -142,9 +142,34 @@ class ConfigLoader:
             if self.training["transfer_learning"] and self.training["fine_tuning"]:
                 raise ValueError("Choose either transfer learning OR fine tuning")
             
+    def get_val_set_size(self) -> Optional[float]:
+        """Get the validation set size"""
+        if self.data_splitting is None:
+            raise ValueError("Data splitting configuration is not set")
+        return self.data_splitting.get("val_set_size", 0.15)
+    
+    def get_oversample(self) -> Optional[bool]:
+        """Get whether to oversample"""
+        if self.training is None:
+            raise ValueError("Training configuration is not set")
+        return self.training.get("oversample", False)
+    
+    def get_undersample(self) -> Optional[bool]:
+        """Get whether to undersample"""
+        if self.training is None:
+            raise ValueError("Training configuration is not set")
+        return self.training.get("undersample", False)
+    
+            
     def get_use_crop(self) -> Optional[bool]:
         """Get whether to use crop"""
         return self.data_augmentation["use_crop"]
+    
+    def get_in_channels(self) -> Optional[int]:
+        """Get the number of input channels"""
+        if self.model is None or self.model["in_channels"] not in [3, 4]:
+            raise ValueError("Model configuration is not set or in_channels is not 3 or 4")
+        return self.model["in_channels"]
     
     def get_crop_percentage(self) -> Optional[float]:
         """Get the crop percentage"""
@@ -153,6 +178,8 @@ class ConfigLoader:
             
     def get_lr_discovery_folds(self) -> Optional[int]:
         """Get the number of folds for learning rate discovery"""
+        if self.data_splitting is None:
+            raise ValueError("Data splitting configuration is not set")
         return self.data_splitting.get("lr_discovery_folds", 4)
     
     def get_mixup_alpha(self) -> Optional[float]:
@@ -187,6 +214,20 @@ class ConfigLoader:
         """
         return self.dataset
         return self.dataset
+    
+    def get_random_seed(self) -> Optional[int]:
+        """Get the random seed"""
+        if self.data_splitting is None:
+            raise ValueError("Data splitting configuration is not set")
+        return self.data_splitting.get("random_seed", 42)
+    
+    def get_use_color_transforms(self) -> Optional[bool]:
+        """Get whether to use color transformations"""
+        if self.data_augmentation is None:
+            raise ValueError("Data augmentation configuration is not set")
+        if "use_color_transforms" not in self.data_augmentation:
+            raise ValueError("use_color_transforms is not set in data augmentation configuration")
+        return self.data_augmentation["use_color_transforms"]
     
     def set_dataset(self, dataset: List[str]) -> None:
         """Set the dataset configuration
@@ -238,6 +279,12 @@ class ConfigLoader:
             class_names: List of class names
         """
         self.class_names = class_names
+        
+    def is_pretrained(self) -> Optional[bool]:
+        """Get whether the model is pretrained"""
+        if self.training is None:
+            raise ValueError("Training configuration is not set")
+        return self.training.get("pretrained", False)
 
     def set_spatial_size(self, spatial_size: tuple) -> None:
         """Set the spatial size for data augmentation
@@ -723,22 +770,3 @@ class ConfigLoader:
     def as_dict(self):
         """Convert the Config instance to a dictionary"""
         return asdict(self)  # Using dataclasses.asdict()
-
-# def load_config(config_path: str) -> Config_loader:
-#     try:
-#         with open(config_path) as f:
-#             config_dict = yaml.safe_load(f)
-        
-#         if "_base_" in config_dict:
-#             base_path = Path(config_path).parent / config_dict["_base_"]
-#             if not base_path.exists():
-#                 raise FileNotFoundError(f"Base config file not found: {base_path}")
-#             base_config = load_config(base_path).as_dict()
-#             config_dict = merge_dicts(base_config, config_dict)
-#             del config_dict["_base_"]
-        
-#         return Config_loader(**config_dict)
-#     except yaml.YAMLError as e:
-#         raise ValueError(f"Invalid YAML in {config_path}: {e}")
-#     except KeyError as e:
-#         raise ValueError(f"Missing required field in config: {e}")

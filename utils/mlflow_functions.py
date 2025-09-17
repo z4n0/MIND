@@ -404,7 +404,7 @@ from utils.data_visualization_functions import min_max_normalization
 
 # ---------------------------------------------------------------------------
 def log_run_to_mlflow(
-    cfg,
+    cfg: ConfigLoader,
     model: nn.Module,
     class_names: List[str],
     fold_results: List[Dict[str, Any]],
@@ -484,11 +484,11 @@ def log_run_to_mlflow(
         # --------------------- PARAMS
         mlflow.log_params(
             {
-                "epochs": cfg.training["num_epochs"],
-                "num_channels": cfg.model["in_channels"],
+                "epochs": cfg.get_num_epochs(),
+                "num_channels": cfg.get_in_channels(),
                 "batch_size": cfg.get_batch_size(),
-                "transfer_learning": cfg.training["transfer_learning"],
-                "fine_tuning": cfg.training["fine_tuning"],
+                "transfer_learning": cfg.get_transfer_learning(),
+                "fine_tuning": cfg.get_fine_tuning(),
                 "pretrained": pretrained_weights,
                 "weight_decay": cfg.get_weight_decay(),
                 "dropout_rate": cfg.get_dropout_prob(),
@@ -503,8 +503,10 @@ def log_run_to_mlflow(
                 "use_lr_discovery": cfg.get_discover_lr(),
                 "lr_discovery_folds": cfg.get_lr_discovery_folds(),
                 "mixup_alpha": cfg.get_mixup_alpha(),
+                "use_crop": cfg.get_use_crop(),
+                "crop_percentage": cfg.get_crop_percentage(),
                 # "use_color_transforms": cfg.data_augmentation["use_color_transforms"],
-                "intensity_augmentation_preset": cfg.data_augmentation["intensity_augmentation_preset"],
+                "intensity_augmentation_preset": cfg.get_intensity_augmentation_preset(),
                 # Add date and time parameters
                 "creation_date": now.strftime("%m-%d"),
                 "creation_time": now.strftime("%H:%M:%S"),
@@ -665,7 +667,7 @@ def log_run_to_mlflow(
         if base_yaml_path.is_file():
             mlflow.log_artifact(str(base_yaml_path), artifact_path="config")
 
-        # 3. CV box-plot
+        # 3. CV box-plotis not set
         fig_box = generate_cv_results_figure(fold_results, "test")
         mlflow.log_figure(fig_box, "fold_box_plot.png")
 

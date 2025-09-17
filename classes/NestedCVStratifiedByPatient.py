@@ -20,6 +20,7 @@ from utils.train_functions import train_epoch, val_epoch, freeze_layers_up_to, t
 # from utils.data_utils import make_loader, oversample_minority, undersample_majority
 # from utils.model_utils import print_model_summary
 from utils.transformations_functions import get_transforms, compute_dataset_mean_std
+from configs.ConfigLoader import ConfigLoader
 from pathlib import Path # Added for Path operations
 
 class NestedCVStratifiedByPatient:
@@ -50,7 +51,7 @@ class NestedCVStratifiedByPatient:
         # )
         # per_fold_training_metrics, outer_fold_test_results = experiment.run_experiment()
     """
-    def __init__(self, df, cfg, labels_np, pat_labels, unique_pat_ids, pretrained_weights,
+    def __init__(self, df, cfg: ConfigLoader, labels_np, pat_labels, unique_pat_ids, pretrained_weights,
                  class_names, train_transforms=None, val_transforms=None, model_factory=None, model_manager=None, num_folds=None, compute_custom_normalization=False, output_dir: str | None = None,
                  train_fn=None, val_fn=None):
 
@@ -65,27 +66,27 @@ class NestedCVStratifiedByPatient:
         self.model_manager = model_manager # e.g., an object with setup_model method
         self.train_fn = train_fn if train_fn is not None else train_epoch
         self.val_fn = val_fn if val_fn is not None else val_epoch
-        self.num_folds = num_folds if num_folds is not None else self.cfg.data_splitting['num_folds']
-        self.oversample = self.cfg.training.get("oversample", False)
-        self.undersample = self.cfg.training.get("undersample", False)
+        self.num_folds = num_folds if num_folds is not None else self.cfg.get_num_folds()
+        self.oversample = self.cfg.get_oversample()
+        self.undersample = self.cfg.get_undersample()
         self.num_classes = self._determine_num_classes()
-        self.val_set_size = self.cfg.data_splitting.get("val_set_size", 0.15)
-        self.num_epochs = self.cfg.training.get("num_epochs", 100)
-        self.lr_discovery_folds = self.cfg.data_splitting.get("lr_discovery_folds", 4)
+        self.val_set_size = self.cfg.get_val_set_size()
+        self.num_epochs = self.cfg.get_num_epochs()
+        self.lr_discovery_folds = self.cfg.get_lr_discovery_folds()
         self.is_supported_by_torchvision = self.pretrained_weights is not None
         self.train_transforms = train_transforms
         self.val_transforms = val_transforms
-        self.random_seed = self.cfg.data_splitting.get("random_seed", 42)
+        self.random_seed = self.cfg.get_random_seed()
         #store current fold's transforms
         self.current_fold_train_transforms = None
         self.current_fold_val_transforms = None
         self.current_fold_test_transforms = None
-        self.per_fold_val_images_paths = {}
+        self.per_fold_val_images_paths = {} #type: ignore store validation set image paths for each fold
         self.compute_custom_normalization = compute_custom_normalization
         self.x_outer_len = None
         self.x_outer_len = None
-        self.train_image_counts_per_fold = {}
-        self.val_image_counts_per_fold = {}
+        self.train_image_counts_per_fold = {} #type: ignore
+        self.val_image_counts_per_fold = {} #type: ignore
         self._num_outer_images = None
         self.output_dir = Path(output_dir or ".").resolve()
         self.cm_dir = str(self.output_dir / "confusion_matrices")
@@ -245,6 +246,8 @@ class NestedCVStratifiedByPatient:
                 (train_image_counts_per_fold, val_image_counts_per_fold)
         """
         return self.train_image_counts_per_fold, self.val_image_counts_per_fold
+    
+    
 
     def get_current_fold_transforms(self):
         """Return the train/val/test transforms for the current outer fold.
@@ -410,7 +413,7 @@ class NestedCVStratifiedByPatient:
         inner_skf = StratifiedKFold(
             n_splits = self.lr_discovery_folds, #or Get from cfg
             shuffle=True,
-            random_state=random_seed
+            random_state=self.random_seed
         )
         inner_val_losses = []
 
@@ -670,7 +673,8 @@ class NestedCVStratifiedByPatient:
             self._num_outer_images = len(X_test_outer)
             # --- Calculate fold-specific normalization statistics ---
             fold_stats = None
-            if not self.cfg.training.get("pretrained", False) or self.compute_custom_normalization:
+            # if not pretrained or compute_custom_normalization is forced via flag
+            if not self.cfg.is_pretrained() or self.compute_custom_normalization:
                 print(f"--- Calculating normalization stats for Fold {fold_display_idx} Training Data ---")
                 fold_stats = compute_dataset_mean_std(X_train_outer, self.cfg, is_supported_by_torchvision=self.is_supported_by_torchvision)
                 print(f"Fold {fold_display_idx} stats: {fold_stats}")
