@@ -35,7 +35,7 @@ python -c "import torch, sys; print(f'Torch: {torch.__version__}, CUDA: {torch.v
 # --- IMPORTANT: SET YOUR LOCAL DATA PATH HERE ---
 export DATA_ROOT="${DATA_ROOT:-$REPO_DIR/data}"
 export MLFLOW_TRACKING_URI="${MLFLOW_TRACKING_URI:-file:$REPO_DIR/mlruns}"
-export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-SL_ViT_MIP}"
+export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-SL_ViT_MIP_3c}"
 
 # Make the repository importable
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"

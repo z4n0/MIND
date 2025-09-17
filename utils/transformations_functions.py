@@ -455,7 +455,7 @@ def get_transforms(cfg, color_transforms=False, fold_specific_stats=None):
     
     return train_transforms, val_transforms, test_transforms
 
-def get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats):
+def get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats, crop = False):
     """
     Generate training and validation transform lists for custom models.
     """
@@ -468,14 +468,15 @@ def get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats):
     # --- INSERISCI QUESTA PARTE ---
     # Aggiungi il cropping casuale per forzare il modello a ignorare i bordi.
     # Prima calcoliamo la dimensione del crop, ad esempio il 90% della dimensione dell'immagine.
-    original_size = cfg.data_augmentation["resize_spatial_size"]  # Es: (512, 512)
-    crop_percentage = 0.95
-    crop_size = (int(original_size[0] * crop_percentage), int(original_size[1] * crop_percentage))
+    if crop:
+        original_size = cfg.data_augmentation["resize_spatial_size"]  # Es: (512, 512)
+        crop_percentage = 0.95
+        crop_size = (int(original_size[0] * crop_percentage), int(original_size[1] * crop_percentage))
     
-    print(f"Applying random crop with size: {crop_size}")
-    train_transforms_list.append(
-        RandSpatialCropd(keys=["image"], roi_size=crop_size, random_size=False)
-    )
+        print(f"Applying random crop with size: {crop_size}")
+        train_transforms_list.append(
+            RandSpatialCropd(keys=["image"], roi_size=crop_size, random_size=False)
+        )
 
     # Ora applica le altre aumentazioni spaziali sull'immagine croppata
     spatial_transforms = _get_spatial_augmentations(cfg)
@@ -508,9 +509,10 @@ def get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats):
     
     # Per la validazione, usiamo un crop centrale invece che casuale per avere risultati consistenti
     val_transforms_list = get_preNormalization_transforms_list(cfg, supported_by_torchvision)
-    val_transforms_list.append(
-        CenterSpatialCropd(keys="image", roi_size=crop_size),   
-    )
+    if crop:
+        val_transforms_list.append(
+            CenterSpatialCropd(keys="image", roi_size=crop_size),   
+        )
     
     if fold_specific_stats and fold_specific_stats.get("mean") is not None and fold_specific_stats.get("std") is not None:
         val_transforms_list.append(

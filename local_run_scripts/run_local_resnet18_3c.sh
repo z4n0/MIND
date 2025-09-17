@@ -27,7 +27,7 @@ python -c "import torch, sys; print(f'Torch: {torch.__version__}, CUDA: {torch.v
 # ── 2) project-specific environment ─────────────────────────────────────────
 export DATA_ROOT="${DATA_ROOT:-$REPO_DIR/data}"
 export MLFLOW_TRACKING_URI="${MLFLOW_TRACKING_URI:-file:$REPO_DIR/mlruns}"
-export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-SL_Single_MIP}"
+export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-SL_Single_MIP_3c}"
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 

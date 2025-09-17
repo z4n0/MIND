@@ -263,8 +263,15 @@ class NestedCVStratifiedByPatient:
         return len(np.unique(self.labels_np))
 
     def _setup_directories(self):
-        """Create (idempotently) the confusion-matrix and learning-curve dirs."""
+        """Create (idempotently) the confusion-matrix and learning-curve dirs.
+
+        Note: This overload must mirror the earlier definition to also
+        create the patient subfolder to avoid race/time-of-use errors.
+        """
         os.makedirs(self.cm_dir, exist_ok=True)
+        # Ensure patient subfolder exists for patient-level CMs
+        if hasattr(self, 'cm_patient_dir') and self.cm_patient_dir:
+            os.makedirs(self.cm_patient_dir, exist_ok=True)
         os.makedirs(self.learning_dir, exist_ok=True)
 
     def _extract_patient_id(self, image_path):

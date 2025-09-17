@@ -36,19 +36,7 @@ from classes.NestedCVStratifiedByPatient import NestedCVStratifiedByPatient
 from utils.mlflow_functions import log_run_to_mlflow
 
 # ───────────────────── CLI (one flag) ──────────────────────────────────────
-def parse():
-    p = argparse.ArgumentParser()
-    p.add_argument("--yaml", required=True, help="path inside configs/")
-    return p.parse_args()
-
-# ───────────────────── helpers ─────────────────────────────────────────────
-def extract_patient_id(path: str) -> str:
-    """Extracts patient ID from a file path."""
-    m = re.search(r'(\d{4})', path)
-    return m.group(1) if m else "UNKNOWN"
-
-def best_fold_idx(results, metric="test_balanced_acc") -> int:
-    return int(np.argmax([r[metric] for r in results]))
+from utils.training_helpers import *
 
 # ───────────────────── ViT Training & Validation Functions ─────────────────
 def train_epoch_vit(model, loader, optimizer, loss_function, device, print_batch_stats=False):
@@ -159,20 +147,6 @@ def val_epoch_vit(model, loader, loss_function, device):
         print(f"Could not compute ROC AUC in val_epoch_vit: {e}")
 
     return val_loss, accuracy, precision, recall, f1, balanced_acc, roc_auc, mcc
-
-
-# ───────────────────── Data & Model Setup ──────────────────────────────────
-def get_data_directory(num_input_channels: int) -> Path:
-    base = Path(os.environ.get("DATA_ROOT", ""))
-    if not base.exists():
-        raise EnvironmentError("DATA_ROOT not set or path does not exist.")
-    sub = {3: "3c_MIP", 4: "4c_MIP"}.get(num_input_channels)
-    if sub is None:
-        raise ValueError("num_input_channels must be 3 or 4")
-    data_dir = base / sub
-    if not data_dir.exists():
-        raise FileNotFoundError(f"Data folder not found: {data_dir}")
-    return data_dir
 
 # ───────────────────── main ────────────────────────────────────────────────
 def main():
@@ -348,11 +322,7 @@ def main():
         print("Could not find the best model file to log artifacts.")
     # ---------- cleanup ----------------------------------------------------
     if os.environ.get("KEEP_RUN_DIR", "0").lower() not in ("1", "true", "yes"):
-        try:
-            print(f"Cleaning up run directory: {RUN_DIR}")
-            shutil.rmtree(RUN_DIR, ignore_errors=True)
-        except Exception as e:
-            print(f"Warning: failed to remove {RUN_DIR}: {e}")
+        cleanup_run_dir(RUN_DIR)
 
 
 if __name__ == "__main__":

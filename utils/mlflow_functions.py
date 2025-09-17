@@ -642,14 +642,14 @@ def log_run_to_mlflow(
 
         # --------------------- PER-FOLD IMAGE-LEVEL METRICS (optional, concise)
         # Log per-fold mcc/auc/precision/recall so you can inspect in MLflow UI
-        try:
-            for i, r in enumerate(fold_results):
-                for k in ("test_mcc", "test_auc", "test_precision", "test_recall"):
-                    v = r.get(k)
-                    if v is not None:
-                        mlflow.log_metric(f"{k}_fold_{i}", float(v))
-        except Exception as e:
-            print(f"Warning: failed to log per-fold metrics: {e}")
+        # try:
+        #     for i, r in enumerate(fold_results):
+        #         for k in ("test_mcc", "test_auc", "test_precision", "test_recall"):
+        #             v = r.get(k)
+        #             if v is not None:
+        #                 mlflow.log_metric(f"{k}_fold_{i}", float(v))
+        # except Exception as e:
+        #     print(f"Warning: failed to log per-fold metrics: {e}")
 
         # --------------------- ARTIFACTS
         # 1. model (always push CPU version)
