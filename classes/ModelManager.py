@@ -14,6 +14,8 @@ from monai.networks.nets import (
     )
 from monai.networks.nets.resnet import get_inplanes
 from monai.networks.nets.senet import SEResNet50, SEResNet101
+import timm
+from difflib import get_close_matches
 # ------------------------------
 # ModelManager: Handles device selection and multi-GPU support
 # ------------------------------
@@ -95,21 +97,34 @@ class ModelManager:
         
         # Select factory based on config: e.g., cfg.model["model_library"] can be 'torchvision' or 'monai'
         if self.library == "monai":
-            print("Using MONAI for model instantiation.")
-            factory = MonaiModelFactory(self.cfg)
+                print("Using MONAI for model instantiation.")
+                factory = MonaiModelFactory(self.cfg)
         elif self.library == "torchvision":
-            if self.cfg.get_model_input_channels() == 4:
-                raise ValueError("Torchvision does not support 4-channel input use monai instead")
-            print("Using Torchvision for model instantiation.")
-            factory = TorchvisionModelFactory(self.cfg)
+                if self.cfg.get_model_input_channels() == 4:
+                    raise ValueError(
+                        "Torchvision factory: 4-channel input not supported out-of-the-box. "
+                        "Use 'timm' or 'monai' instead, or patch the first conv."
+                    )
+                print("Using Torchvision for model instantiation.")
+                factory = TorchvisionModelFactory(self.cfg)
+        elif self.library == "timm":
+                print("Using timm for model instantiation.")
+                factory = TimmModelFactory(self.cfg)
         else:
-            raise ValueError(f"Model library '{self.library}' is not supported. Supported libraries: 'torchvision', 'monai'")
-        
-        self.model = factory.create_model(self.model_name, pretrained_weights, num_classes)
-        
-        if torch.cuda.device_count() > 1: #if more than 1 gpu is present
-            self.model = nn.DataParallel(self.model)
-        
+                raise ValueError(
+                    f"Model library '{self.library}' is not supported. "
+                    "Supported: 'torchvision', 'monai', 'timm'."
+                )
+
+        self.model = factory.create_model(
+                    model_name=self.model_name,
+                    pretrained_weights=pretrained_weights,
+                    num_classes=num_classes,
+                )
+
+        if torch.cuda.device_count() > 1:
+                self.model = nn.DataParallel(self.model)
+
         self.model = self.model.to(self.device)
         return self.model, self.device
 
@@ -118,7 +133,6 @@ class ModelManager:
 # class BaseModelFactory:
 #     def create_model(self, model_name, pretrained_weights, num_classes):
 #         raise NotImplementedError("Subclasses must implement create_model()")
-
 # ------------------------------
 # ModelFactory: Encapsulates how to build each model
 # ------------------------------
@@ -520,30 +534,138 @@ class MonaiModelFactory():
         print(f" -> ViT configured with {num_classes} output classes.")
         return model
 
-def _adapt_first_conv(model: nn.Module, in_channels: int) -> nn.Module:
-    """Adapt the first convolution layer to handle different input channels."""
-    if in_channels > 3:
-        # Get the first conv layer
-        first_conv = model.conv1
-        if isinstance(first_conv, nn.Conv2d):
-            # Ensure kernel_size, stride, and padding are proper 2D tuples
-            kernel_size = (first_conv.kernel_size[0], first_conv.kernel_size[0]) if isinstance(first_conv.kernel_size, tuple) else (first_conv.kernel_size, first_conv.kernel_size)
-            stride = (first_conv.stride[0], first_conv.stride[0]) if isinstance(first_conv.stride, tuple) else (first_conv.stride, first_conv.stride)
-            padding = (first_conv.padding[0], first_conv.padding[0]) if isinstance(first_conv.padding, tuple) else (first_conv.padding, first_conv.padding)
-            
-            # Create new conv layer with correct number of input channels
-            new_conv = nn.Conv2d(
-                in_channels=in_channels,
-                out_channels=first_conv.out_channels,
-                kernel_size=kernel_size,
-                stride=stride,
-                padding=padding,
-                bias=first_conv.bias is not None
+    def _adapt_first_conv(self, model: nn.Module, in_channels: int) -> nn.Module:
+        """Adapt the first convolution layer to handle different input channels."""
+        if in_channels > 3:
+            # Get the first conv layer
+            first_conv = model.conv1
+            if isinstance(first_conv, nn.Conv2d):
+                # Ensure kernel_size, stride, and padding are proper 2D tuples
+                kernel_size = (first_conv.kernel_size[0], first_conv.kernel_size[0]) if isinstance(first_conv.kernel_size, tuple) else (first_conv.kernel_size, first_conv.kernel_size)
+                stride = (first_conv.stride[0], first_conv.stride[0]) if isinstance(first_conv.stride, tuple) else (first_conv.stride, first_conv.stride)
+                padding = (first_conv.padding[0], first_conv.padding[0]) if isinstance(first_conv.padding, tuple) else (first_conv.padding, first_conv.padding)
+                
+                # Create new conv layer with correct number of input channels
+                new_conv = nn.Conv2d(
+                    in_channels=in_channels,
+                    out_channels=first_conv.out_channels,
+                    kernel_size=kernel_size,
+                    stride=stride,
+                    padding=padding,
+                    bias=first_conv.bias is not None
+                )
+                # Initialize the new conv layer
+                nn.init.kaiming_normal_(new_conv.weight, mode='fan_out', nonlinearity='relu')
+                if new_conv.bias is not None:
+                    nn.init.constant_(new_conv.bias, 0)
+                # Replace the first conv layer
+                model.conv1 = new_conv
+        return model
+
+
+# TIMM Model Factory -----------------------------------------------------
+class TimmModelFactory:
+    """
+    Factory for creating timm classification backbones that natively support
+    in_chans > 3 (e.g., 4-channel fluorescence inputs).
+    to use this factory, you need to have timm installed. and 
+    you have to change the cfg.model["model_library"] to "timm"
+
+    Reads the following (optional) keys from cfg.model:
+      - img_size: (H, W), default 224x224 (used by some models internally)
+      - global_pool: 'avg' | 'max' | 'avgmax' | 'catavgmax' | 'token' (ViTs)
+      - drop_rate: float, default 0.0
+      - drop_path_rate: float, default 0.0
+      - head_init_scale: float for some transformer heads (if supported)
+      - timm_name: (optional) canonical timm name if you want to bypass synonyms
+    """
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.pretrained = bool(cfg.get_transfer_learning())
+        self.input_channels = int(cfg.get_model_input_channels())
+        self.num_classes = int(cfg.get_num_classes())
+        self.model_cfg = getattr(cfg, "model", {})
+        self.global_pool = self.model_cfg.get("global_pool", "avg")
+        self.drop_rate = float(self.model_cfg.get("drop_rate", 0.0))
+        self.drop_path_rate = float(self.model_cfg.get("drop_path_rate", 0.0))
+
+        self._name_map = {
+            "resnet18": "resnet18",
+            "resnet34": "resnet34",
+            "resnet50": "resnet50",
+            "resnet101": "resnet101",
+            "resnet152": "resnet152",
+            "densenet121": "densenet121",
+            "densenet169": "densenet169",
+            "densenet201": "densenet201",
+            "convnext_tiny": "convnext_tiny",
+            "convnext_small": "convnext_small",
+            "efficientnet_b0": "efficientnet_b0",
+            "efficientnet_b3": "efficientnet_b3",
+            "vit_base_patch16_224": "vit_base_patch16_224",
+            "deit_small_patch16_224": "deit_small_patch16_224",
+            "swin_tiny_patch4_window7_224": "swin_tiny_patch4_window7_224",
+        }
+
+    def _normalize_name(self, name: str) -> str:
+        if not isinstance(name, str):
+            raise TypeError("model_name must be a string.")
+        key = name.replace("-", "_").lower()
+        # Allow overriding with an explicit timm name in cfg.model
+        override = self.model_cfg.get("timm_name")
+        if isinstance(override, str) and override.strip():
+            return override.strip()
+        return self._name_map.get(key, key)
+
+    def _resolve_pretrained_flag(self, pretrained_weights) -> bool:
+        """
+        We treat 'imagenet' (case-insensitive) as True; anything else falls
+        back to cfg.get_transfer_learning().
+        """
+        if pretrained_weights is None:
+            return self.pretrained
+        if isinstance(pretrained_weights, str):
+            return pretrained_weights.lower() == "imagenet"
+        return bool(pretrained_weights)
+
+    def create_model(self, model_name: str, pretrained_weights=None,
+                     num_classes: int = 2) -> nn.Module:
+        """
+        Build a timm model with `in_chans` taken from cfg, and the specified
+        num_classes. Raises a helpful error when the name is not found.
+        """
+        timm_name = self._normalize_name(model_name)
+        use_pretrained = self._resolve_pretrained_flag(pretrained_weights)
+
+        try:
+            model = timm.create_model(
+                timm_name,
+                pretrained=use_pretrained,
+                in_chans=self.input_channels,           # ← 4-channel ready
+                num_classes=num_classes,
+                global_pool=self.global_pool,
+                drop_rate=self.drop_rate,
+                drop_path_rate=self.drop_path_rate,
             )
-            # Initialize the new conv layer
-            nn.init.kaiming_normal_(new_conv.weight, mode='fan_out', nonlinearity='relu')
-            if new_conv.bias is not None:
-                nn.init.constant_(new_conv.bias, 0)
-            # Replace the first conv layer
-            model.conv1 = new_conv
-    return model
+        except Exception as exc:
+            # Surface a readable message with close matches
+            all_models = timm.list_models(pretrained=use_pretrained)
+            suggestions = get_close_matches(timm_name, all_models, n=5, cutoff=0.3)
+            msg = (
+                f"[timm] Could not instantiate model '{timm_name}'. "
+                f"Close matches: {suggestions}. "
+                "Tip: set cfg.model['timm_name'] to the exact timm identifier."
+            )
+            raise ValueError(msg) from exc
+
+        # Optional: linear-probe warmup support—freeze backbone if requested
+        linear_probe = bool(self.model_cfg.get("linear_probe_warmup", False))
+        if linear_probe:
+            for name, param in model.named_parameters():
+                # Heuristic: keep only final classifier trainable
+                if "fc" in name or "classifier" in name or "head" in name:
+                    param.requires_grad = True
+                else:
+                    param.requires_grad = False
+
+        return model

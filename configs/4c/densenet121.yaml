@@ -18,7 +18,7 @@ model:
 training:
   num_epochs: 210
   early_stopping_patience: 35
-  mixup_alpha: 0  # Added mixup
+  # mixup_alpha:   # Added mixup
   freezed_layerIndex: null
 
 # Optimizer

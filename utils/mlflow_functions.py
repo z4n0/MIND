@@ -539,28 +539,27 @@ def log_run_to_mlflow(
                 for r in fold_results
             ]
         )
-        mlflow.log_metrics(
-            {
-                "mean_test_loss": float(per_fold[:, 0].mean()),
-                "std_test_loss": float(per_fold[:, 0].std()),
-                "mean_test_accuracy": float(per_fold[:, 1].mean()),
-                "std_test_accuracy": float(per_fold[:, 1].std()),
-                "mean_test_balanced_acc": float(per_fold[:, 2].mean()),
-                "std_test_balanced_acc": float(per_fold[:, 2].std()),
-                "mean_test_f1": float(per_fold[:, 3].mean()),
-                "std_test_f1": float(per_fold[:, 3].std()),
-                "mean_test_auc": float(per_fold[:, 4].mean()),
-                "std_test_auc": float(per_fold[:, 4].std()),
-                "mean_test_mcc": float(per_fold[:, 5].mean()),
-                "std_test_mcc": float(per_fold[:, 5].std()),
-                "mean_test_precision": float(per_fold[:, 6].mean()),
-                "std_test_precision": float(per_fold[:, 6].std()),
-                "mean_test_recall": float(per_fold[:, 7].mean()),
-                "std_test_recall": float(per_fold[:, 7].std()),
-                "exec_time_min": execution_time / 60.0,
-            }
-        )
-
+        metrics = {
+            "mean_test_loss": float(per_fold[:, 0].mean()),
+            "std_test_loss": float(per_fold[:, 0].std()),
+            "mean_test_accuracy": float(per_fold[:, 1].mean()),
+            "std_test_accuracy": float(per_fold[:, 1].std()),
+            "mean_test_balanced_acc": float(per_fold[:, 2].mean()),
+            "std_test_balanced_acc": float(per_fold[:, 2].std()),
+            "mean_test_f1": float(per_fold[:, 3].mean()),
+            "std_test_f1": float(per_fold[:, 3].std()),
+            "mean_test_auc": float(per_fold[:, 4].mean()),
+            "std_test_auc": float(per_fold[:, 4].std()),
+            "mean_test_mcc": float(per_fold[:, 5].mean()),
+            "std_test_mcc": float(per_fold[:, 5].std()),
+            "mean_test_precision": float(per_fold[:, 6].mean()),
+            "std_test_precision": float(per_fold[:, 6].std()),
+            "mean_test_recall": float(per_fold[:, 7].mean()),
+            "std_test_recall": float(per_fold[:, 7].std()),
+            "exec_time_min": execution_time / 60.0,
+        }
+        metrics = {k: round(v, 3) for k, v in metrics.items()}
+        mlflow.log_metrics(metrics)
         # --------------------- PATIENT-LEVEL METRICS (if present)
         try:
             # Safely extract arrays if keys are available in fold_results
@@ -638,6 +637,7 @@ def log_run_to_mlflow(
                 })
 
             if metrics_to_log:
+                metrics_to_log = {k: round(float(v), 3) for k, v in metrics_to_log.items()}
                 mlflow.log_metrics(metrics_to_log)
         except Exception as e:
             print(f"Warning: failed to log patient-level metrics: {e}")

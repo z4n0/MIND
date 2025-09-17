@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ── 0) repo root & logs ─────────────────────────────────────────────────────
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_DIR"
 
 mkdir -p logs
@@ -41,7 +41,7 @@ echo "Using GPU:    ${CUDA_VISIBLE_DEVICES}"
 echo "──────────────────────────────────────────────"
 
 # ── 3) launch training ──────────────────────────────────────────────────────
-python train_vit.py --yaml configs/pretrained/vit.yaml
+python train_vit.py --yaml configs/pretrained_3c_monai/vit.yaml
 
 # ── 4) end ──────────────────────────────────────────────────────────────────
 echo "──────────────────────────────────────────────"

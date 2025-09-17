@@ -19,8 +19,8 @@ data_augmentation:
   rand_gaussian_noise_mean: 0.0
   rand_gaussian_noise_std: 0.1
   crop_size: [256, 256]  # New parameter for random cropping
-  use_color_transforms: true
-  intensity_augmentation_preset: "medium"  # Options: "none", "light", "medium", "heavy"
+  use_color_transforms: false
+  intensity_augmentation_preset: "none"  # Options: "none", "light", "medium", "heavy"
   use_crop: false
   crop_percentage: 0.95
 
@@ -40,7 +40,7 @@ model:
 training:
   num_epochs: 50
   early_stopping_patience: 2
-  mixup_alpha: 0
+  mixup_alpha: 0.2
   oversample: true
   undersample: false
   weighted_loss: false

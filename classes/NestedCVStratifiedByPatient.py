@@ -543,10 +543,10 @@ class NestedCVStratifiedByPatient:
         for epoch in range(self.num_epochs):
             current_lr = optimizer.param_groups[0]['lr']
             # from utils.training_utils import train_epoch_mixUp (if used)
-            if self.cfg.training.get("mixup_alpha", 0) > 0:
-                train_loss, train_acc = train_epoch_mixUp(model, train_loader_es, optimizer, loss_function, device, self.cfg.training["mixup_alpha"])
-            else:
-                train_loss, train_acc = self.train_fn(model, train_loader_es, optimizer, loss_function, device)
+            # if self.cfg.training.get("mixup_alpha", 0) > 0:
+            #     train_loss, train_acc = train_epoch_mixUp(model, train_loader_es, optimizer, loss_function, device, self.cfg.training["mixup_alpha"])
+            # else:
+            train_loss, train_acc = self.train_fn(model, train_loader_es, optimizer, loss_function, device, mixup_alpha=self.cfg.training.get("mixup_alpha", 0))
 
             val_loss, val_acc, val_prec, val_recall, val_f1, val_bal_acc, val_roc_auc, val_mcc = self.val_fn(model, val_loader_es, loss_function, device)
 

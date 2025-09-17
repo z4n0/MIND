@@ -3,7 +3,7 @@ set -euo pipefail
 
 # ── 0) repo root & logs ─────────────────────────────────────────────────────
 # Equivalent of $SLURM_SUBMIT_DIR
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_DIR"
 
 mkdir -p logs

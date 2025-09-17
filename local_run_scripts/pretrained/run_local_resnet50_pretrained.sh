@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ── 0) repo root & logs ─────────────────────────────────────────────────────
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_DIR"
 
 mkdir -p logs
@@ -41,7 +41,7 @@ echo "Using GPU:    ${CUDA_VISIBLE_DEVICES}"
 echo "──────────────────────────────────────────────"
 
 # ── 3) launch training ──────────────────────────────────────────────────────
-python train_pretrained.py --yaml configs/pretrained/resnet50.yaml
+python train_pretrained.py --yaml configs/pretrained_3c_monai/resnet50.yaml
 
 # ── 4) end ──────────────────────────────────────────────────────────────────
 echo "──────────────────────────────────────────────"

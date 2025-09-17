@@ -25,140 +25,131 @@ import warnings
 warnings.filterwarnings("ignore", message=".*`torch.cuda.amp.autocast(args...)` is deprecated.*", category=UserWarning)
 warnings.filterwarnings("ignore", message=".*`torch.cuda.amp.GradScaler(args...)` is deprecated.*", category=UserWarning)
 
+from torch.cuda.amp import autocast, GradScaler
+import torch
+import torch.nn as nn
+
+class MixupState:
+    """Reusable GPU buffer to avoid per-batch allocations."""
+    def __init__(self) -> None:
+        self.buf: torch.Tensor | None = None
+
+    def ensure_buf(self, x: torch.Tensor) -> torch.Tensor:
+        if self.buf is None or self.buf.shape != x.shape or self.buf.dtype != x.dtype:
+            self.buf = torch.empty_like(x, device=x.device)
+        return self.buf
+
+
+def mixup_inplace(
+    x: torch.Tensor,
+    y: torch.Tensor,
+    alpha: float,
+    device: torch.device,
+    state: MixupState,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, float]:
+    """
+    In-place MixUp to minimize peak memory:
+      - buf <- x[idx]                        (1 extra full-size buffer)
+      - x.mul_(lam).add_(buf, alpha=1-lam)   (overwrite x with the mix)
+    Returns: (mixed_x, y_a, y_b, lam)
+    """
+    if alpha <= 0.0:
+        return x, y, y, 1.0
+
+    lam = float(torch.distributions.Beta(alpha, alpha).sample(()).item())
+    idx = torch.randperm(x.size(0), device=device)
+
+    buf = state.ensure_buf(x)
+    buf.copy_(x[idx])                           # buf = shuffled(x)
+    x.mul_(lam).add_(buf, alpha=1.0 - lam)      # x = lam*x + (1-lam)*buf  (in-place)
+    return x, y, y[idx], lam
+
 
 def train_epoch(
-    model, 
-    loader, 
-    optimizer, 
-    loss_function, 
-    device, 
-    clip_value=1.0, 
-    print_batch_stats=False,
-    enable_amp: bool = True  # New parameter to control AMP
-):
+    model: nn.Module,
+    loader,
+    optimizer: torch.optim.Optimizer,
+    loss_function,
+    device: torch.device,
+    clip_value: float = 1.0,
+    print_batch_stats: bool = False,
+    enable_amp: bool = True,
+    mixup_alpha: float = 0.0,   # 0.0 ⇒ MixUp OFF; >0 ⇒ ON
+    mixup_prob: float = 1.0,    # Apply MixUp with this probability per batch
+) -> tuple[float, float]:
     """
-    Trains the model for one epoch.
-    Optionally uses Automatic Mixed Precision (AMP) if enable_amp is True and on CUDA.
-    This version is based on the user-provided snippet.
-    Includes gradient clipping and NaN checks.
-
-    Args:
-        model (torch.nn.Module): The model to be trained.
-        loader (torch.utils.data.DataLoader): DataLoader for the training data.
-        optimizer (torch.optim.Optimizer): Optimizer for updating the model parameters.
-        loss_function (callable): Loss function to compute the loss.
-        device (torch.device): Device on which to perform computations (e.g., 'cpu' or 'cuda').
-        clip_value (float): Maximum norm for gradient clipping. Default is 1.0.
-        print_batch_stats (bool): Whether to print stats for the first batch.
-        enable_amp (bool): Whether to enable Automatic Mixed Precision. Default is True.
-
-    Returns:
-        tuple: A tuple containing:
-            - avg_loss (float): The average loss over valid batches in the epoch.
-            - avg_accuracy (float): The average accuracy over all processed samples in the epoch.
+    One epoch of training with optional AMP and optional MixUp (in-place).
+    Keeps NaN/Inf checks and gradient clipping to avoid instabilities.
+    Returns (avg_loss, avg_accuracy).
     """
     model.train()
     epoch_loss = 0.0
-    correct = 0
+    correct = 0.0
     total = 0
-    num_valid_batches = 0 # Track batches without NaN loss
+    num_valid_batches = 0
 
-    # Determine if AMP should actually be used based on enable_amp and device type
-    # This replaces the original fixed: use_amp = device.type == 'cuda'
-    amp_active = enable_amp and (device.type == 'cuda')
-    
-    scaler = None # Initialize scaler
-    if amp_active:
-        scaler = GradScaler()
-        if print_batch_stats: # Only print if other batch stats are also being printed
-            print("AMP is active for training this epoch.")
-    elif enable_amp and device.type != 'cuda':
-        if print_batch_stats:
-             print("AMP was enabled, but CUDA is not available. Training in float32.")
-    elif not enable_amp:
-        if print_batch_stats:
-            print("AMP is disabled by user. Training in float32.")
+    amp_active = enable_amp and (device.type == "cuda")
+    scaler = GradScaler(enabled=amp_active)
+    mx_state = MixupState()  # re-used buffer across batches
 
+    for i, batch in enumerate(loader):
+        x = batch["image"].to(device, non_blocking=True)
+        y = batch["label"].to(device, non_blocking=True).long()
 
-    for i, batch in enumerate(loader): # Added enumerate for batch index logging
-        images_batch = batch["image"].to(device)
-        labels_batch = batch["label"].to(device).long()
-        
-        if i == 0 and print_batch_stats: # Check first batch only
-            print(f"\n--- Input Batch Stats (Batch {i}) ---")
-            print(f"  Images shape: {images_batch.shape}, dtype: {images_batch.dtype}")
-            print(f"  Images min: {images_batch.min()}, max: {images_batch.max()}, mean: {images_batch.mean()}")
-            print(f"  Images has NaN: {torch.isnan(images_batch).any()}, has Inf: {torch.isinf(images_batch).any()}")
-            print(f"  Labels shape: {labels_batch.shape}, dtype: {labels_batch.dtype}")
-            print(f"  Labels unique: {torch.unique(labels_batch)}")
-            print(f"  Images dtype: {images_batch.dtype}, device: {images_batch.device}")
-            # Add check for label range if num_classes is known
-            # num_classes = model.classifier_model.classifier[-1].out_features # Example way to get num_classes
-            # if (labels_batch < 0).any() or (labels_batch >= num_classes).any():
-            #      print(f"!!! WARNING: Labels out of range [0, {num_classes-1}) detected: {torch.unique(labels_batch)}")
-            print("-------------------------------------\n")
-        
-        optimizer.zero_grad()
+        if i == 0 and print_batch_stats:
+            print(f"Images: {x.shape} {x.dtype} | Labels: {y.shape} {y.dtype}")
 
-        # --- Automatic Mixed Precision Context (or regular context if AMP is not active) ---
+        # Decide if we MixUp this batch
+        do_mix = (mixup_alpha > 0.0) and (torch.rand(()) < mixup_prob)
+        if do_mix:
+            x, y_a, y_b, lam = mixup_inplace(x, y, mixup_alpha, device, mx_state)
+        else:
+            y_a = y_b = y
+            lam = 1.0
+
+        optimizer.zero_grad(set_to_none=True)
+
         with autocast(enabled=amp_active):
-            outputs = model(images_batch) # Directly use images_batch as in the provided version
-            # Ensure labels_batch is compatible if loss expects float (unlikely for CrossEntropy)
-            loss = loss_function(outputs, labels_batch)
+            out = model(x)
+            loss = (
+                lam * loss_function(out, y_a)
+                + (1.0 - lam) * loss_function(out, y_b)
+                if do_mix
+                else loss_function(out, y)
+            )
 
-        # --- Check for NaN/Inf Loss BEFORE backward ---
+        # Guard against NaN / Inf
         if torch.isnan(loss) or torch.isinf(loss):
-            print(f"Warning: NaN/Inf loss detected at training batch index {i}. Loss: {loss.item()}. Skipping batch update.")
-            # Optional: Investigate why loss is NaN here (e.g., print outputs, inputs)
-            # print(f"  Outputs sample: {outputs.flatten()[:10]}")
-            continue # Skip backward and optimizer step for this batch
+            print(f"Warning: NaN/Inf loss at batch {i}. Skipping.")
+            continue
 
-        # --- Perform backward pass and optimizer step (conditionally using scaler) ---
-        if amp_active and scaler: # If AMP is active (implies CUDA and scaler is initialized)
+        if amp_active:
             scaler.scale(loss).backward()
-            # Unscale gradients before clipping
             scaler.unscale_(optimizer)
-            # Clip gradients after unscaling
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip_value)
-            # Optimizer step (internally checks for inf/nans in gradients)
             scaler.step(optimizer)
-            # Update scaler for next iteration
             scaler.update()
-        else: # If AMP is not active (either on CPU or enable_amp=False)
+        else:
             loss.backward()
-            # Clip gradients directly
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip_value)
             optimizer.step()
 
-        # --- Accumulate metrics for valid batches ---
         epoch_loss += loss.item()
         num_valid_batches += 1
 
-        # Get predictions (works for both binary and multi-class)
-        # Ensure outputs are not NaN before calculating accuracy
-        if not torch.isnan(outputs).any():
-             with torch.no_grad(): # Ensure no gradients calculated here
-                _, predicted = torch.max(outputs, dim=1)
-                correct += (predicted == labels_batch).sum().item()
-        else:
-            print(f"Warning: NaN outputs detected at training batch index {i} during accuracy calculation.")
+        with torch.no_grad():
+            _, pred = torch.max(out, dim=1)
+            if do_mix:
+                # Proxy accuracy under MixUp
+                correct += lam * (pred == y_a).sum().item()
+                correct += (1.0 - lam) * (pred == y_b).sum().item()
+            else:
+                correct += (pred == y).sum().item()
+            total += y.size(0)
 
-        total += labels_batch.size(0) # Count total samples processed regardless of NaN loss
-
-    # --- Calculate average metrics ---
-    if num_valid_batches > 0:
-        avg_loss = epoch_loss / num_valid_batches
-    else:
-        print("Warning: No valid batches processed in this epoch (all resulted in NaN/Inf loss).")
-        avg_loss = float('nan') # Indicate failure
-
-    if total > 0:
-        avg_accuracy = correct / total
-    else:
-        print("Warning: No samples processed in this epoch.")
-        avg_accuracy = 0.0
-
-    return avg_loss, avg_accuracy
+    avg_loss = epoch_loss / max(1, num_valid_batches)
+    avg_acc = correct / max(1, total)
+    return avg_loss, avg_acc
 
 
 def val_epoch(model, loader, loss_function, device):
