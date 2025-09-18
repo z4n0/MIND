@@ -1,0 +1,55 @@
+# configs/simclr_resnet18_3c.yaml
+_base_: base.yaml 
+# inherits from base.yaml overwriting all the parameters following this line if they exist
+
+# Data Splitting
+data_splitting:
+  random_seed: 42
+  val_set_size: 0.15
+  test_set_size: 0.1
+  num_folds: 7  # Changed from base
+
+dataset:
+  unlabeled_subdir: PRETRAINING_MSA_VS_PD   # relative to $DATA_ROOT
+
+model:
+  backbone_library: torchvision             # or "monai"
+  model_name: Resnet18                      # ResNet18 architecture
+  in_channels: 3
+  input_size: 256                           # image crop/resize used in SimCLRTransform
+  proj_hidden_dim: 512                      # hidden dim of the projection MLP
+  proj_output_dim: 128                      # output dim of the projection MLP
+  library: "torchvision"
+  
+# Data Loading
+data_loading:
+  batch_size: 128   # Reduced batch size to fit dataset size (127 images)
+  num_workers: 4   # Number of data loading workers
+  loader_type: full-image #full-image or patch # Use Lightly's DataLoader for SimCLR
+
+data_augmentation:
+  resize_spatial_size: [256, 256]           # [height, width] for input images
+  rotation_range: 15                        # degrees
+  brightness: 0.2                           # brightness jitter
+  contrast: 0.2                             # contrast jitter
+  saturation: 0.2                           # saturation jitter
+  hue: 0.1                                  # hue jitter
+  gaussian_blur_prob: 0.5                   # probability of applying Gaussian blur
+  gaussian_blur_kernel_size: 23             # kernel size for Gaussian blur
+  gaussian_blur_sigma: [0.1, 2.0]          # sigma range for Gaussian blur
+
+training:
+  batch_size: 64                            # Reduced batch size to fit dataset size
+  num_workers: 4
+  num_epochs: 120
+  lr: 3e-4
+  temperature: 0.07
+  simsiam_flag: false
+
+# Data Augmentation
+data_augmentation:
+  use_color_transforms: false
+  
+output:
+  #this is the path where the pretrained encoder will be saved
+  weights_path: /leonardo_work/pMI24_EleBr_1/lzanotto/FOLDER_CINECA/pretrained_encoders/byol_resnet18_3c.pth

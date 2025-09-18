@@ -1,0 +1,50 @@
+_base_: ./base.yaml 
+# Inherits from base.yaml, overriding the parameters below
+
+# Data Splitting
+data_splitting:
+  random_seed: 42
+  val_set_size: 0.15
+  test_set_size: 0.1
+  num_folds: 5  # Number of cross-validation folds
+
+# Dataset
+dataset:
+  class_names: ["MSA", "PD"]  # Class names for downstream task
+
+# Model
+model:
+  backbone_library: torchvision  # Must match pretrained encoder
+  model_name: Resnet18          # Must match pretrained encoder
+  in_channels: 3                # Must match pretrained encoder
+  input_size: 256               # Must match pretrained encoder
+  library: "torchvision"
+
+# Data Loading
+data_loading:
+  batch_size: 32
+  num_workers: 4
+  
+# Training
+training:
+  batch_size: 32
+  num_workers: 4
+  num_epochs: 50
+  lr: 1e-4                  # Learning rate for fine-tuning
+  weight_decay: 1e-5
+  early_stopping_patience: 10
+  randomly_initialized: false  # Set to true if you want to use random initialization instead of SSL
+  
+# Data Augmentation - Use lighter augmentations for fine-tuning
+data_augmentation:
+  use_color_transforms: false
+  resize_spatial_size: [256, 256]
+  rotation_range: 10
+  brightness: 0.1
+  contrast: 0.1
+  saturation: 0.1
+  hue: 0.05
+  
+# Output
+# output:
+  # weights_path: /leonardo_work/pMI24_EleBr_1/lzanotto/FOLDER_CINECA/finetuned_models/ssl_finetuned_resnet18_3c.pth

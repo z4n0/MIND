@@ -48,6 +48,6 @@ echo "Python: $(which python)"
 echo "PYTHONPATH: $PYTHONPATH"
 echo "--------------------"
 
-srun python "$SLURM_SUBMIT_DIR/train_vit.py" --yaml "configs/pretrained/vit.yaml"
+srun python "$SLURM_SUBMIT_DIR/train_vit.py" --yaml "configs_cineca/pretrained_3c_monai/vit.yaml"
 
 echo "--- END ---"

@@ -157,12 +157,7 @@ def main() -> None:
 
     # ---------- find unlabeled images ------------------------------------
     data_root = Path(os.environ["DATA_ROOT"])
-    if "MSA" in class_names:
-        ssl_dir = data_root / "PRETRAINING_MSA_VS_PD"
-    elif "MSA-P" in class_names:
-        ssl_dir = data_root / "PRETRAINING_MSAP_VS_PD"
-    else:
-        raise ValueError("Unknown class names in config. Please specify the correct dataset path.")
+    ssl_dir = data_root / cfg.dataset["unlabeled_subdir"]
     if not ssl_dir.is_dir():
         raise FileNotFoundError(f"Unlabeled dir not found: {ssl_dir}")
     # lightly dataset ------------------------------------------------------
@@ -173,12 +168,15 @@ def main() -> None:
         vf_prob=0.5, hf_prob=0.5, rr_prob=0.5
     )
     dataset = LightlyDataset(input_dir=str(ssl_dir), transform=transform)
-    loader  = DataLoader(
+    num_workers = cfg.get_num_workers()
+    loader = DataLoader(
         dataset,
-        batch_size=cfg.data_loading["batch_size"],
-        shuffle=True,  drop_last=True,
-        num_workers=cfg.data_loading["num_workers"],
-        pin_memory=True, persistent_workers=True,
+        batch_size=cfg.get_batch_size(),
+        shuffle=True,
+        drop_last=True,
+        num_workers=num_workers,
+        pin_memory=torch.cuda.is_available(),
+        persistent_workers=(num_workers > 0),
     )
     print(f"Found {len(dataset):,} unlabeled images")
 

@@ -65,65 +65,69 @@ def mixup_inplace(
     return x, y, y[idx], lam
 
 
+# ===========================
+# TRAIN (no MixUp, as before)
+# ===========================
+import torch
+from torch.cuda.amp import autocast, GradScaler  # vecchia API
+from torch import nn
+
 def train_epoch(
-    model: nn.Module,
-    loader,
-    optimizer: torch.optim.Optimizer,
-    loss_function,
-    device: torch.device,
-    clip_value: float = 1.0,
+    model: nn.Module, 
+    loader, 
+    optimizer: torch.optim.Optimizer, 
+    loss_function, 
+    device: torch.device, 
+    clip_value: float = 1.0, 
     print_batch_stats: bool = False,
-    enable_amp: bool = True,
-    mixup_alpha: float = 0.0,   # 0.0 ⇒ MixUp OFF; >0 ⇒ ON
-    mixup_prob: float = 1.0,    # Apply MixUp with this probability per batch
-) -> tuple[float, float]:
+    enable_amp: bool = True,   # come prima
+):
     """
-    One epoch of training with optional AMP and optional MixUp (in-place).
-    Keeps NaN/Inf checks and gradient clipping to avoid instabilities.
-    Returns (avg_loss, avg_accuracy).
+    Trains the model for one epoch (NO MixUp).
+    Uses AMP if enable_amp=True and CUDA is available.
+    Includes gradient clipping and NaN checks.
+    Returns: (avg_loss, avg_accuracy)
     """
     model.train()
     epoch_loss = 0.0
-    correct = 0.0
+    correct = 0
     total = 0
     num_valid_batches = 0
 
-    amp_active = enable_amp and (device.type == "cuda")
-    scaler = GradScaler(enabled=amp_active)
-    mx_state = MixupState()  # re-used buffer across batches
+    amp_active = enable_amp and (device.type == 'cuda')
+    scaler = GradScaler() if amp_active else None
 
     for i, batch in enumerate(loader):
-        x = batch["image"].to(device, non_blocking=True)
-        y = batch["label"].to(device, non_blocking=True).long()
+        images_batch = batch["image"].to(device)
+        labels_batch = batch["label"].to(device).long()
 
         if i == 0 and print_batch_stats:
-            print(f"Images: {x.shape} {x.dtype} | Labels: {y.shape} {y.dtype}")
+            print(f"\n--- Input Batch Stats (Batch {i}) ---")
+            print(f"  Images shape: {images_batch.shape}, dtype: {images_batch.dtype}")
+            print(f"  Images min: {images_batch.min()}, max: {images_batch.max()}, mean: {images_batch.mean()}")
+            print(f"  Images has NaN: {torch.isnan(images_batch).any()}, has Inf: {torch.isinf(images_batch).any()}")
+            print(f"  Labels shape: {labels_batch.shape}, dtype: {labels_batch.dtype}")
+            print(f"  Labels unique: {torch.unique(labels_batch)}")
+            print("-------------------------------------\n")
 
-        # Decide if we MixUp this batch
-        do_mix = (mixup_alpha > 0.0) and (torch.rand(()) < mixup_prob)
-        if do_mix:
-            x, y_a, y_b, lam = mixup_inplace(x, y, mixup_alpha, device, mx_state)
+        optimizer.zero_grad()
+
+        # AMP on CUDA only
+        if amp_active:
+            with autocast():
+                outputs = model(images_batch)
+                loss = loss_function(outputs, labels_batch)
         else:
-            y_a = y_b = y
-            lam = 1.0
+            outputs = model(images_batch)
+            loss = loss_function(outputs, labels_batch)
 
-        optimizer.zero_grad(set_to_none=True)
-
-        with autocast(enabled=amp_active):
-            out = model(x)
-            loss = (
-                lam * loss_function(out, y_a)
-                + (1.0 - lam) * loss_function(out, y_b)
-                if do_mix
-                else loss_function(out, y)
-            )
-
-        # Guard against NaN / Inf
+        # NaN/Inf guard
         if torch.isnan(loss) or torch.isinf(loss):
-            print(f"Warning: NaN/Inf loss at batch {i}. Skipping.")
+            print(f"Warning: NaN/Inf loss at training batch {i}. Skipping batch.")
             continue
 
-        if amp_active:
+        # Backward + step (with optional AMP scaler)
+        if amp_active and scaler is not None:
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip_value)
@@ -134,22 +138,18 @@ def train_epoch(
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip_value)
             optimizer.step()
 
+        # Stats
         epoch_loss += loss.item()
         num_valid_batches += 1
 
         with torch.no_grad():
-            _, pred = torch.max(out, dim=1)
-            if do_mix:
-                # Proxy accuracy under MixUp
-                correct += lam * (pred == y_a).sum().item()
-                correct += (1.0 - lam) * (pred == y_b).sum().item()
-            else:
-                correct += (pred == y).sum().item()
-            total += y.size(0)
+            _, predicted = torch.max(outputs, dim=1)
+            correct += (predicted == labels_batch).sum().item()
+            total += labels_batch.size(0)
 
     avg_loss = epoch_loss / max(1, num_valid_batches)
-    avg_acc = correct / max(1, total)
-    return avg_loss, avg_acc
+    avg_accuracy = correct / max(1, total)
+    return avg_loss, avg_accuracy
 
 
 def val_epoch(model, loader, loss_function, device):

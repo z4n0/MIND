@@ -47,4 +47,4 @@ echo "────────────────────────�
 
 # --- 5) launch training ----------------------------------------------------
 cd "$SLURM_SUBMIT_DIR"
-srun python train_3c.py --yaml configs/3c/densenet169.yaml
+srun python train_3c.py --yaml configs_cineca/3c/densenet169.yaml

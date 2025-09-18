@@ -47,6 +47,6 @@ echo "Python: $(which python)"
 echo "PYTHONPATH: $PYTHONPATH"
 echo "--------------------"
 
-srun python "$SLURM_SUBMIT_DIR/train_vit.py" --yaml "configs/3c/vit.yaml"
+srun python "$SLURM_SUBMIT_DIR/train_vit.py" --yaml "configs_cineca/3c/vit.yaml"
 
 echo "--- END ---"

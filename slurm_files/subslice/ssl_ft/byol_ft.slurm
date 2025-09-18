@@ -50,12 +50,12 @@ cd "$SLURM_SUBMIT_DIR"
 
 # For SSL pretrained weights - CORRECTED PATHS
 srun python downstream_supervised_fine_tuning.py \
-    --yaml configs/ssl_ft/byol_resnet18.yaml \
+    --yaml configs_cineca/ssl_ft/byol_resnet18.yaml \
     --encoder_path /leonardo_work/pMI24_EleBr_1/lzanotto/FOLDER_CINECA/pretrained_encoders/byol_resnet18_3c_MSA_VS_PD_patch.pth \
     --freeze_encoder
 
 # For random initialization, uncomment this instead:
 # srun python downstream_supervised_fine_tuning.py \
-#     --yaml configs/ssl_ft/byol_resnet18.yaml
+#     --yaml configs_cineca/ssl_ft/byol_resnet18.yaml
 
 echo "Finished at: " $(date)

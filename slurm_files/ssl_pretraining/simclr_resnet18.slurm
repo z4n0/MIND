@@ -48,7 +48,7 @@ echo "────────────────────────�
 # ───────────────────── 4) launch SimCLR pre-training  ─────────────────────
 cd "$SLURM_SUBMIT_DIR"          # project root (FOLDER_CINECA)
 
-YAML=configs/ssl/simclr_resnet18_3c.yaml   # YAML with ResNet18 SimCLR options
+YAML=configs_cineca/ssl/simclr_resnet18_3c.yaml   # YAML with ResNet18 SimCLR options
 
 # srun inherits the GPU/CPU allocation granted by Slurm
 srun python simclr_pretraining.py --yaml "$YAML"

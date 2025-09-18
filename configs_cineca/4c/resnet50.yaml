@@ -1,0 +1,33 @@
+_base_: base.yaml
+
+# Data Splitting
+data_splitting:
+  random_seed: 42
+  # num_folds: 7  # Changed from base
+
+# Data Loading
+data_loading:
+  # batch_size: 64  # Custom batch size for DenseNet
+  # num_workers: 4  
+
+model:
+  model_name: "Resnet50"  # Specific model name
+  library: "monai" #because torchvision does not support 4 channels
+  
+# Training
+training:
+  num_epochs: 210
+  early_stopping_patience: 35
+  transfer_learning: false
+  freezed_layerIndex: null
+
+# Optimizer
+optimizer:
+  learning_rate: 2e-4  # Custom learning rate
+  optimizer_name: "AdamW"  # Changed optimizer
+  weight_decay: 1e-4
+  patience: 30
+
+# # Data Augmentation
+# data_augmentation:
+#   use_color_transforms: false

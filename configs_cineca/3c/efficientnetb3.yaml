@@ -1,0 +1,42 @@
+_base_: base.yaml 
+# inherits from base.yaml overwriting all the parameters following this line if they exist
+
+# Data Splitting
+data_splitting:
+  random_seed: 42
+  val_set_size: 0.15
+  test_set_size: 0.1
+  # num_folds: 6  # Changed from base
+
+# Data Loading
+data_loading:
+  batch_size: 16  # Custom batch size for DenseNet
+  num_workers: 4  # Increased workers
+
+model:
+  model_name: "efficientnet_b3"  # Specific model name
+  spatial_dims: 2
+  in_channels: 3
+  out_channels: 2
+  
+# Training
+training:
+  num_epochs: 135
+  early_stopping_patience: 40
+  mixup_alpha: 0  # Added mixup
+  oversample: true
+  undersample: false
+  weighted_loss: false
+  fine_tuning: false
+  transfer_learning: true
+  freezed_layerIndex: null
+
+# Optimizer
+optimizer:
+  learning_rate: 2e-4  # Custom learning rate
+  optimizer_name: "AdamW"  # Changed optimizer
+  weight_decay: 1e-4
+  patience: 20
+
+data_augmentation:
+  use_color_transforms: false

@@ -1,0 +1,61 @@
+# config.yaml
+dataset:
+  class_names: ["MSA", "PD"] #["MSA", "PD"] ##["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
+
+data_splitting:
+  random_seed: 42
+  val_set_size: 0.15
+  test_set_size: 0.10
+  num_folds: 8
+  lr_discovery_folds: 4
+
+data_augmentation:
+  resize_spatial_size: [224,224]  # Tuple becomes list in YAML
+  rand_flip_prob: 0.3
+  rand_flip_spatial_axes: [0, 1]
+  rand_rotate90_prob: 0.3
+  rand_rotate90_max_k: 3
+  rand_gaussian_noise_prob: 0.4
+  rand_gaussian_noise_mean: 0.0
+  rand_gaussian_noise_std: 0.1
+  crop_size: [256, 256]  # New parameter for random cropping
+  use_color_transforms: false
+  use_crop: false
+  crop_percentage: 0.95
+
+data_loading:
+  batch_size: 64
+  num_workers: 4
+
+model:
+  model_name: "base"
+  spatial_dims: 2
+  in_channels: 3
+  out_channels: 2
+  dropout_prob: 0.1
+  library: "torchvision"
+
+training:
+  num_epochs: 250
+  early_stopping_patience: 40
+  mixup_alpha: 0
+  oversample: true
+  undersample: false
+  weighted_loss: false
+  fine_tuning: false
+  transfer_learning: true
+  freezed_layerIndex: null
+  discover_lr: true
+  
+optimizer:
+  learning_rate: 1e-4  # Will be adjusted automatically
+  optimizer_name: "Adam"
+  weight_decay: 2e-5
+
+scheduler:
+  scheduler_name: "ReduceLROnPlateau"
+  factor: 0.5
+  scheduler_patience: 15
+  threshold: 1e-4
+  min_lr: 1e-8
+
