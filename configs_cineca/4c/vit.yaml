@@ -9,7 +9,7 @@ data_splitting:
 # Data Loading
 data_loading:
   batch_size: 32  # ViT can be memory-intensive, start with a smaller batch size
-  # num_workers: 4
+  num_workers: 4
 
 data_augmentation:
   crop_size: [448, 448] # This overrides the crop_size from base.yaml to match img_size

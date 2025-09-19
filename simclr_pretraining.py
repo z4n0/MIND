@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 simclr_pretrain.py ─ Self-supervised SimCLR backbone training for CINECA.
+INSPIRED BY: https://docs.lightly.ai/self-supervised-learning/examples/simclr.html
 
 Run
 ----
@@ -24,7 +25,6 @@ sys.path.insert(0, str(PROJ_ROOT))
 # ───────────────────── project imports
 from configs.ConfigLoader import ConfigLoader
 from classes.ModelManager import ModelManager
-
 # ───────────────────── lightly / lightning
 import pytorch_lightning as pl
 from lightly.data import LightlyDataset
@@ -37,7 +37,6 @@ def parse() -> argparse.Namespace:
     p = argparse.ArgumentParser()
     p.add_argument("--yaml", required=True, help="SimCLR YAML path")
     return p.parse_args()
-
 
 # ───────────────────── LightningModule
 class SimCLRModule(pl.LightningModule):
@@ -146,7 +145,6 @@ def reproducibility(seed: int = 42) -> None:
     set_determinism(seed)
     cudnn.deterministic, cudnn.benchmark = True, False
 
-
 # ───────────────────── main
 def main() -> None:
     args = parse()
@@ -187,7 +185,7 @@ def main() -> None:
         pretrained_weights=None,
     )
     backbone.input_shape = (
-        cfg.model["in_channels"],
+        cfg.get_in_channels(),
         *cfg.data_augmentation["resize_spatial_size"],
     )
     backbone = backbone.to(device)
