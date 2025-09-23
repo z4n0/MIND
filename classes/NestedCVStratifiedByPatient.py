@@ -22,6 +22,7 @@ from utils.train_functions import train_epoch, val_epoch, freeze_layers_up_to, t
 from utils.transformations_functions import get_transforms, compute_dataset_mean_std
 from configs.ConfigLoader import ConfigLoader
 from pathlib import Path # Added for Path operations
+from optuna.exceptions import TrialPruned
 
 class NestedCVStratifiedByPatient:
     """
@@ -564,23 +565,37 @@ class NestedCVStratifiedByPatient:
             inner_num_epochs = self.cfg.training.get("num_inner_epochs_hyp", 3) # Get from cfg
             best_inner_loss = float("inf")
 
-            for _ in range(inner_num_epochs):
+            for epoch in range(inner_num_epochs):
                 # from utils.training_utils import train_epoch, val_epoch
                 train_loss_e, _ = self.train_fn(model_inner, train_loader_inner, optimizer_inner, loss_function_inner, device_inner)
-                val_loss_e, _, _, _, _, _, _, _ = self.val_fn(model_inner, val_loader_inner, loss_function_inner, device_inner)
+                val_loss_e, *_ = self.val_fn(model_inner, val_loader_inner, loss_function_inner, device_inner)
+
+                # update best and report current status
                 if val_loss_e < best_inner_loss:
                     best_inner_loss = val_loss_e
+
+                # enable pruning
+                trial.report(val_loss_e, step=epoch)
+                if trial.should_prune():
+                    raise TrialPruned()
+
             inner_val_losses.append(best_inner_loss)
         return float(np.mean(inner_val_losses))
 
     def _tune_learning_rate(self, X_train_outer, y_train_outer):
         """Run Optuna to select the best LR using inner CV on training patients."""
-        sampler = optuna.samplers.TPESampler(seed=self.cfg.data_splitting["random_seed"])
-        study = optuna.create_study(direction="minimize", sampler=sampler)
+        study = optuna.create_study(
+            direction="minimize",
+            sampler=optuna.samplers.TPESampler(seed=self.cfg.get_random_seed()),
+            # pruner to avoid wasting time on trials that will not improve the best result
+            #  Prunes if a trial’s metric is worse than the median of completed trials at the same step.
+            # n_startup_trials: The number of trials that must be completed before the pruning starts.
+            pruner=optuna.pruners.MedianPruner(n_startup_trials=2)
+        )
         # Use a lambda to pass the extra arguments to objective
         study.optimize(
             lambda trial: self._objective(trial, X_train_outer, y_train_outer),
-            n_trials= 2 # Get from cfg
+            n_trials= 2, # number of lr candidates tested in inner CV
         )
         best_lr = study.best_params["lr"]
         print(f"  Best LR from inner CV = {best_lr:.6f}")
