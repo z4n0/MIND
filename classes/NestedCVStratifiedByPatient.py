@@ -62,6 +62,7 @@ class NestedCVStratifiedByPatient:
         self.pat_labels = pat_labels
         self.unique_pat_ids = unique_pat_ids
         self.pretrained_weights = pretrained_weights
+        self.best_lr = None
         self.class_names = class_names
         self.model_factory = model_factory # e.g., a function: def create_model(lr): ...
         self.model_manager = model_manager # e.g., an object with setup_model method
@@ -121,6 +122,11 @@ class NestedCVStratifiedByPatient:
         self.fold_results: list[dict] = []
         self._setup_directories()
     
+    def get_best_lr(self):
+        return self.best_lr
+    
+    def set_best_lr(self, best_lr):
+        self.best_lr = best_lr
     
     def _setup_directories(self):
         """Create output subdirectories for metrics and plots for this run.
@@ -403,96 +409,93 @@ class NestedCVStratifiedByPatient:
     # Aggiungi questo metodo all'interno della tua classe NestedCVStratifiedByPatient
 
     def find_best_lr_grid_search(self,
-                            lr_candidates: list[float] = [1e-5, 5e-5, 1e-4, 5e-4, 1e-3],
-                            num_epochs_per_lr: int = 10,
-                            val_split_size: float = 0.20):
+                           lr_candidates: list[float] = [1e-5, 5e-5, 1e-4, 5e-4, 1e-3],
+                           num_epochs_per_lr: int = 10,
+                           n_splits_lr: int = 3): # New: Number of splits for mini-CV
         """
-        Esegue una Grid Search per il learning rate su un singolo split stratificato per paziente.
-        Questo metodo viene eseguito UNA VOLTA prima della cross-validation principale.
+        Performs a more robust Grid Search for the learning rate using a mini cross-validation.
+        This method is executed ONCE before the main cross-validation.
 
         Args:
-            lr_candidates (list[float]): Lista di learning rate da testare.
-            num_epochs_per_lr (int): Numero di epoche per cui addestrare il modello per ogni LR.
-            val_split_size (float): La frazione di pazienti da usare per il set di validazione.
+            lr_candidates (list[float]): List of learning rates to test.
+            num_epochs_per_lr (int): Number of epochs to train for each LR on each split.
+            n_splits_lr (int): Number of splits to use for the internal cross-validation.
 
         Returns:
-            float: Il learning rate che ha ottenuto la loss di validazione più bassa.
+            float: The learning rate with the best average validation loss across all splits.
         """
-        print(f"---  Inizio Grid Search per il Learning Rate su split {1-val_split_size:.0%}/{val_split_size:.0%} ---")
+        print(f"--- Starting Robust Grid Search for Learning Rate ---")
         print(f"LR candidates: {lr_candidates}")
+        print(f"Internal CV splits: {n_splits_lr}, Epochs per LR: {num_epochs_per_lr}")
+        
+        lr_performance = {lr: [] for lr in lr_candidates}
 
-        # 1. Suddividi i PAZIENTI in un set di training e uno di validazione (stratificato)
-        train_pats, val_pats, _, _ = train_test_split(
-            self.unique_pat_ids,
-            self.pat_labels,
-            test_size=val_split_size,
-            stratify=self.pat_labels,
-            random_state=self.random_seed
-        )
+        # Improvement 1: Mini cross-validation for the grid search
+        skf = StratifiedKFold(n_splits=n_splits_lr, shuffle=True, random_state=self.random_seed)
 
-        # 2. Ottieni i percorsi delle immagini corrispondenti
-        train_mask = self.df["patient_id"].isin(train_pats)
-        val_mask = self.df["patient_id"].isin(val_pats)
+        # Improvement 2: Consistent model initialization
+        # Initialize the model once to get its starting weights
+        initial_model, device = self._get_model_and_device()
+        initial_state_dict = initial_model.state_dict()
+        del initial_model # Free up memory
 
-        X_train = self.df.loc[train_mask, "image_path"].values
-        y_train = self.df.loc[train_mask, "label"].values
-        X_val = self.df.loc[val_mask, "image_path"].values
-        y_val = self.df.loc[val_mask, "label"].values
+        for fold_idx, (train_pat_idx, val_pat_idx) in enumerate(skf.split(self.unique_pat_ids, self.pat_labels)):
+            print(f"\n--- LR Search - Split {fold_idx + 1}/{n_splits_lr} ---")
+            train_pats = self.unique_pat_ids[train_pat_idx]
+            val_pats = self.unique_pat_ids[val_pat_idx]
 
-        print(f"Split per ricerca LR: {len(train_pats)} pazienti in train, {len(val_pats)} in validazione.")
-        print(f"Immagini: {len(X_train)} in train, {len(X_val)} in validazione.")
+            # Get image paths for this split
+            train_mask = self.df["patient_id"].isin(train_pats)
+            val_mask = self.df["patient_id"].isin(val_pats)
+            X_train, y_train = self.df.loc[train_mask, "image_path"].values, self.df.loc[train_mask, "label"].values
+            X_val, y_val = self.df.loc[val_mask, "image_path"].values, self.df.loc[val_mask, "label"].values
 
-        # Applica over/undersampling se configurato
-        if self.oversample:
-            X_train_bal, y_train_bal = oversample_minority(X_train, y_train, self.random_seed)
-        elif self.undersample:
-            X_train_bal, y_train_bal = undersample_majority(X_train, y_train, self.random_seed)
-        else:
-            X_train_bal, y_train_bal = X_train, y_train
+            # Handle balancing (oversampling/undersampling)
+            if self.oversample:
+                X_train_bal, y_train_bal = oversample_minority(X_train, y_train, self.random_seed)
+            elif self.undersample:
+                X_train_bal, y_train_bal = undersample_majority(X_train, y_train, self.random_seed)
+            else:
+                X_train_bal, y_train_bal = X_train, y_train
 
-        # Usa le trasformazioni definite per la classe (o quelle standard se non definite)
-        # NOTA: Qui usiamo le trasformazioni già presenti nell'oggetto, assumendo che siano state create.
-        # Se le trasformazioni dipendono dal fold (es. per normalizzazione), devi crearle qui.
-        # Per semplicità, assumiamo che le trasformazioni base siano sufficienti per la ricerca LR.
-        if self.train_transforms is None or self.val_transforms is None:
-            print("Warning: Transforms not set. Generating default transforms for LR search.")
-            self.current_fold_train_transforms, self.current_fold_val_transforms, _ = get_transforms(self.cfg)
-        else:
-            self.current_fold_train_transforms = self.train_transforms
-            self.current_fold_val_transforms = self.val_transforms
+            # Create DataLoaders
+            train_loader = make_loader(X_train_bal, y_train_bal, self.train_transforms or get_transforms(self.cfg)[0], self.cfg, shuffle=True)
+            val_loader = make_loader(X_val, y_val, self.val_transforms or get_transforms(self.cfg)[1], self.cfg, shuffle=False)
 
-        train_loader = make_loader(X_train_bal, y_train_bal, self.current_fold_train_transforms, self.cfg, shuffle=True)
-        val_loader = make_loader(X_val, y_val, self.current_fold_val_transforms, self.cfg, shuffle=False)
+            # Iterate through each learning rate for this split
+            for lr in lr_candidates:
+                print(f"  Testing LR: {lr:.6f}")
+                # Re-create the model and load the same initial weights
+                model, device = self._get_model_and_device()
+                model.load_state_dict(initial_state_dict)
 
-        lr_performance = {}
+                loss_function = self._get_loss_function(y_train_bal)
+                optimizer = self._get_optimizer(model, lr)
+                
+                epoch_val_losses = []
+                for epoch in range(num_epochs_per_lr):
+                    self.train_fn(model, train_loader, optimizer, loss_function, device)
+                    val_loss, _, _, _, _, _, _, _ = self.val_fn(model, val_loader, loss_function, device)
+                    epoch_val_losses.append(val_loss)
 
-        # 3. Itera su ogni learning rate candidato
-        for lr in lr_candidates:
-            print(f"\n--- Testando LR: {lr:.6f} ---")
-            model, device = self._get_model_and_device(learning_rate_for_factory=lr)
-            loss_function = self._get_loss_function(y_train_bal)
-            optimizer = self._get_optimizer(model, lr)
+                # Improvement 3: Evaluate on average of last few epochs
+                # Use last 3 epochs, or all if fewer than 3 were run
+                num_epochs_to_average = min(3, num_epochs_per_lr)
+                avg_last_val_loss = np.mean(epoch_val_losses[-num_epochs_to_average:])
+                lr_performance[lr].append(avg_last_val_loss)
+                print(f"    Avg Val Loss (last {num_epochs_to_average} epochs): {avg_last_val_loss:.4f}")
 
-            best_val_loss = float('inf')
+        # Calculate final average performance across all splits
+        avg_lr_performance = {lr: np.mean(losses) for lr, losses in lr_performance.items()}
+        
+        # Select the best LR based on the overall average
+        best_lr = min(avg_lr_performance, key=avg_lr_performance.get)
 
-            # 4. Addestra per un numero fisso di epoche
-            for epoch in range(num_epochs_per_lr):
-                train_loss, train_acc = self.train_fn(model, train_loader, optimizer, loss_function, device)
-                val_loss, val_acc, _, _, _, val_bal_acc, _, _ = self.val_fn(model, val_loader, loss_function, device)
-
-                print(f"  Epoch {epoch+1}/{num_epochs_per_lr} | Tr Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Bal Acc: {val_bal_acc:.4f}")
-
-                if val_loss < best_val_loss:
-                    best_val_loss = val_loss
-            
-            lr_performance[lr] = best_val_loss
-            print(f"--- Risultato per LR {lr:.6f}: Miglior Validation Loss = {best_val_loss:.4f} ---")
-
-        # 5. Scegli il miglior LR
-        best_lr = min(lr_performance, key=lr_performance.get) # type: ignore
-        print(f"\n--- Grid Search Conclusa ---")
-        print(f"Performance (LR: Val Loss): {lr_performance}")
-        print(f"Miglior Learning Rate trovato: {best_lr:.6f}")
+        print(f"\n--- Grid Search Concluded ---")
+        print("Average Validation Loss per LR:")
+        for lr, avg_loss in avg_lr_performance.items():
+            print(f"  LR: {lr:.6f} -> Avg Loss: {avg_loss:.4f}")
+        print(f"\nBest Learning Rate found: {best_lr:.6f}")
         
         return best_lr
     
@@ -690,8 +693,8 @@ class NestedCVStratifiedByPatient:
         return final_test_loss, final_test_acc, final_test_prec, final_test_recall, final_test_f1, final_test_balanced_acc, test_auc, test_mcc, patient_metrics
         """
         model, device = self._get_model_and_device() # Get a fresh model instance
-        model.load_state_dict(torch.load(str(model_path), map_location=device))
-        model.eval()
+        model.load_state_dict(torch.load(str(model_path), map_location=device)) # Load the best model for the fold
+        model.eval() # Set the model to evaluation mode
 
         test_loader = make_loader(X_test_outer, y_test_outer, self.current_fold_val_transforms, self.cfg, shuffle=False)
 
@@ -719,6 +722,7 @@ class NestedCVStratifiedByPatient:
         fig_learning_curves = plot_learning_curves(
             self.per_fold_metrics['train_loss'][fold_idx], self.per_fold_metrics['val_loss'][fold_idx],
             self.per_fold_metrics['train_accuracy'][fold_idx], self.per_fold_metrics['val_accuracy'][fold_idx],
+            ignore_first_epoch_loss=True
         )
         
         lc_path = os.path.join(self.learning_dir, f"learning_curves_fold_{fold_idx}.png")
@@ -817,8 +821,22 @@ class NestedCVStratifiedByPatient:
             best_lr_for_all_folds = None
 
             if lr_discovery_method == 'grid_search':
+                lr_map = {
+                    'resnet50': [5e-5, 1e-4, 3e-4, 5e-4],
+                    'resnet101': [1e-5, 5e-5, 1e-4, 2e-4],
+                    'densenet121': [5e-5, 1e-4, 3e-4, 5e-4],
+                    'densenet169': [1e-5, 5e-5, 1e-4, 2e-4]
+                }
+                
+                current_model_name = self.cfg.get_model_name().lower() 
+
+                # 3. Select the appropriate LR list, with a fallback to a default
+                default_lrs = [1e-5, 5e-5, 1e-4, 5e-4, 1e-3]
+                lr_candidates_for_this_model = lr_map.get(current_model_name, default_lrs)
+                print(f"Using LR candidates for '{current_model_name}': {lr_candidates_for_this_model}")
+
                 # Chiama la nuova funzione UNA VOLTA prima di iniziare la CV
-                best_lr_for_all_folds = self.find_best_lr_grid_search()
+                best_lr_for_all_folds = self.find_best_lr_grid_search(lr_candidates=lr_candidates_for_this_model)
             elif lr_discovery_method == 'fixed':
                 # Usa un LR manuale per tutti i fold
                 best_lr_for_all_folds = self.cfg.get_manual_lr()
@@ -833,6 +851,9 @@ class NestedCVStratifiedByPatient:
                 print(f"Utilizzando il Learning Rate pre-determinato per il Fold {fold_display_idx}: {best_lr:.6f}")
 
             # 2. Train Final Model for the Fold
+            self.set_best_lr(best_lr)
+            self.cfg.set_learning_rate(best_lr)
+            # self.cfg.set_learning_rate(best_lr)
             print(f"--- Starting Final Model Training for Fold {fold_display_idx} with LR={best_lr:.6f} ---")
             best_model_path, loss_func_for_eval = self._train_model_with_early_stopping(fold_idx_actual, X_train_outer, y_train_outer, best_lr)
             

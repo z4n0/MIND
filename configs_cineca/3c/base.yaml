@@ -1,5 +1,5 @@
 dataset:
-  class_names: ["MSA", "PD"] #["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
+  class_names: ["MSA-P", "PD"] #["MSA-P", "PD"] #["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
 
 # config.yaml
 data_splitting:
@@ -20,7 +20,7 @@ data_augmentation:
   rand_gaussian_noise_std: 0.1
   crop_size: [256, 256]  # New parameter for random cropping
   use_color_transforms: true
-  intensity_augmentation_preset: "medium"  # Options: "none", "light", "medium", "heavy"
+  intensity_augmentation_preset: "light"  # Options: "none", "light", "medium", "heavy"
   use_crop: false
   crop_percentage: 0.95
 
@@ -34,20 +34,22 @@ model:
   in_channels: 3
   out_channels: 2
   dropout_prob: 0.1
-  patch_size: [32, 32]  # New parameter
+  patch_size: [16, 16]  # New parameter
   library: "torchvision"
   
 training:
   num_epochs: 50
-  early_stopping_patience: 17
-  mixup_alpha: 0
+  early_stopping_patience: 2
+  mixup_alpha: 0.2
   oversample: true
   undersample: false
   weighted_loss: false
   fine_tuning: false
   transfer_learning: false
   freezed_layerIndex: null  # null in YAML = None in Python
-  discover_lr: True
+  discover_lr: false # this become useless 
+  lr_discovery_method: 'grid_search'  # Opzioni: '  grid_search'--> do 80/20 split and then grid search over 5 candidates , 'nested': do nested hyperparameter tuning with optuna, 'fixed': set a fixed learning rate
+  manual_lr:  1e-4  # Usato se il metodo è 'fixed'
 
 optimizer:
   learning_rate: 1e-4  # Will be adjusted automatically
@@ -60,5 +62,3 @@ scheduler:
   scheduler_patience: 9
   threshold: 1e-4
   min_lr: 1e-8
-
-    

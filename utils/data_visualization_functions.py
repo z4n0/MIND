@@ -485,7 +485,7 @@ def visualize_dict_image(data_dict, step_name="", cmap="gray"):
     plt.show()
 
 # Add learning curves visualization
-def plot_learning_curves(train_losses, val_losses, train_accuracies, val_accuracies):
+def plot_learning_curves(train_losses, val_losses, train_accuracies, val_accuracies, ignore_first_epoch_loss=False):
     """ 
     Plots learning curves for training and validation losses and accuracies.
     NOTE it could be that train/val_accuracies are balanced accuracy not accuracy
@@ -493,6 +493,9 @@ def plot_learning_curves(train_losses, val_losses, train_accuracies, val_accurac
         train_losses (list): Training loss values
         val_losses (list): Validation loss values
         train_accuracies (list): Training accuracy values
+        val_accuracies (list): Validation accuracy values
+        ignore_first_epoch_loss (bool): If True, the y-axis for the loss plot is scaled
+                                        based on the losses from the second epoch onwards.
     """
     
     if any(loss is None for loss in [train_losses, val_losses]):
@@ -513,6 +516,15 @@ def plot_learning_curves(train_losses, val_losses, train_accuracies, val_accurac
     ax1.set_ylabel('Loss')
     ax1.legend()
     ax1.grid(True)
+
+    # to solve the issue of the first epoch loss being much higher than the second epoch loss
+    # making the graph visualization not clear since it have a much higher scale than needed
+    # with this we use the max loss from the second epoch onwards to set the y-limit
+    if ignore_first_epoch_loss and len(val_losses) > 1 and len(train_losses) > 1:
+        # Find the max loss from the second epoch onwards
+        max_loss_after_epoch1 = max(max(train_losses[1:]), max(val_losses[1:]))
+        # Set the y-limit to be slightly above this max value, with a minimum of 0
+        ax1.set_ylim(0, max_loss_after_epoch1 * 1.1)
 
     # Accuracy curves
     ax2.plot(epochs, train_accuracies, label='Train Acc')

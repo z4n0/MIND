@@ -42,7 +42,7 @@ class ConfigLoader:
     pretrained_weights: Optional[str] = None
     crop_size: Optional[List[int]] = None
     use_color_transforms: Optional[bool] = None
-    discover_lr: Optional[bool] = None
+    # discover_lr: Optional[bool] = None
     lr_discovery_folds: Optional[int] = None
     mixup_alpha: Optional[float] = None
     oversample: Optional[bool] = None
@@ -253,13 +253,13 @@ class ConfigLoader:
         print(f"intensity_augmentation_preset is {self.data_augmentation['intensity_augmentation_preset']}")
         return self.data_augmentation["intensity_augmentation_preset"]
 
-    def get_discover_lr(self) -> Optional[bool]:
-        """Get whether to use learning rate finder"""
-        if self.training is None:
-            raise ValueError("Training configuration is not set")
-        discover_lr = self.training.get("discover_lr", False)  # Default to False if not present
-        print(f"discover_lr is {discover_lr}")
-        return discover_lr
+    # def get_discover_lr(self) -> Optional[bool]:
+    #     """Get whether to use learning rate finder"""
+    #     if self.training is None:
+    #         raise ValueError("Training configuration is not set")
+    #     discover_lr = self.training.get("discover_lr", False)  # Default to False if not present
+    #     print(f"discover_lr is {discover_lr}")
+    #     return discover_lr
     
     def get_manual_lr(self) -> Optional[float]:
         """Get the manually set learning rate"""
@@ -433,6 +433,21 @@ class ConfigLoader:
             data_loading: Data loading configuration dictionary
         """
         self.data_loading = data_loading
+        
+    def set_learning_rate(self, learning_rate: float) -> None:
+        """Set the learning rate for the optimizer"""
+        if self.optimizer is None:
+            self.optimizer = {}
+        self.optimizer["learning_rate"] = learning_rate
+    
+    def get_learning_rate(self) -> float:
+        """Get the learning rate for the optimizer"""
+        if self.optimizer is None:
+            raise ValueError("Optimizer configuration is not set")
+        lr = self.optimizer["learning_rate"]
+        if lr is None:
+            raise ValueError("Learning rate is not set in optimizer configuration")
+        return float(lr)
     
     def get_batch_size(self) -> int:
         """Get the batch size for data loading"""

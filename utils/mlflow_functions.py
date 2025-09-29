@@ -498,7 +498,7 @@ def log_run_to_mlflow(
                 "train_counts": train_counts,
                 "val_counts": val_counts,
                 "test_counts": test_counts,
-                "color_transforms": cfg.data_augmentation["use_color_transforms"],
+                "color_transforms": cfg.get_use_color_transforms(),
                 "freezed_layer_index": cfg.get_freezed_layer_index(),
                 "use_lr_discovery": False,
                 "lr_discovery_folds": cfg.get_lr_discovery_folds(),
@@ -509,6 +509,7 @@ def log_run_to_mlflow(
                 # "use_color_transforms": cfg.data_augmentation["use_color_transforms"],
                 "intensity_augmentation_preset": cfg.get_intensity_augmentation_preset(),
                 # Add date and time parameters
+                "best_lr": cfg.get_learning_rate(),
                 "creation_date": now.strftime("%m-%d"),
                 "creation_time": now.strftime("%H:%M:%S"),
                 # "creation_datetime": now.strftime("%Y-%m-%d %H:%M:%S"),

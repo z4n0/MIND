@@ -25,7 +25,7 @@ data_augmentation:
   crop_percentage: 0.95
 
 data_loading:
-  batch_size: 64
+  batch_size: 32
   num_workers: 4
 
 model:
@@ -40,14 +40,16 @@ model:
 training:
   num_epochs: 50
   early_stopping_patience: 2
-  mixup_alpha: 0
+  mixup_alpha: 0.2
   oversample: true
   undersample: false
   weighted_loss: false
   fine_tuning: false
   transfer_learning: false
   freezed_layerIndex: null  # null in YAML = None in Python
-  discover_lr: false
+  discover_lr: false # this become useless, everything is controlled by lr_discovery_method !TODO remove it
+  lr_discovery_method: 'fixed'  # Opzioni: '  grid_search'--> do 80/20 split and then grid search over 5 candidates , 'nested': do nested hyperparameter tuning with optuna, 'fixed': set a fixed learning rate
+  manual_lr:  1e-4  # Usato se il metodo è 'fixed'
 
 optimizer:
   learning_rate: 1e-4  # Will be adjusted automatically
