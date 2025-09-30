@@ -44,9 +44,9 @@ training:
   oversample: true
   undersample: false
   weighted_loss: false
-  # fine_tuning: false
   transfer_learning: false
   freezed_layerIndex: null  # null in YAML = None in Python
+  lr_discovery_method: 'grid_search'  # Opzioni: '  grid_search'--> do 80/20 split and then grid search over 5 candidates , 'nested': do nested hyperparameter tuning with optuna, 'fixed': set a fixed learning rate
   # discover_lr: True
 
 optimizer:

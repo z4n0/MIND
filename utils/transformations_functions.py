@@ -444,6 +444,9 @@ def get_transforms(cfg, color_transforms=False, fold_specific_stats=None):
     is_pretrained = cfg.get_transfer_learning()
     print(f"Using pretrained model: {is_pretrained}")
     
+    if cfg.get_intensity_augmentation_preset() not in ["none", "off", "no", "0"]:
+        color_transforms = True
+    
     # Initialize transform lists
     train_transforms_list = []
     val_transforms_list = []
@@ -457,7 +460,7 @@ def get_transforms(cfg, color_transforms=False, fold_specific_stats=None):
         train_transforms_list, val_transforms_list = get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats)
     elif supported_by_torchvision and is_pretrained: # If you are using a pretrained model(even if it's micronet), use the torchvision transforms
         print("the model is supported by torchvision and is pretrained")
-        train_transforms_list, val_transforms_list = get_pretrained_model_transforms_list_without_crop(cfg, color_transforms)
+        train_transforms_list, val_transforms_list = get_pretrained_model_transforms_list_without_crop(cfg)
     else: # Fallback or unsupported pretrained model
         raise ValueError(f"Model {cfg.get_model_name()} is marked pretrained but not supported by torchvision or has no specific transform pipeline defined. Falling back to basic transforms without specific normalization.")
     
@@ -505,10 +508,9 @@ def get_custom_transforms_lists(cfg: ConfigLoader, color_transforms: bool, fold_
     spatial_transforms = _get_spatial_augmentations(cfg)
     train_transforms_list.extend(spatial_transforms)
 
-    # Aggiungi le aumentazioni di intensità
-    if color_transforms:
-        intensity_transforms = _get_intensity_augmentations(cfg)
-        train_transforms_list.extend(intensity_transforms)
+    # Aggiungi le aumentazioni di intensità saranno decise da come è il preset
+    intensity_transforms = _get_intensity_augmentations(cfg)
+    train_transforms_list.extend(intensity_transforms)
         
     # Applica la normalizzazione
     if fold_specific_stats:
@@ -596,9 +598,10 @@ def get_custom_transforms_lists(cfg: ConfigLoader, color_transforms: bool, fold_
 #     return train_transforms_list, val_transforms_list
 
 
-def get_pretrained_model_transforms_list_without_crop(cfg, color_transforms:bool)->Tuple[List[MapTransform], List[MapTransform]]:
+def get_pretrained_model_transforms_list_without_crop(cfg:ConfigLoader)->Tuple[List[MapTransform], List[MapTransform]]:
     """
     Get the transforms for pretrained models without crop.
+    
     """
     from monai.transforms import Resized, ScaleIntensityd, NormalizeIntensityd
 
@@ -607,11 +610,13 @@ def get_pretrained_model_transforms_list_without_crop(cfg, color_transforms:bool
     tv_t = imagenet_weights.transforms()
     mean = torch.tensor(tv_t.mean)
     std  = torch.tensor(tv_t.std)
+    
+    use_color_transforms = cfg.get_intensity_augmentation_preset() not in ["none", "off", "no", "0"]
 
     # Force pre-normalization to include resize and scale (no center crop)
     train_transforms_list = new_get_preNormalization_transforms_list(cfg)
     train_transforms_list.extend(_get_spatial_augmentations(cfg))
-    if color_transforms:
+    if use_color_transforms:
         train_transforms_list.extend(_get_intensity_augmentations(cfg))
     # Apply ImageNet normalization on [0,1]-scaled tensor
     train_transforms_list.append(

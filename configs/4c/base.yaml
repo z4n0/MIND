@@ -48,8 +48,9 @@ training:
   transfer_learning: false
   freezed_layerIndex: null  # null in YAML = None in Python
   # discover_lr: false # this become useless 
-  lr_discovery_method: 'grid_search'  # Opzioni: '  grid_search'--> do 80/20 split and then grid search over 5 candidates , 'nested': do nested hyperparameter tuning with optuna, 'fixed': set a fixed learning rate
-  manual_lr:  1e-4  # Usato se il metodo è 'fixed'
+  lr_discovery_method: 'nested' 
+   # Opzioni: '  grid_search'--> do 80/20 split and then grid search over 5 candidates , 'nested': do nested hyperparameter tuning with optuna, 'fixed': set a fixed lre
+   # NOTE grid search introduce optimistic bias since it uses data that will be tested as data on which to tune the lr
 
 optimizer:
   learning_rate: 1e-4  # Will be adjusted automatically
