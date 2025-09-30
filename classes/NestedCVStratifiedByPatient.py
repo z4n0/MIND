@@ -473,8 +473,17 @@ class NestedCVStratifiedByPatient:
                 X_train_bal, y_train_bal = X_train, y_train
 
             # Create DataLoaders
-            train_loader = make_loader(X_train_bal, y_train_bal, self.train_transforms or get_transforms(self.cfg)[0], self.cfg, shuffle=True)
-            val_loader = make_loader(X_val, y_val, self.val_transforms or get_transforms(self.cfg)[1], self.cfg, shuffle=False)
+            train_stats = None
+            val_stats = None
+            if self.train_transforms is None:
+                train_stats = compute_dataset_mean_std(X_train_bal, self.cfg, is_supported_by_torchvision=self.is_supported_by_torchvision)
+            if self.val_transforms is None:
+                val_stats = compute_dataset_mean_std(X_train_bal, self.cfg, is_supported_by_torchvision=self.is_supported_by_torchvision)
+
+            train_transforms = self.train_transforms or get_transforms(self.cfg, fold_specific_stats=train_stats)[0]
+            val_transforms = self.val_transforms or get_transforms(self.cfg, fold_specific_stats=val_stats)[1]
+            train_loader = make_loader(X_train_bal, y_train_bal, train_transforms, self.cfg, shuffle=True)
+            val_loader = make_loader(X_val, y_val, val_transforms, self.cfg, shuffle=False)
 
             # Iterate through each learning rate for this split
             for lr in lr_candidates:

@@ -500,7 +500,7 @@ def log_run_to_mlflow(
                 "test_counts": test_counts,
                 "color_transforms": cfg.get_use_color_transforms(),
                 "freezed_layer_index": cfg.get_freezed_layer_index(),
-                "use_lr_discovery": False,
+                # "use_lr_discovery": False,
                 "lr_discovery_folds": cfg.get_lr_discovery_folds(),
                 "lr_discovery_method": cfg.get_lr_discovery_method(),
                 "mixup_alpha": cfg.get_mixup_alpha(),

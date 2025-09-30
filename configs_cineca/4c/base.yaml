@@ -44,16 +44,14 @@ training:
   oversample: true
   undersample: false
   weighted_loss: false
-  # fine_tuning: false
   transfer_learning: false
   freezed_layerIndex: null  # null in YAML = None in Python
-  discover_lr: false # this become useless, everything is controlled by lr_discovery_method !TODO remove it
-  lr_discovery_method: 'fixed'  # Opzioni: '  grid_search'--> do 80/20 split and then grid search over 5 candidates , 'nested': do nested hyperparameter tuning with optuna, 'fixed': set a fixed learning rate
+  lr_discovery_method: 'grid_search'  # Opzioni: '  grid_search'--> do 80/20 split and then grid search over 5 candidates , 'nested': do nested hyperparameter tuning with optuna, 'fixed': set a fixed learning rate
   manual_lr:  1e-4  # Usato se il metodo è 'fixed'
 
 optimizer:
   learning_rate: 1e-4  # Will be adjusted automatically
-  optimizer_name: "Adam"
+  optimizer_name: "AdamW" #"AdamW" , "SGD"
   weight_decay: 2e-5
 
 scheduler:

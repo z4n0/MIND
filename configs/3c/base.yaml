@@ -47,7 +47,7 @@ training:
   # fine_tuning: false
   transfer_learning: false
   freezed_layerIndex: null  # null in YAML = None in Python
-  discover_lr: True
+  # discover_lr: True
 
 optimizer:
   learning_rate: 1e-4  # Will be adjusted automatically
