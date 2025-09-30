@@ -44,7 +44,7 @@ training:
   oversample: true
   undersample: false
   weighted_loss: false
-  fine_tuning: false
+  # fine_tuning: false
   transfer_learning: false
   freezed_layerIndex: null  # null in YAML = None in Python
   discover_lr: True

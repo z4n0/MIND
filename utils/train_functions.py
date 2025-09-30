@@ -1100,7 +1100,7 @@ def nested_cv_stratified_by_patient(df, cfg, labels_np, pat_labels, unique_pat_i
                     model_inner = model_factory(candidate_lr).to(device_inner)
                     
                 #model_inner, device_inner = setup_model(cfg)
-                if cfg.training["transfer_learning"] or cfg.training["fine_tuning"]:
+                if cfg.training["transfer_learning"]:
                     freeze_layers_up_to(model_inner, cfg)
 
                 # Weighted loss if needed
@@ -1212,7 +1212,7 @@ def nested_cv_stratified_by_patient(df, cfg, labels_np, pat_labels, unique_pat_i
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             model = model_factory(best_lr).to(device)
         
-        if cfg.training["transfer_learning"] or cfg.training["fine_tuning"]:
+        if cfg.training["transfer_learning"]:
             freeze_layers_up_to(model, cfg)
         
         print_model_summary(model)
@@ -1504,10 +1504,10 @@ def remove_projection_head(encoder: nn.Module) -> nn.Module:
         if hasattr(encoder, attr):
             setattr(encoder, attr, nn.Identity())
             print(f"Removed {attr} from encoder.")
-            return encoder
         else:
             print(f"Encoder does not have attribute '{attr}' to remove.")
-            return encoder
+        
+    return encoder
     # raise ValueError("Encoder does not have a known classifier head to remove.")
     
 def _remove_linear_probe_head(backbone):

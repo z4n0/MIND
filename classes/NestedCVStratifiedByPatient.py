@@ -345,7 +345,7 @@ class NestedCVStratifiedByPatient:
         else:
             raise ValueError("Either model_manager or model_factory must be provided.")
 
-        if self.cfg.training.get("transfer_learning") or self.cfg.training.get("fine_tuning"):
+        if self.cfg.training.get("transfer_learning"):
             freeze_layers_up_to(model, self.cfg)
         
         return model, device

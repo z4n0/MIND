@@ -1,5 +1,5 @@
 dataset:
-  class_names: ["MSA", "PD"] #["MSA-P", "PD"] #["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
+  class_names: ["MSA-P", "PD"] #["MSA-P", "PD"] #["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
 
 # config.yaml
 data_splitting:
@@ -44,7 +44,7 @@ training:
   oversample: true
   undersample: false
   weighted_loss: false
-  fine_tuning: false
+  # fine_tuning: false
   transfer_learning: false
   freezed_layerIndex: null  # null in YAML = None in Python
   discover_lr: false # this become useless, everything is controlled by lr_discovery_method !TODO remove it

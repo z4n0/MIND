@@ -49,7 +49,7 @@ class ConfigLoader:
     undersample: Optional[bool] = None
     weighted_loss: Optional[bool] = None
     transfer_learning: Optional[bool] = None
-    fine_tuning: Optional[bool] = None
+    # fine_tuning: Optional[bool] = None
     freezed_layer_index: Optional[int] = None
     use_crop: Optional[bool] = None
     crop_percentage: Optional[float] = None
@@ -138,9 +138,9 @@ class ConfigLoader:
             print(f"found {self.model['in_channels']} channels in input data and {self.training['transfer_learning']} in transfer learning")
             raise ValueError("Transfer learning is not supported for 4-channel input")
                 
-        self.training["pretrained"] = self.training["transfer_learning"] or self.training["fine_tuning"]
-        if self.training["transfer_learning"] and self.training["fine_tuning"]:
-            raise ValueError("Choose either transfer learning OR fine tuning")
+        self.training["pretrained"] = self.training["transfer_learning"]
+        # if self.training["transfer_learning"] and self.training["fine_tuning"]:
+        #     raise ValueError("Choose either transfer learning OR fine tuning")
         
         
     def get_lr_discovery_method(self) -> Optional[str]:
@@ -606,29 +606,29 @@ class ConfigLoader:
             self.training = {}
         self.training["transfer_learning"] = enabled
         # Update pretrained flag
-        if self.training.get("fine_tuning", False) and enabled:
+        if enabled:
             raise ValueError("Choose either transfer learning OR fine tuning")
-        self.training["pretrained"] = enabled or self.training.get("fine_tuning", False)
+        self.training["pretrained"] = enabled
     
-    def get_fine_tuning(self) -> bool:
-        """Get whether fine tuning is enabled"""
-        if self.training is None:
-            raise ValueError("Training configuration is not set")
-        return self.training.get("fine_tuning", False)
+    # def get_fine_tuning(self) -> bool:
+    #     """Get whether fine tuning is enabled"""
+    #     if self.training is None:
+    #         raise ValueError("Training configuration is not set")
+    #     return self.training.get("fine_tuning", False)
     
-    def set_fine_tuning(self, enabled: bool) -> None:
-        """Set whether fine tuning is enabled
+    # def set_fine_tuning(self, enabled: bool) -> None:
+    #     """Set whether fine tuning is enabled
         
-        Args:
-            enabled: Boolean flag to enable/disable fine tuning
-        """
-        if self.training is None:
-            self.training = {}
-        self.training["fine_tuning"] = enabled
-        # Update pretrained flag
-        if self.training.get("transfer_learning", False) and enabled:
-            raise ValueError("Choose either transfer learning OR fine tuning")
-        self.training["pretrained"] = enabled or self.training.get("transfer_learning", False)
+    #     Args:
+    #         enabled: Boolean flag to enable/disable fine tuning
+    #     """
+    #     if self.training is None:
+    #         self.training = {}
+    #     self.training["fine_tuning"] = enabled
+    #     # Update pretrained flag
+    #     if self.training.get("transfer_learning", False) and enabled:
+    #         raise ValueError("Choose either transfer learning OR fine tuning")
+    #     self.training["pretrained"] = enabled or self.training.get("transfer_learning", False)
     
     def get_pretrained(self) -> bool:
         """Get whether to use pretrained weights"""

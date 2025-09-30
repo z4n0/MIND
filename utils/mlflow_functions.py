@@ -488,7 +488,7 @@ def log_run_to_mlflow(
                 "num_channels": cfg.get_in_channels(),
                 "batch_size": cfg.get_batch_size(),
                 "transfer_learning": cfg.get_transfer_learning(),
-                "fine_tuning": cfg.get_fine_tuning(),
+                # "fine_tuning": cfg.get_fine_tuning(),
                 "pretrained": pretrained_weights,
                 "weight_decay": cfg.get_weight_decay(),
                 "dropout_rate": cfg.get_dropout_prob(),
