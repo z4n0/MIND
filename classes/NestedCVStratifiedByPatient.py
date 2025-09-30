@@ -16,7 +16,6 @@ from utils.test_functions import evaluate_model
 # undersample_majority, freeze_layers_up_to, print_model_summary are available
 # from utils or other modules. For brevity, I won't redefine them here.
 from utils.train_functions import train_epoch, val_epoch, freeze_layers_up_to, train_epoch_mixUp, oversample_minority, undersample_majority, make_loader
-
 # from utils.data_utils import make_loader, oversample_minority, undersample_majority
 # from utils.model_utils import print_model_summary
 from utils.transformations_functions import get_transforms, compute_dataset_mean_std
@@ -382,11 +381,26 @@ class NestedCVStratifiedByPatient:
     def _get_optimizer(self, model, learning_rate):
         """Build the optimizer (Adam) over trainable parameters."""
         trainable_params = [p for p in model.parameters() if p.requires_grad]
-        return optim.Adam(
-            trainable_params,
-            lr=learning_rate,
-            weight_decay=float(self.cfg.optimizer["weight_decay"])
-        )
+        if self.cfg.get_optimizer_name() == "Adam":
+            return optim.Adam(
+                trainable_params,
+                lr=learning_rate,
+                weight_decay=float(self.cfg.optimizer["weight_decay"])
+            )
+        elif self.cfg.get_optimizer_name() == "SGD":
+            return optim.SGD(
+                trainable_params,
+                lr=learning_rate,
+                weight_decay=float(self.cfg.optimizer["weight_decay"])
+            )
+        elif self.cfg.get_optimizer_name() == "AdamW":
+            return optim.AdamW(
+                trainable_params,
+                lr=learning_rate,
+                weight_decay=float(self.cfg.optimizer["weight_decay"])
+            )
+        else:
+            raise ValueError(f"Optimizer {self.cfg.get_optimizer_name()} not supported")
 
     def _get_scheduler(self, optimizer):
         """Return LR scheduler and a flag indicating epoch-stepped scheduling.

@@ -506,6 +506,7 @@ def log_run_to_mlflow(
                 "mixup_alpha": cfg.get_mixup_alpha(),
                 "use_crop": cfg.get_use_crop(),
                 "crop_percentage": cfg.get_crop_percentage(),
+                "optimizer_name": cfg.get_optimizer_name(),
                 # "use_color_transforms": cfg.data_augmentation["use_color_transforms"],
                 "intensity_augmentation_preset": cfg.get_intensity_augmentation_preset(),
                 # Add date and time parameters

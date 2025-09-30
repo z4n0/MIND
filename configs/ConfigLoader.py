@@ -661,6 +661,13 @@ class ConfigLoader:
         if self.training is None:
             self.training = {}
         self.training["freezed_layerIndex"] = index
+        
+    def get_optimizer_name(self) -> str:
+        """Get the optimizer name"""
+        if self.optimizer is None:
+            raise ValueError("Optimizer configuration is not set")
+        return self.optimizer.get("optimizer_name", "Adam")
+    
     
     # Optimizer getters and setters
     def get_optimizer(self) -> Optional[Dict[str, Any]]:
