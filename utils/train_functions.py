@@ -81,6 +81,7 @@ def train_epoch(
     clip_value: float = 1.0, 
     print_batch_stats: bool = False,
     enable_amp: bool = True,   # come prima
+    use_bf16: Optional[bool] = False,
 ):
     """
     Trains the model for one epoch (NO MixUp).
@@ -95,8 +96,12 @@ def train_epoch(
     num_valid_batches = 0
 
     amp_active = enable_amp and (device.type == 'cuda')
-    scaler = GradScaler() if amp_active else None
-
+    # scaler = GradScaler() if amp_active else None   #DEPRECATED
+    # Use new API - GradScaler only needed for float16, not bfloat16
+    scaler = torch.amp.GradScaler('cuda') if (amp_active and not use_bf16) else None
+    # Determine dtype
+    dtype = torch.bfloat16 if use_bf16 else torch.float16
+    # print(f"Training on device: {device}")
     for i, batch in enumerate(loader):
         images_batch = batch["image"].to(device)
         labels_batch = batch["label"].to(device).long()
@@ -113,8 +118,12 @@ def train_epoch(
         optimizer.zero_grad()
 
         # AMP on CUDA only
+        # if amp_active: #DEPRECATED
+        #     with autocast():
+        #         outputs = model(images_batch)
+        #         loss = loss_function(outputs, labels_batch)
         if amp_active:
-            with autocast():
+            with torch.autocast(device_type='cuda', dtype=dtype):
                 outputs = model(images_batch)
                 loss = loss_function(outputs, labels_batch)
         else:
@@ -133,7 +142,7 @@ def train_epoch(
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip_value)
             scaler.step(optimizer)
             scaler.update()
-        else:
+        else: # BFLOAT16 OR NO AMP
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip_value)
             optimizer.step()
@@ -453,7 +462,8 @@ def train_epoch_mixUp(model, loader, optimizer, loss_function, device, mixup_alp
     total = 0
     
     # Initialize gradient scaler for AMP
-    scaler = torch.cuda.amp.GradScaler()
+    # scaler = torch.cuda.amp.GradScaler() #DEPRECATED
+    scaler = torch.amp.GradScaler('cuda')
 
     for batch in loader:
         images_batch = batch["image"].to(device)
@@ -472,15 +482,25 @@ def train_epoch_mixUp(model, loader, optimizer, loss_function, device, mixup_alp
         # Forward pass with AMP
         optimizer.zero_grad()
         
-        with torch.cuda.amp.autocast():
+        # with torch.cuda.amp.autocast(): #DEPRECATED
+        #     outputs = model(images_batch)
+        #     # Mixup loss
+        #     loss = mixup_criterion(loss_function, outputs, labels_a, labels_b, lam)
+        with torch.autocast(device_type='cuda', dtype=torch.float16):
             outputs = model(images_batch)
-            # Mixup loss
             loss = mixup_criterion(loss_function, outputs, labels_a, labels_b, lam)
-
         # Backprop with AMP
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
+        # Backprop with optional scaler
+        if scaler is not None:  # float16
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:  # bfloat16
+            loss.backward()
+            optimizer.step()
+        # scaler.scale(loss).backward()
+        # scaler.step(optimizer)
+        # scaler.update()
         
         epoch_loss += loss.item()
 
