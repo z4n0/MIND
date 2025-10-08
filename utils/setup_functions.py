@@ -1,4 +1,7 @@
 import torch
+import os
+import glob
+import numpy as np
 
 
 def set_environment_flags():
@@ -28,15 +31,14 @@ def set_environment_flags():
     return flags
 
 
-def get_device():
+def get_device()->torch.device:
+    """
+    Returns the available device (GPU if available, otherwise CPU).
+    """
     if torch.cuda.is_available():
         return torch.device('cuda')
     else:
         return torch.device('cpu')
-    
-import os
-import glob
-import numpy as np
 
 def get_tif_image_paths_from_folder(folder_path: str) -> list[str]:
     """

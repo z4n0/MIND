@@ -7,9 +7,7 @@ Run
 ----
 srun ... python simclr_pretrain.py --yaml configs/simclr_d121
 """
-
 from __future__ import annotations
-
 # ───────────────────── std-lib
 import argparse
 import os
@@ -44,7 +42,6 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 # Lightly: keep the SimCLR building blocks
 from lightly.loss import NTXentLoss
 from lightly.models.modules import SimCLRProjectionHead
-
 # ───────────────────── project path
 PROJ_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJ_ROOT))

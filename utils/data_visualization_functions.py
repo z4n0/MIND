@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt 
 from utils.data_extraction_functions import extract_labels_meaning
 import os, re, torch, tifffile, random
+import seaborn as sns
 
 
 def get_image_array(item):
@@ -130,7 +131,6 @@ def visualize_and_compare_pixel_intensity_histograms(
     plt.tight_layout()
     plt.show()
 
-
 def print_class_statistics(class_paths, class_name):
     """
     Print statistics about image types within a class.
@@ -148,7 +148,6 @@ def print_class_statistics(class_paths, class_name):
     print(f"'gh' images: {gh_count} ({(gh_count/total_count)*100:.1f}%)")
     print(f"'vaso' images: {vaso_count} ({(vaso_count/total_count)*100:.1f}%)")
     print("-" * 40)
-
 
 def print_image_statistic(image_paths, image_labels, num_samples, class1_name, class0_name):
     """
@@ -274,7 +273,6 @@ def visualize_tiff(image_path, channel_wise_norm=True, figsize=(10,10)):
             channel = img[..., i]
             print(f"{name}: min={np.min(channel):.2f}, max={np.max(channel):.2f}")
 
-
 # Now do a min-max scale for display, so negative => 0, max => 1
 def min_max_normalization(array, channel_wise=False):
     """
@@ -337,7 +335,6 @@ def min_max_normalization(array, channel_wise=False):
                 normalized[..., c] = (channel - c_min) / rng
     
     return normalized.astype(np.float32)
-
 
 def imageNet_denormalize(img):
     """
@@ -452,9 +449,7 @@ def calculate_tensor_histogram(image_tensor, bins=256, plot=False, density=True)
         plt.show()
 
     return histograms
-
-#calculate_color_histograms_from_paths has been deleted for calculate_tensor_histogram
-    
+   
 def visualize_dict_image(data_dict, step_name="", cmap="gray"):
     """
     Visualizes an image from a MONAI data dictionary AND its RGB channel histograms.
@@ -577,7 +572,6 @@ def visualize_batch_histograms(images, labels, class1_name, class0_name, class2_
     plt.tight_layout()
     plt.show()
 
-
 # --- Normalization function inspired by the reference ---
 def normalize_image(image, per_channel=False):
     """
@@ -633,7 +627,6 @@ def normalize_image(image, per_channel=False):
         return normalized_img
     else: # Not 2D or 3D, return as is (maybe convert to float)
         return image.astype(np.float32, copy=False)
-
 
 def display_images_by_class(image_paths, labels, class_names, ncols=5, normalize=True, overlay_alpha=0.4):
     """
@@ -820,8 +813,6 @@ def display_images_by_class(image_paths, labels, class_names, ncols=5, normalize
         image_list_for_class = paths_by_class[i]
         plot_grid(image_list_for_class, class_title, ncols, normalize, overlay_alpha)
 
-
-
 def print_batch_image_statistics(images, labels, class1_name, class0_name):
     """
     Calculates and prints statistics (min, max, mean, std) for each image
@@ -930,8 +921,6 @@ def generate_cv_results_figure(fold_results, prefix='test'):
     plt.tight_layout()
     return fig
 
-import seaborn as sns
-
 def plot_confusion_matrix(cm, class_names, title='Confusion Matrix', figsize=(8,6)):
     """
     Visualize confusion matrix without immediately displaying it.
@@ -965,7 +954,6 @@ def plot_confusion_matrix(cm, class_names, title='Confusion Matrix', figsize=(8,
     
     # Do not call plt.show() here so the figure remains available
     return fig
-
 
 def show_misclassified_images(misclassified_images, num_images=10, figsize=(20, 20), normalize=True, class_names=None, overlay_alpha_DAPI=0.2):
     """
@@ -1078,43 +1066,4 @@ def show_misclassified_images(misclassified_images, num_images=10, figsize=(20, 
     plt.subplots_adjust(wspace=0.1, hspace=0.2)
     plt.show()
     
-from sklearn.metrics import roc_curve, auc
-
-def plot_roc_curve(y_true, y_pred_proba):
-    """
-    Plot the Receiver Operating Characteristic (ROC) curve for binary classification results.
-    The ROC curve shows the trade-off between the True Positive Rate (TPR) and 
-    False Positive Rate (FPR) at various classification thresholds.
-    Parameters
-    ----------
-    y_true : array-like
-        Ground truth (correct) binary labels.
-    y_pred_proba : array-like
-        Predicted probabilities for the positive class.
-    Returns
-    -------
-    matplotlib.figure.Figure
-        The figure object containing the ROC curve plot.
-    Notes
-    -----
-    The plot includes:
-    - ROC curve in orange
-    - Diagonal dashed line representing random chance
-    - Area Under the Curve (AUC) score in the legend
-    - Grid for better readability
-    """
-    fpr, tpr, _ = roc_curve(y_true, y_pred_proba)
-    roc_auc = auc(fpr, tpr)
-
-    plt.figure(figsize=(8, 6))
-    plt.plot(fpr, tpr, color='darkorange', lw=2,
-             label=f'ROC curve (AUC = {roc_auc:.2f})')
-    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
-    plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title('Receiver Operating Characteristic (ROC)')
-    plt.legend(loc="lower right")
-    plt.grid(True)
-    return plt.gcf()
+    

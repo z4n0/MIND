@@ -1,4 +1,8 @@
 import random, os, numpy as np, torch
+from monai.utils.misc import set_determinism
+import torch.nn as nn
+import hashlib
+from typing import Tuple
 
 def set_global_seed(seed: int = 42, deterministic: bool = True) -> None:
     """Seed python, NumPy and PyTorch (CPU & all GPUs)."""
@@ -7,36 +11,15 @@ def set_global_seed(seed: int = 42, deterministic: bool = True) -> None:
     np.random.seed(seed)
 
     torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)          # for multi-GPU
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)         # for multi-GPU
 
     if deterministic:                         # make CUDA kernels repeatable
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-        torch.use_deterministic_algorithms(True, warn_only=True)
+        # torch.use_deterministic_algorithms(True, warn_only=True) # this was not used, it's probably an overkill, the variations created by non deterministic algorithms are usually very small
+        # algorithms are negligibly different from the deterministic ones, but they are not exactly the same
         
-from monai.utils.misc import set_determinism
-import torch.nn as nn
-
-def set_global_seed(seed: int = 42) -> None:
-    # os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-    set_determinism(seed=seed)
-    
-    random.seed(seed)
-    ## this is probably redundant but whatever
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-    import torch.backends.cudnn as cudnn
-    cudnn.deterministic = True   # forces deterministic convolution algorithms
-    cudnn.benchmark     = False  # turn off data-dependent autotune
-
-
-import hashlib
-from typing import Tuple
-import torch
-from torch import nn
-
 # ───────────────────────────────────────────────────────────────────────────────
 # 1.  Bit-wise equality (strict)
 # ───────────────────────────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ import torch.nn as nn
 from monai.transforms import Compose
 import numpy as np
 from configs.ConfigLoader import ConfigLoader
+import pandas as pd
 
 #!TODO delete this you already have get_tracking_uri
 def get_mlrun_base_folder(gdrive, kaggle,linux):
@@ -206,8 +207,6 @@ def load_mlflow_model_by_name(tracking_uri: str, experiment_name: str, gdrive: b
 #                     mean_value = sum(values) / len(values)
 #                     mlflow.log_metric(mlflow_name, mean_value)
 #                     print(f"Logged {mlflow_name}: {mean_value:.4f}")
-
-import pandas as pd
 
 def log_folds_results_to_csv(fold_results, prefix='val'):
     if not fold_results:

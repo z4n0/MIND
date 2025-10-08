@@ -29,7 +29,6 @@ def threshold_heatmap(heatmap, threshold=0.5, normalize=True):
 
     return heatmap_thresholded
 
-
 def get_overlay_heatmap(image, heatmap, alpha=0.5, cmap="jet"):
     """
     Overlay a heatmap on an image with transparency for zero-valued pixels.
@@ -177,7 +176,6 @@ def generate_and_save_gradcam_batch(
 
     return cam_output_dir
 
-
 def visualize_gradcam_for_single_image(model, test_loader, gradcam_obj, min_max_normalization, threshold=0.5, overlay_alpha_DAPI=0.2, random_seed=None):
     """
     Retrieves a random image from the test_loader, generates GradCAM heatmaps,
@@ -309,7 +307,6 @@ def visualize_gradcam_for_single_image(model, test_loader, gradcam_obj, min_max_
     
     print(f"Thresholded ({threshold}) Heatmap Overlay:")
     get_overlay_heatmap(display_for_overlay, cam_tensor_thresholded, alpha=0.6, cmap="jet")
-
 
 def process_and_save_batch_gradcam_and_Overlay(
     model, 
