@@ -47,6 +47,7 @@ def get_base_directory() -> Path:
 
 def get_tracking_uri() -> str:
     """
+    gets the MLFLOW_TRACKING_URI from env variables.
     Return the MLflow tracking URI (file-store).
     """
     uri = os.getenv("MLFLOW_TRACKING_URI")

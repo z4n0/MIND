@@ -174,7 +174,7 @@ class NestedCVStratifiedByPatient:
                 pat_pred_major[pid] = int(Counter(preds_img[idxs]).most_common(1)[0][0])
                 # Soft vote: mean probabilities across slices
                 if probs_img is not None and len(probs_img) == len(true_img):
-                    mean_probs = probs_img[idxs].mean(axis=0)
+                    mean_probs = probs_img[idxs].mean(axis=0) #media delle probabilità
                     pat_pred_soft[pid] = int(mean_probs.argmax())
                 else:
                     pat_pred_soft[pid] = pat_pred_major[pid]

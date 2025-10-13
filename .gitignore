@@ -19,3 +19,4 @@ lightning_logs/*
 runs/*
 pretrained_weights/*
 *.csv
+*.xlsx

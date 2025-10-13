@@ -63,7 +63,6 @@ from utils.transformations_functions import from_GBR_to_RGB
 from utils.ssl.byol_transformation_functions import get_byol_transforms_dict
 from utils.train_functions import make_unlabeled_loader
 
-
 # ───────────────────── CLI
 def parse() -> argparse.Namespace:
     p = argparse.ArgumentParser()
@@ -104,7 +103,6 @@ def main() -> None:
     BATCH_SIZE = cfg.get_batch_size()
 
     reproducibility(42)
-
     # ---------- find unlabeled image folder ------------------------------------
     data_root = Path(os.environ["DATA_ROOT"])    
     ssl_dir = data_root / cfg.dataset["unlabeled_subdir"]
@@ -249,7 +247,7 @@ def main() -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     learner = learner.to(device)
     optimizer = optim.Adam(learner.parameters(), lr=1e-4)
-    scaler = GradScaler()  # Fixed: removed "cuda" argument
+    scaler = torch.amp.GradScaler()  # Fixed: removed "cuda" argument
 
     start_time = time.time()
     

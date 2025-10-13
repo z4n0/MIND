@@ -50,7 +50,6 @@ from typing import List, Tuple
 from monai.transforms.transform import MapTransform
 import random 
 from monai.utils.misc import set_determinism
-
 from utils.reproducibility_functions import set_global_seed
 set_global_seed(42)
 
@@ -119,7 +118,6 @@ def from_GBR_to_RGB(image: torch.Tensor) -> torch.Tensor:
         raise ValueError(f"Unsupported tensor shape {image.shape}; "
                          "expected 3D (C,H,W) or 4D (B,C,H,W)")
         
-
 def get_preNormalization_transforms_list(cfg, is_supported_by_torchvision=False)->List[MapTransform]:
     """
         Get the list of transforms to be applied before normalization.
@@ -335,7 +333,6 @@ def _get_intensity_augmentations(cfg, preset: str = "medium") -> List:
                                holes=1, max_holes=3,
                                spatial_size=(int(0.1 * H), int(0.1 * W)))
         ]
-
     else:
         raise ValueError(f"Unknown preset: {preset}")
 

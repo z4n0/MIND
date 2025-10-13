@@ -12,8 +12,6 @@ import matplotlib.pyplot as plt
 # ---------------------------------
 # 2) Attention Rollout
 # ---------------------------------
-import torch
-
 def compute_rollout(attentions):
     """
     Computes the aggregated (rolled out) attention across layers.
@@ -44,8 +42,6 @@ def compute_rollout(attentions):
             rollout = torch.matmul(attn_heads_fused, rollout)
     return rollout  # shape [B, tokens, tokens]
 
-import numpy as np
-
 def normalize_image(img: np.ndarray, per_channel: bool = True) -> np.ndarray:
     """
     Scales `img` to [0..1]. 
@@ -68,7 +64,6 @@ def normalize_image(img: np.ndarray, per_channel: bool = True) -> np.ndarray:
         if (mx - mn) < 1e-7:
             return np.zeros_like(img, dtype=np.float32)
         return (img - mn) / (mx - mn)
-
 
 # ---------------------------------
 # 3) Overlay Visualization
@@ -275,6 +270,3 @@ def save_attention_overlays_side_by_side(
                 outpath = os.path.join(output_path, outname)
                 plt.savefig(outpath, bbox_inches="tight", dpi=100)
                 plt.close(fig)
-
-# Call the function to save overlays
-#save_attention_overlays_from_loader(test_loader, model, output_path, device)
