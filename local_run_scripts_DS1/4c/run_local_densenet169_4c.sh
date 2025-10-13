@@ -7,7 +7,7 @@ cd "$REPO_DIR"
 
 mkdir -p logs
 ts="$(date +'%Y-%m-%d_%H-%M-%S')"
-job_name="densenet121_4c_local"
+job_name="densenet169_4c_local"
 final_log="logs/${ts}_${job_name}.out"
 
 exec > >(tee -a "$final_log") 2>&1
@@ -27,7 +27,7 @@ python -c "import torch, sys; print(f'Torch: {torch.__version__}, CUDA: {torch.v
 # ── 2) project-specific environment ─────────────────────────────────────────
 export DATA_ROOT="${DATA_ROOT:-$REPO_DIR/data}"
 export MLFLOW_TRACKING_URI="${MLFLOW_TRACKING_URI:-file:$REPO_DIR/mlruns}"
-export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-SL_Single_MIP_4c}"
+export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-DS1_4c}"
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 
@@ -40,7 +40,7 @@ echo "Using GPU:    ${CUDA_VISIBLE_DEVICES}"
 echo "──────────────────────────────────────────────"
 
 # ── 3) launch training ──────────────────────────────────────────────────────
-python train_4c.py --yaml configs/4c/densenet121.yaml
+python train_4c.py --yaml configs/4c/densenet169.yaml
 
 # ── 4) end ──────────────────────────────────────────────────────────────────
 echo "──────────────────────────────────────────────"

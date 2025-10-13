@@ -497,7 +497,7 @@ def log_run_to_mlflow(
                 "train_counts": train_counts,
                 "val_counts": val_counts,
                 "test_counts": test_counts,
-                "color_transforms": cfg.get_use_color_transforms(),
+                # "color_transforms": cfg.get_use_color_transforms(),
                 "freezed_layer_index": cfg.get_freezed_layer_index(),
                 # "use_lr_discovery": False,
                 "lr_discovery_folds": cfg.get_lr_discovery_folds(),

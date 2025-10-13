@@ -7,7 +7,7 @@ cd "$REPO_DIR"
 
 mkdir -p logs
 ts="$(date +'%Y-%m-%d_%H-%M-%S')"
-job_name="efficientnetb3_3c_local"
+job_name="resnet18_4c_local"
 final_log="logs/${ts}_${job_name}.out"
 
 exec > >(tee -a "$final_log") 2>&1
@@ -25,9 +25,9 @@ echo "Running on:   $(hostname)"
 python -c "import torch, sys; print(f'Torch: {torch.__version__}, CUDA: {torch.version.cuda}, GPU Available: {torch.cuda.is_available()}'); sys.exit(0 if torch.cuda.is_available() else 1)"
 
 # ── 2) project-specific environment ─────────────────────────────────────────
-export DATA_ROOT="${DATA_ROOT:-$REPO_DIR/data}"
+export DATA_ROOT="${DATA_ROOT:-$REPO_DIR/data/SUBSLICE_MIPS}"
 export MLFLOW_TRACKING_URI="${MLFLOW_TRACKING_URI:-file:$REPO_DIR/mlruns}"
-export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-SL_Single_MIP}"
+export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-DS2_4c}"
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 
@@ -40,7 +40,7 @@ echo "Using GPU:    ${CUDA_VISIBLE_DEVICES}"
 echo "──────────────────────────────────────────────"
 
 # ── 3) launch training ──────────────────────────────────────────────────────
-python train_3c.py --yaml configs/3c/efficientnetb3.yaml
+python train_4c.py --yaml configs/4c/resnet18.yaml
 
 # ── 4) end ──────────────────────────────────────────────────────────────────
 echo "──────────────────────────────────────────────"

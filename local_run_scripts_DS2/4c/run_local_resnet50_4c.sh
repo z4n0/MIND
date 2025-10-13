@@ -25,9 +25,9 @@ echo "Running on:   $(hostname)"
 python -c "import torch, sys; print(f'Torch: {torch.__version__}, CUDA: {torch.version.cuda}, GPU Available: {torch.cuda.is_available()}'); sys.exit(0 if torch.cuda.is_available() else 1)"
 
 # ── 2) project-specific environment ─────────────────────────────────────────
-export DATA_ROOT="${DATA_ROOT:-$REPO_DIR/data}"
+export DATA_ROOT="${DATA_ROOT:-$REPO_DIR/data/SUBSLICE_MIPS}"
 export MLFLOW_TRACKING_URI="${MLFLOW_TRACKING_URI:-file:$REPO_DIR/mlruns}"
-export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-SL_Single_MIP_4c}"
+export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-SL_DS2_4c}"
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 

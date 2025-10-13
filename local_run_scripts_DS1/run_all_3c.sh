@@ -40,12 +40,12 @@ echo "Using GPU:    ${CUDA_VISIBLE_DEVICES}"
 echo "──────────────────────────────────────────────"
 
 # ── 3) define scripts to run ────────────────────────────────────────────────
-SCRIPTS_DIR="local_run_scripts/3c"
+SCRIPTS_DIR="local_run_scripts_DS1/3c"
 scripts=(
     "run_local_densenet121_3c.sh"
     "run_local_densenet169_3c.sh"
-    "run_local_efficientnetb0_3c.sh"
-    "run_local_efficientnetb3_3c.sh"
+    # "run_local_efficientnetb0_3c.sh"
+    # "run_local_efficientnetb3_3c.sh"
     "run_local_resnet18_3c.sh"
     "run_local_resnet50_3c.sh"
     "run_local_vit_3c.sh"
