@@ -22,7 +22,7 @@ model:
   library: "torchvision"
 # Training
 training:
-  num_epochs: 125
+  # num_epochs: 125
   early_stopping_patience: 25
   mixup_alpha: 0
   oversample: true

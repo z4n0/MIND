@@ -26,6 +26,7 @@ from monai.transforms import (
     ClipIntensityPercentilesd,  # Clip intensities at specified low and high percentiles to remove extreme outlier pixels.
     HistogramNormalized  # Standardizes image histograms, can be useful if illumination/staining varies significantly.
 )
+
 import random
 import torch
 from typing import List, Tuple
@@ -423,16 +424,16 @@ def is_supported_by_torchvision(model_name:str)->bool:
     """
     Check if the model is supported by torchvision ie if it is in the IMAGENET_WEIGHTS dictionary
     """
-    return IMAGENET_WEIGHTS.get(model_name.lower(), None) is not None
+    return IMAGENET_WEIGHTS.get(model_name.lower()) is not None
 
-def get_transforms(cfg, color_transforms=False, fold_specific_stats=None):
+def get_transforms(cfg: ConfigLoader, fold_specific_stats: dict[str, float] | None = None) -> Tuple[Compose, Compose, Compose]:
     """
     Create and return the training, validation, and test transforms.
     
     Args:
         cfg: A configuration object/dictionary with data augmentation parameters.
-        normalization_params: A dictionary with keys 'subtrahend' and 'divisor'.
-    
+        fold_specific_stats: A dictionary with keys 'mean' and 'std' used for fold-specific normalization.
+        
     Returns:
         tuple (train_transforms, val_transforms, test_transforms)
         each of these is a Compose object containing the necessary transformations list.
@@ -441,8 +442,7 @@ def get_transforms(cfg, color_transforms=False, fold_specific_stats=None):
     is_pretrained = cfg.get_transfer_learning()
     print(f"Using pretrained model: {is_pretrained}")
     
-    if cfg.get_intensity_augmentation_preset() not in ["none", "off", "no", "0"]:
-        color_transforms = True
+    color_transforms = cfg.get_intensity_augmentation_preset() not in ["none", "off", "no", "0"]
     
     # Initialize transform lists
     train_transforms_list = []
@@ -454,7 +454,7 @@ def get_transforms(cfg, color_transforms=False, fold_specific_stats=None):
     if not supported_by_torchvision or not is_pretrained: 
         print("the model is not supported by torchvision or is not pretrained")
         # ie. if you are not using a pretrained model or using a pretrained model that is not supported by torchvision you can use custom transforms
-        train_transforms_list, val_transforms_list = get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats)
+        train_transforms_list, val_transforms_list = get_custom_transforms_lists(cfg, fold_specific_stats)
     elif supported_by_torchvision and is_pretrained: # If you are using a pretrained model(even if it's micronet), use the torchvision transforms
         print("the model is supported by torchvision and is pretrained")
         train_transforms_list, val_transforms_list = get_pretrained_model_transforms_list_without_crop(cfg)
@@ -476,7 +476,7 @@ def get_transforms(cfg, color_transforms=False, fold_specific_stats=None):
     
     return train_transforms, val_transforms, test_transforms
 
-def get_custom_transforms_lists(cfg: ConfigLoader, color_transforms: bool, fold_specific_stats: dict, crop: bool = False):
+def get_custom_transforms_lists(cfg: ConfigLoader, fold_specific_stats: dict, crop: bool = False):
     """
     Generate training and validation transform lists for custom models. ie not pretrained models
     """
@@ -489,17 +489,27 @@ def get_custom_transforms_lists(cfg: ConfigLoader, color_transforms: bool, fold_
     # --- INSERISCI QUESTA PARTE ---
     # Aggiungi il cropping casuale per forzare il modello a ignorare i bordi.
     # Prima calcoliamo la dimensione del crop, ad esempio il 90% della dimensione dell'immagine.
-    crop = cfg.get_use_crop()
-    
+    crop = bool(cfg.get_use_crop())
+
     if crop:
         original_size = cfg.get_crop_size()  # Es: (512, 512)
         crop_percentage = cfg.get_crop_percentage()
+        
+        # Ensure original_size and crop_percentage are valid
+        if original_size is None or crop_percentage is None:
+            raise ValueError("original_size and crop_percentage must not be None")
+        if not isinstance(original_size, (tuple, list)) or len(original_size) != 2:
+            raise ValueError(f"original_size must be a tuple/list of length 2, got: {original_size}")
+        if not (0 < crop_percentage <= 1):
+            raise ValueError(f"crop_percentage must be between 0 and 1, got: {crop_percentage}")
+
         crop_size = (int(original_size[0] * crop_percentage), int(original_size[1] * crop_percentage))
-    
+
         print(f"Applying random crop with size: {crop_size}")
         train_transforms_list.append(
             RandSpatialCropd(keys=["image"], roi_size=crop_size, random_size=False)
         )
+        
 
     # Ora applica le altre aumentazioni spaziali sull'immagine croppata
     spatial_transforms = _get_spatial_augmentations(cfg)

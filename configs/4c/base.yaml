@@ -1,5 +1,5 @@
 dataset:
-  class_names: ["MSA-P", "PD"] #["MSA-P", "PD"] #["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
+  class_names: ["MSA", "PD"] #["MSA-P", "PD"] #["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
 
 # config.yaml
 data_splitting:
@@ -19,7 +19,7 @@ data_augmentation:
   rand_gaussian_noise_mean: 0.0
   rand_gaussian_noise_std: 0.1
   crop_size: [256, 256]  # New parameter for random cropping
-  use_color_transforms: true
+  # use_color_transforms: true
   intensity_augmentation_preset: "light"  # Options: "none", "light", "medium", "heavy"
   use_crop: false
   crop_percentage: 0.95
@@ -38,9 +38,9 @@ model:
   library: "torchvision"
   
 training:
-  num_epochs: 50
-  early_stopping_patience: 2
-  mixup_alpha: 0.2
+  num_epochs: 150
+  early_stopping_patience: 20
+  mixup_alpha: 0
   oversample: true
   undersample: false
   weighted_loss: false

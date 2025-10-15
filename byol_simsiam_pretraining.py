@@ -111,7 +111,7 @@ def main() -> None:
         raise FileNotFoundError(f"Unlabeled dir not found: {ssl_dir}")
     
     # -------- load a model and its transformations
-    train_transforms, val_transforms, test_transforms = tf.get_transforms(cfg, color_transforms=color_transforms)
+    train_transforms, val_transforms, test_transforms = tf.get_transforms(cfg)
     model_manager = ModelManager(cfg, library=model_library)
     
     # Verify the number of unique labels in the dataset

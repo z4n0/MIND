@@ -207,6 +207,8 @@ def main():
         val_counts=val_counts,
         test_counts=test_counts,
         output_dir=str(RUN_DIR),
+        test_pat_ids_per_fold=experiment.test_pat_ids_per_fold,
+        best_idx=best_idx,
     )
 
     # ---------- cleanup ----------------------------------------------------

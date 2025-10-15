@@ -236,6 +236,11 @@ class NestedCVStratifiedByPatient:
     @property
     def cfg(self):
         return self._cfg
+
+    @property
+    def test_pat_ids_per_fold(self):
+        """Returns the patient IDs used for the outer test set in all folds."""
+        return self.test_pat_ids_per_fold
     
     @property
     def num_outer_images(self):
@@ -263,9 +268,13 @@ class NestedCVStratifiedByPatient:
         return self.current_fold_train_transforms, self.current_fold_val_transforms, self.current_fold_test_transforms
 
     def get_test_patient_ids_for_fold(self, fold_idx: int) -> np.ndarray:
-        """Returns the patient IDs used for the outer test set in a given fold."""
+        """Returns the patient IDs used for the outer test set in a given fold 
+        arg: fold_idx (int): The index of the fold for which to get the test patient IDs array
+        return: np.ndarray: The patient IDs used for the outer test set in the given fold decided by index arg
+        ."""
         return self.test_pat_ids_per_fold.get(fold_idx)
-        
+    
+    
     def _determine_num_classes(self):
         """Infer the number of classes from the provided labels array."""
         return len(np.unique(self.labels_np))
@@ -447,7 +456,7 @@ class NestedCVStratifiedByPatient:
     # Aggiungi questo metodo all'interno della tua classe NestedCVStratifiedByPatient
 
     def find_best_lr_grid_search(self,
-                        #    lr_candidates: list[float] = [1e-5, 5e-5, 1e-4, 5e-4, 1e-3],
+                        #  lr_candidates: list[float] = [1e-5, 5e-5, 1e-4, 5e-4, 1e-3],
                            num_epochs_per_lr: int = 10,
                            n_splits_lr: int = 3): # New: Number of splits for mini-CV
         """
@@ -482,7 +491,7 @@ class NestedCVStratifiedByPatient:
 
                 # Chiama la nuova funzione UNA VOLTA prima di iniziare la CV
         # lr_candidates = lr_candidates_for_this_model
-        lr_performance = {lr: [] for lr in lr_candidates_for_this_model}
+        lr_performance = { lr: [] for lr in lr_candidates_for_this_model }
 
         # Improvement 1: Mini cross-validation for the grid search
         skf = StratifiedKFold(n_splits=n_splits_lr, shuffle=True, random_state=self.random_seed)
@@ -615,6 +624,35 @@ class NestedCVStratifiedByPatient:
         return groups
     
     def _tune_optim_hparams(self, X_train_outer, y_train_outer):
+        """
+        Perform hyperparameter optimization for the optimizer using Optuna.
+
+        This function tunes optimizer-related hyperparameters (learning rate, weight decay,
+        beta2, epsilon, backbone learning rate multiplier, etc.) on the outer training set,
+        using an inner cross-validation strategy. The best hyperparameters are determined
+        by minimizing the mean (1 - balanced accuracy) across inner folds, as evaluated 
+        by the objective function.
+
+        Args:
+            X_train_outer (np.ndarray or list[str]): Training image paths for the outer fold.
+            y_train_outer (np.ndarray or list[int]): Training labels (aligned to image paths) for the outer fold.
+
+        Returns:
+            dict: A dictionary of the best optimizer hyperparameters found, containing:
+                - 'lr': Optimized learning rate (float)
+                - 'weight_decay': Optimized weight decay coefficient (float)
+                - 'betas': Tuple of beta values for Adam/AdamW optimizer (tuple(float, float))
+                - 'eps': Optimized epsilon value for optimizer stabilization (float)
+                - 'backbone_lr_mult': Backbone learning rate multiplier (float)
+                - 'optimizer_name': Optimizer type as defined in config (str)
+                - 'no_decay_on_norm_bias': Whether to avoid weight decay on normalization and bias params (bool)
+
+        Note:
+            - Uses a TPESampler with a fixed random seed for reproducibility.
+            - Uses a MedianPruner for early stopping of bad trials.
+            - The number of Optuna trials is drawn from the config (default: 8).
+            - Prints and returns the best optimizer hyperparameter set found.
+        """
         study = optuna.create_study(
             direction="minimize",
             sampler=optuna.samplers.TPESampler(seed=self.random_seed),
@@ -622,9 +660,10 @@ class NestedCVStratifiedByPatient:
         )
         study.optimize(
             lambda t: self._objective(t, X_train_outer, y_train_outer),
-            n_trials=self.cfg.training.get("n_trials", 8),
+            n_trials=self.cfg.training.get("n_trials", 4),
         )
-        best = study.best_trial.params
+        
+        best = study.best_trial.params # this is a dictionary containing the best hyperparameters
         # Ensure presence of all keys with sensible defaults
         best_opt = {
             "lr": float(best["lr"]),
@@ -637,6 +676,13 @@ class NestedCVStratifiedByPatient:
         }
         print(f"Best inner-CV hparams: {best_opt}")
         return best_opt
+    
+    def _run_combined_hparam_tuning(self, X_train_outer, y_train_outer):
+        """Run a single Optuna study to retrieve LR and optimizer hyperparameters."""
+        opt_cfg = self._tune_optim_hparams(X_train_outer, y_train_outer)
+        best_lr = float(opt_cfg.get("lr", self.cfg.get_learning_rate()))
+        print(f"  Best LR from combined inner CV = {best_lr:.6f}")
+        return best_lr, opt_cfg
     
     def _objective(self, trial, X_train_outer_fold, y_train_outer_fold):
         """
@@ -1117,6 +1163,7 @@ class NestedCVStratifiedByPatient:
         lr_discovery_method = self.cfg.get_lr_discovery_method() # Es: 'pre_split', 'nested', 'fixed'
 
         # tune the learning rate once with grid search if grid search is used and the best lr is not set
+        # NOTE: Grid search is not used anymore since it introduces optimistic bias since it uses data that will be tested as data on which to tune the lr
         if lr_discovery_method == 'grid_search':
             print(f"--- Starting Grid Search for Learning Rate ---")
             print("REMEMBER: grid search introduce optimistic bias since it uses data that will be tested as data on which to tune the lr")
@@ -1126,11 +1173,11 @@ class NestedCVStratifiedByPatient:
             best_lr = self.cfg.get_manual_lr()
         
         # Determine if color transforms should be used based on cfg
-        use_color_transforms = self.cfg.data_augmentation.get("use_color_transforms", True)
+        # use_color_transforms = self.cfg.data_augmentation.get("use_color_transforms", True)
         for fold_idx_actual, (train_pat_idx, test_pat_idx) in enumerate(outer_skf.split(self.unique_pat_ids, self.pat_labels)):
             fold_display_idx = fold_idx_actual + 1
             print(f"\n===== OUTER FOLD {fold_display_idx} / {self.num_folds} =====")
-            
+            # initialize the per fold metrics
             for key in self.per_fold_metrics:
                 self.per_fold_metrics[key][fold_idx_actual] = []
 
@@ -1165,7 +1212,6 @@ class NestedCVStratifiedByPatient:
                 #if the transformations are not set, generate them
                 self.current_fold_train_transforms, self.current_fold_val_transforms, self.current_fold_test_transforms = get_transforms(
                 self.cfg,
-                color_transforms=use_color_transforms,
                 fold_specific_stats=fold_stats # note that is None if pretrained=True
                 )
                 print(f"Transforms generated for Fold {fold_display_idx}.")
@@ -1183,8 +1229,11 @@ class NestedCVStratifiedByPatient:
             
             if lr_discovery_method == 'nested':
                 print(f"--- Starting Nested Hyperparameter Tuning for Fold {fold_display_idx} ---")
-                best_lr = self._tune_learning_rate(X_train_outer, y_train_outer)
-                opt_cfg = self._tune_optim_hparams(X_train_outer, y_train_outer)
+                # best_lr = self._tune_learning_rate(X_train_outer, y_train_outer)
+                # opt_cfg = self._tune_optim_hparams(X_train_outer, y_train_outer)
+                best_lr, opt_cfg = self._run_combined_hparam_tuning(
+                    X_train_outer, y_train_outer
+                )
             else:
                 # Usa il valore pre-calcolato o fisso
                 best_lr = best_lr_for_all_folds # type: ignore
@@ -1240,6 +1289,4 @@ class NestedCVStratifiedByPatient:
             print(f"Avg Test Recall: {avg_recall:.4f} +/- {std_recall:.4f}")
             print(f"Avg Test MCC: {avg_mcc:.4f} +/- {std_mcc:.4f}")
         print("-------------------------------------------------")
-
-
 

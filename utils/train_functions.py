@@ -495,7 +495,7 @@ def train_epoch_mixUp(model, loader, optimizer, loss_function, device, mixup_alp
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
-        else:  # bfloat16
+        else:  # bfloat16 or float32
             loss.backward()
             optimizer.step()
         # scaler.scale(loss).backward()

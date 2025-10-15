@@ -10,7 +10,7 @@ data_splitting:
 
 # Data Loading
 data_loading:
-  batch_size: 32  # Custom batch size for DenseNet
+  # batch_size: 32  # Custom batch size for DenseNet
   num_workers: 4  # Increased workers
 
 model:
@@ -23,14 +23,14 @@ model:
   
 # Training
 training:
-  num_epochs: 125
+  # num_epochs: 125
   early_stopping_patience: 40
-  mixup_alpha: 0
+  # mixup_alpha: 0
   oversample: true
   undersample: false
   weighted_loss: false
   fine_tuning: false
-  transfer_learning: true
+  transfer_learning: false
   freezed_layerIndex: null
 
 # Optimizer

@@ -218,6 +218,8 @@ def log_folds_results_to_csv(fold_results, prefix='val'):
 
     # Compute summary (mean, std, min, max) for selected metrics
     metric_keys = ['loss', 'acc', 'f1', 'balanced_acc', 'auc', 'mcc']
+    formatted_fold_tags = {}
+    
     for key in metric_keys:
         metric_name = f"{prefix}_{key}"
         if metric_name in df.columns:
@@ -230,8 +232,15 @@ def log_folds_results_to_csv(fold_results, prefix='val'):
             mlflow.log_metric(f"std_{metric_name}", std)
             mlflow.log_metric(f"min_{metric_name}", min_)
             mlflow.log_metric(f"max_{metric_name}", max_)
+            
+            # Add formatted tag with mean ± std
+            formatted_fold_tags[f"{metric_name}_formatted"] = f"{mean:.4f} ± {std:.4f}"
 
             print(f"{metric_name} | mean: {mean:.4f}, std: {std:.4f}, min: {min_:.4f}, max: {max_:.4f}")
+    
+    # Log formatted tags
+    if formatted_fold_tags:
+        mlflow.set_tags(formatted_fold_tags)
 
     # Log the full table as CSV artifact
     csv_path = f"{prefix}_fold_metrics.csv"
@@ -424,6 +433,8 @@ def log_run_to_mlflow(
     val_counts: int = 0,
     test_counts: int = 0,
     output_dir: Optional[str] = None,
+    test_pat_ids_per_fold: Optional[Dict[str, List[str]]] = None,
+    best_fold_idx: Optional[int] = None,
 ) -> None:
     """
     Log parameters, metrics and artifacts to MLflow (file store).
@@ -449,6 +460,8 @@ def log_run_to_mlflow(
         val_counts: Number of validation samples
         test_counts: Number of test samples
         output_dir: Directory where run outputs (models, plots) are stored
+        test_pat_ids_per_fold: Dictionary containing test patient IDs for each fold
+        best_fold_idx: Index of the best fold
     """
     # ------------------------------------------------------------------ URI
     env_experiment_name = os.getenv("MLFLOW_EXPERIMENT_NAME")
@@ -495,6 +508,7 @@ def log_run_to_mlflow(
                 "train_counts": train_counts,
                 "val_counts": val_counts,
                 "test_counts": test_counts,
+                "best_fold_idx": best_fold_idx,
                 # "color_transforms": cfg.get_use_color_transforms(),
                 "freezed_layer_index": cfg.get_freezed_layer_index(),
                 # "use_lr_discovery": False,
@@ -510,18 +524,24 @@ def log_run_to_mlflow(
                 "best_lr": cfg.get_learning_rate(),
                 "creation_date": now.strftime("%m-%d"),
                 "creation_time": now.strftime("%H:%M:%S"),
+                "total_params": int(sum(p.numel() for p in model.parameters())),
+                "trainable_params": int(sum(p.numel() for p in model.parameters() if p.requires_grad)),
                 # "creation_datetime": now.strftime("%Y-%m-%d %H:%M:%S"),
                 # "creation_timestamp": now.timestamp(),  # Unix timestamp for sorting
             }
         )
-        mlflow.log_param(
-            "total_params", int(sum(p.numel() for p in model.parameters()))
-        )
-        mlflow.log_param(
-            "trainable_params",
-            int(sum(p.numel() for p in model.parameters() if p.requires_grad)),
-        )
-
+        if test_pat_ids_per_fold:
+            mlflow.log_params(
+                {
+                    "test_pat_ids_per_fold": test_pat_ids_per_fold
+                }
+            )
+        if best_fold_idx:
+            mlflow.log_params(
+                {
+                    "test_pat_ids_for_best_fold": test_pat_ids_per_fold.get(best_fold_idx)
+                }
+            )
         # --------------------- METRICS
         log_kfold_epoch_metrics(per_fold_metrics, prefix="val")
         per_fold = np.asarray(
@@ -575,70 +595,105 @@ def log_run_to_mlflow(
             soft_rec  = [r["patient_soft_recall"] for r in fold_results if r.get("patient_soft_recall") is not None]
 
             metrics_to_log = {}
+            formatted_tags = {}
+            
             if major_bal:
                 arr = np.asarray(major_bal, dtype=float)
+                mean_val, std_val = float(arr.mean()), float(arr.std())
                 metrics_to_log.update({
-                    "mean_patient_major_bal_acc": float(arr.mean()),
-                    "std_patient_major_bal_acc": float(arr.std()),
+                    "mean_patient_major_bal_acc": mean_val,
+                    "std_patient_major_bal_acc": std_val,
                 })
+                formatted_tags["patient_major_bal_acc_formatted"] = f"{mean_val:.3f} ± {std_val:.3f}"
+            
             if soft_bal:
                 arr = np.asarray(soft_bal, dtype=float)
+                mean_val, std_val = float(arr.mean()), float(arr.std())
                 metrics_to_log.update({
-                    "mean_patient_soft_bal_acc": float(arr.mean()),
-                    "std_patient_soft_bal_acc": float(arr.std()),
+                    "mean_patient_soft_bal_acc": mean_val,
+                    "std_patient_soft_bal_acc": std_val,
                 })
+                formatted_tags["patient_soft_bal_acc_formatted"] = f"{mean_val:.3f} ± {std_val:.3f}"
+            
             if major_auc:
                 arr = np.asarray(major_auc, dtype=float)
+                mean_val, std_val = float(arr.mean()), float(arr.std())
                 metrics_to_log.update({
-                    "mean_patient_major_auc": float(arr.mean()),
-                    "std_patient_major_auc": float(arr.std()),
+                    "mean_patient_major_auc": mean_val,
+                    "std_patient_major_auc": std_val,
                 })
+                formatted_tags["patient_major_auc_formatted"] = f"{mean_val:.3f} ± {std_val:.3f}"
+            
             if soft_auc:
                 arr = np.asarray(soft_auc, dtype=float)
+                mean_val, std_val = float(arr.mean()), float(arr.std())
                 metrics_to_log.update({
-                    "mean_patient_soft_auc": float(arr.mean()),
-                    "std_patient_soft_auc": float(arr.std()),
+                    "mean_patient_soft_auc": mean_val,
+                    "std_patient_soft_auc": std_val,
                 })
+                formatted_tags["patient_soft_auc_formatted"] = f"{mean_val:.3f} ± {std_val:.3f}"
+            
             if major_mcc:
                 arr = np.asarray(major_mcc, dtype=float)
+                mean_val, std_val = float(arr.mean()), float(arr.std())
                 metrics_to_log.update({
-                    "mean_patient_major_mcc": float(arr.mean()),
-                    "std_patient_major_mcc": float(arr.std()),
+                    "mean_patient_major_mcc": mean_val,
+                    "std_patient_major_mcc": std_val,
                 })
+                formatted_tags["patient_major_mcc_formatted"] = f"{mean_val:.3f} ± {std_val:.3f}"
+            
             if soft_mcc:
                 arr = np.asarray(soft_mcc, dtype=float)
+                mean_val, std_val = float(arr.mean()), float(arr.std())
                 metrics_to_log.update({
-                    "mean_patient_soft_mcc": float(arr.mean()),
-                    "std_patient_soft_mcc": float(arr.std()),
+                    "mean_patient_soft_mcc": mean_val,
+                    "std_patient_soft_mcc": std_val,
                 })
+                formatted_tags["patient_soft_mcc_formatted"] = f"{mean_val:.3f} ± {std_val:.3f}"
+            
             if major_prec:
                 arr = np.asarray(major_prec, dtype=float)
+                mean_val, std_val = float(arr.mean()), float(arr.std())
                 metrics_to_log.update({
-                    "mean_patient_major_precision": float(arr.mean()),
-                    "std_patient_major_precision": float(arr.std()),
+                    "mean_patient_major_precision": mean_val,
+                    "std_patient_major_precision": std_val,
                 })
+                formatted_tags["patient_major_precision_formatted"] = f"{mean_val:.3f} ± {std_val:.3f}"
+            
             if soft_prec:
                 arr = np.asarray(soft_prec, dtype=float)
+                mean_val, std_val = float(arr.mean()), float(arr.std())
                 metrics_to_log.update({
-                    "mean_patient_soft_precision": float(arr.mean()),
-                    "std_patient_soft_precision": float(arr.std()),
+                    "mean_patient_soft_precision": mean_val,
+                    "std_patient_soft_precision": std_val,
                 })
+                formatted_tags["patient_soft_precision_formatted"] = f"{mean_val:.3f} ± {std_val:.3f}"
+            
             if major_rec:
                 arr = np.asarray(major_rec, dtype=float)
+                mean_val, std_val = float(arr.mean()), float(arr.std())
                 metrics_to_log.update({
-                    "mean_patient_major_recall": float(arr.mean()),
-                    "std_patient_major_recall": float(arr.std()),
+                    "mean_patient_major_recall": mean_val,
+                    "std_patient_major_recall": std_val,
                 })
+                formatted_tags["patient_major_recall_formatted"] = f"{mean_val:.3f} ± {std_val:.3f}"
+            
             if soft_rec:
                 arr = np.asarray(soft_rec, dtype=float)
+                mean_val, std_val = float(arr.mean()), float(arr.std())
                 metrics_to_log.update({
-                    "mean_patient_soft_recall": float(arr.mean()),
-                    "std_patient_soft_recall": float(arr.std()),
+                    "mean_patient_soft_recall": mean_val,
+                    "std_patient_soft_recall": std_val,
                 })
+                formatted_tags["patient_soft_recall_formatted"] = f"{mean_val:.3f} ± {std_val:.3f}"
 
             if metrics_to_log:
                 metrics_to_log = {k: round(float(v), 3) for k, v in metrics_to_log.items()}
                 mlflow.log_metrics(metrics_to_log)
+            
+            if formatted_tags:
+                mlflow.set_tags(formatted_tags)
+                
         except Exception as e:
             print(f"Warning: failed to log patient-level metrics: {e}")
 

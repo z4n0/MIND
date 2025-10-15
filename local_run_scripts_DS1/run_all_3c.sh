@@ -27,7 +27,7 @@ python -c "import torch, sys; print(f'Torch: {torch.__version__}, CUDA: {torch.v
 # ── 2) project-specific environment ─────────────────────────────────────────
 export DATA_ROOT="${DATA_ROOT:-$REPO_DIR/data}"
 export MLFLOW_TRACKING_URI="${MLFLOW_TRACKING_URI:-file:$REPO_DIR/mlruns}"
-export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-SL_Single_MIP_3c}"
+export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-DS1_3c}"
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 
@@ -42,12 +42,12 @@ echo "────────────────────────�
 # ── 3) define scripts to run ────────────────────────────────────────────────
 SCRIPTS_DIR="local_run_scripts_DS1/3c"
 scripts=(
-    "run_local_densenet121_3c.sh"
+    # "run_local_densenet121_3c.sh"
     "run_local_densenet169_3c.sh"
     # "run_local_efficientnetb0_3c.sh"
     # "run_local_efficientnetb3_3c.sh"
     "run_local_resnet18_3c.sh"
-    "run_local_resnet50_3c.sh"
+    # "run_local_resnet50_3c.sh"
     "run_local_vit_3c.sh"
 )
 
@@ -72,7 +72,7 @@ for i in "${!scripts[@]}"; do
     
     if [ ! -f "$script_path" ]; then
         echo "ERROR: Script not found: $script_path"
-        ((failed_runs++))
+        ((failed_runs += 1))
         continue
     fi
     
@@ -84,10 +84,10 @@ for i in "${!scripts[@]}"; do
     # Run the script and capture its exit code
     if bash "$script_path"; then
         echo "✅ SUCCESS: $script_name completed successfully"
-        ((successful_runs++))
+        ((successful_runs += 1))
     else
         echo "❌ FAILED: $script_name failed with exit code $?"
-        ((failed_runs++))
+        ((failed_runs += 1))
     fi
     
     echo "Finished at: $(date)"

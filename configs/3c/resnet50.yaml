@@ -23,9 +23,9 @@ model:
   
 # Training
 training:
-  num_epochs: 125
+  # num_epochs: 125
   early_stopping_patience: 40
-  mixup_alpha: 0
+  # mixup_alpha: 0
   oversample: true
   undersample: false
   weighted_loss: false

@@ -38,9 +38,9 @@ model:
   library: "torchvision"
   
 training:
-  num_epochs: 50
-  early_stopping_patience: 17
-  mixup_alpha: 0.2
+  num_epochs: 150
+  early_stopping_patience: 20
+  mixup_alpha: 0
   oversample: true
   undersample: false
   weighted_loss: false
