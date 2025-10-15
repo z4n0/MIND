@@ -125,7 +125,7 @@ def main():
 
     # ---------- transforms (as in notebook) --------------------------------
     train_transforms, val_transforms, test_transforms = tf.get_transforms(
-        cfg, color_transforms=False
+        cfg
     )
 
     # ---------- model ------------------------------------------------------

@@ -294,9 +294,8 @@ def load_model_for_run(run_id: str, experiment_id: str, base_folder: str, device
         return None
 
 
-def create_run_name(cfg=None, color_transforms=False, model_library="", pretrained_weights=None):
+def create_run_name(cfg=None, model_library="", pretrained_weights=None):
     import datetime
-    color_transforms = cfg.data_augmentation["use_color_transforms"] if cfg is not None else color_transforms
     model_name = cfg.model["model_name"]
     components = [model_name]
 
@@ -322,7 +321,7 @@ def create_run_name(cfg=None, color_transforms=False, model_library="", pretrain
         components.append(f"freeze:{cfg.get_freezed_layer_index()}")
 
     run_name = "_".join(components)
-    run_name = run_name + "_" + model_library + "_" +f"color_transforms:{str(color_transforms)}_" + str(datetime.datetime.now().strftime("%m-%d_at:%H-%M-%S"))
+    run_name = run_name + "_" + model_library + "_" + str(datetime.datetime.now().strftime("%m-%d_at:%H-%M-%S"))
     print("Run name:", run_name)
     return run_name
 
@@ -468,7 +467,6 @@ def log_run_to_mlflow(
     # ---------------------------------------------------------------- run / exp
     run_name = create_run_name(
         cfg,
-        color_transforms=color_transforms,
         model_library=model_library,
         pretrained_weights=pretrained_weights,
     )

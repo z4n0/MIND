@@ -122,9 +122,7 @@ def main():
     pat_labels  = pat_df["label"].values
 
     # ---------- transforms (as in notebook) --------------------------------
-    train_transforms, val_transforms, test_transforms = tf.get_transforms(
-        cfg, color_transforms=True
-    )
+    train_transforms, val_transforms, test_transforms = tf.get_transforms(cfg)
 
     # ---------- model ------------------------------------------------------
     model_manager = ModelManager(cfg, library=cfg.get_model_library())
