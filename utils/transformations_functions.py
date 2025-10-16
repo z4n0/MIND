@@ -510,7 +510,6 @@ def get_custom_transforms_lists(cfg: ConfigLoader, fold_specific_stats: dict, cr
             RandSpatialCropd(keys=["image"], roi_size=crop_size, random_size=False)
         )
         
-
     # Ora applica le altre aumentazioni spaziali sull'immagine croppata
     spatial_transforms = _get_spatial_augmentations(cfg)
     train_transforms_list.extend(spatial_transforms)

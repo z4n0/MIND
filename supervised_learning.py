@@ -146,6 +146,8 @@ def main():
         color_transforms=False,
         model_library=model_library,
         pretrained_weights=pretrained_weights,
+        test_pat_ids_per_fold=experiment.test_pat_ids_per_fold,
+        best_fold_idx=best_idx,
     )
 
 if __name__ == "__main__":

@@ -63,7 +63,7 @@ def main():
     #NOTE if you want to change the number of channels use
     # cfg.set_num_input_channels(3) # or 4
     #NOTE if you want to change the pretrained weights use
-    available_weights = ["microscopynet"] #"torchvision", "monai", ,"microscopynet"
+    available_weights = ["imagenet-microscopynet"] #,"microscopynet","torchvision" "torchvision", "monai", ,"microscopynet"
     #cfg.set_pretrained_weights("torchvision") # or "monai" or "imagenet-microscopynet" "microscopynet"
     #NOTE if you want to change the number of epochs use
     # cfg.set_num_epochs(100) # or any other number
@@ -128,7 +128,7 @@ def main():
 
         # Transforms & model
         try:
-            train_transforms, val_transforms, _ = tf.get_transforms(cfg, color_transforms=False)
+            train_transforms, val_transforms, _ = tf.get_transforms(cfg)
             model_manager = ModelManager(cfg, library=cfg.get_model_library())
             model, device = model_manager.setup_model(len(class_names), pretrained_weights)
         except Exception as e:
@@ -192,7 +192,6 @@ def main():
             test_images_paths_np=te_imgs,
             test_true_labels_np=te_y,
             yaml_path=str(PROJ_ROOT / args.yaml),
-            color_transforms=False,
             model_library=model_library,
             pretrained_weights=pretrained_weights,
             execution_time=execution_time,
@@ -200,6 +199,8 @@ def main():
             val_counts=val_counts,
             test_counts=test_counts,
             output_dir=str(RUN_DIR),
+            test_pat_ids_per_fold=experiment.test_pat_ids_per_fold,
+            best_fold_idx=best_idx,
         )
 
         # Cleanup per weight

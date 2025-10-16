@@ -297,7 +297,6 @@ def main():
         # is a reasonable approximation if normalization is consistent (e.g., ImageNet stats).
         _, val_transforms, _ = tf.get_transforms(cfg)
 
-
         log_run_to_mlflow(
             device=device,
             cfg=cfg,
@@ -309,7 +308,6 @@ def main():
             test_images_paths_np=te_imgs,
             test_true_labels_np=te_y,
             yaml_path=str(PROJ_ROOT / args.yaml),
-            color_transforms=True, # ViT uses color transforms
             model_library=model_library,
             pretrained_weights=pretrained_weights,
             execution_time=execution_time,
@@ -317,6 +315,8 @@ def main():
             val_counts=val_counts,
             test_counts=test_counts,
             output_dir=str(RUN_DIR),
+            test_pat_ids_per_fold=experiment.test_pat_ids_per_fold,
+            best_fold_idx=best_idx,
         )
     else:
         print("Could not find the best model file to log artifacts.")

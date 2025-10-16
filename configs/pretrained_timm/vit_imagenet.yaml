@@ -1,0 +1,52 @@
+_base_: base.yaml
+
+# NOTE: This is a template/example config for timm ViT models
+# For production use, prefer the specific model configs:
+#   - vit_small_patch16_224.yaml
+#   - vit_base_patch16_224.yaml
+#   - deit_small_patch16_224.yaml
+#   - deit_base_patch16_224.yaml
+#   - vit_base_patch16_384.yaml
+
+model:
+  model_name: "vit_base_patch16_224"  # Change to any timm ViT model
+  library: "timm"
+  in_channels: 3  # Standard RGB (supports 4 with pretrained via channel adaptation)
+  out_channels: 2
+  pretrained_weights: "imagenet"
+  
+  # Optional timm-specific parameters
+  global_pool: "avg"  # Options: 'avg', 'max', 'token'
+  drop_rate: 0.0
+  drop_path_rate: 0.0
+  
+  # Optional: For 4-channel with pretrained (experimental)
+  # channel_adaptation_strategy: "repeat_avg"  # Options: "repeat_avg", "random_init", "zero_init"
+
+data_augmentation:
+  resize_spatial_size: [224, 224]  # Match ViT input size (384 for vit_base_patch16_384)
+  crop_size: [224, 224]
+
+data_loading:
+  batch_size: 16  # Adjust based on GPU memory
+
+training:
+  num_epochs: 450
+  transfer_learning: true
+  early_stopping_patience: 50
+  oversample: true
+  undersample: false
+  weighted_loss: false
+  mixup_alpha: 0
+
+optimizer:
+  learning_rate: 1e-4  # DeiT models may benefit from 5e-5
+  optimizer_name: "AdamW"
+  weight_decay: 1e-5  # DeiT models typically use 0.05
+
+scheduler:
+  scheduler_name: "ReduceLROnPlateau"
+  factor: 0.5
+  scheduler_patience: 25
+  threshold: 1e-4
+  min_lr: 1e-8

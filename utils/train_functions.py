@@ -15,6 +15,8 @@ from sklearn.metrics import (
     matthews_corrcoef,
 )
 from sklearn.utils import resample
+import matplotlib
+matplotlib.use("Agg", force=True)
 import matplotlib.pyplot as plt
 from configs.ConfigLoader import ConfigLoader
 from torch.cuda.amp import GradScaler, autocast
@@ -743,6 +745,19 @@ def freeze_layers_up_to(model, cfg: ConfigLoader) -> int:
     Enter -1 to not freeze any layers.
     """
     layers = [name for name, _ in model.named_parameters()]
+    training_cfg = cfg.get_training() or {}
+    strategy = str(training_cfg.get("freeze_strategy", "index")).lower()
+
+    if strategy in ("name", "auto"):
+        applied, trainable_params, total_params = _freeze_layers_by_name(model, cfg, training_cfg)
+        if applied:
+            print(f"[freeze_layers_up_to] Name-based freezing applied ({trainable_params}/{total_params} trainable parameters).")
+            _freeze_batchnorm_running_stats(model)
+            # Preserve existing API: return stored index if available, else -1
+            stored_index = cfg.get_freezed_layer_index()
+            return stored_index if stored_index is not None else -1
+        if strategy == "name":
+            print("[freeze_layers_up_to] Name-based strategy requested but no keywords matched. Falling back to index-based strategy.")
 
     # Only print layers and ask for input if freezed_layerIndex is not set
     if cfg.get_freezed_layer_index() is None:
@@ -780,8 +795,78 @@ def freeze_layers_up_to(model, cfg: ConfigLoader) -> int:
         # Freeze layers up to and including the selected index
         for i, (name, param) in enumerate(model.named_parameters()):
             param.requires_grad = i > end_index
+
+    _freeze_batchnorm_running_stats(model)
     
     return end_index
+
+
+def _freeze_batchnorm_running_stats(model: nn.Module) -> None:
+    """
+    Put BatchNorm modules whose affine parameters are frozen into eval mode so
+    their running mean/variance are not updated during training.
+    """
+    bn_types = (
+        nn.BatchNorm1d,
+        nn.BatchNorm2d,
+        nn.BatchNorm3d,
+        nn.SyncBatchNorm,
+    )
+
+    def _bn_eval_pre_hook(module, _inputs):
+        if module.training:
+            module.train(False)
+
+    for module in model.modules():
+        if isinstance(module, bn_types):
+            # If any parameter still requires grad, keep updates enabled.
+            if any(param.requires_grad for param in module.parameters()):
+                continue
+            module.train(False)
+            if getattr(module, "_freeze_bn_hook", None) is None:
+                handle = module.register_forward_pre_hook(_bn_eval_pre_hook)
+                module._freeze_bn_hook = handle
+
+
+def _freeze_layers_by_name(
+    model: nn.Module,
+    cfg: ConfigLoader,
+    training_cfg: dict,
+) -> tuple[bool, int, int]:
+    """
+    Freeze backbone parameters by matching substrings on parameter names.
+    Returns (applied, trainable_count, total_params).
+    """
+    keywords = training_cfg.get("freeze_trainable_keywords")
+    if keywords is None:
+        model_name = cfg.get_model_name().lower()
+        # Default keywords per architecture family
+        if "densenet" in model_name or "efficientnet" in model_name:
+            keywords = ("classifier", "class_layers", "head", "out", "fc")
+        elif "resnet" in model_name or "seresnet" in model_name:
+            keywords = ("fc", "classifier", "head", "class_layers", "out")
+        elif "vit" in model_name or "swin" in model_name or "convnext" in model_name:
+            keywords = ("head", "classifier", "mlp_head", "proj")
+        else:
+            return (False, 0, sum(1 for _ in model.parameters()))
+
+    if isinstance(keywords, str):
+        keywords = [keywords]
+    keywords = tuple(kw.lower() for kw in keywords)
+
+    total_params = 0
+    trainable_params = 0
+    for name, param in model.named_parameters():
+        total_params += 1
+        lower_name = name.lower()
+        should_train = any(kw in lower_name for kw in keywords)
+        param.requires_grad = should_train
+        if should_train:
+            trainable_params += 1
+
+    if trainable_params == 0:
+        return (False, trainable_params, total_params)
+    return (True, trainable_params, total_params)
 
 
 def freeze_layers_up_to_progressive_ft(model, cfg: ConfigLoader, layerwise_lrs=None) -> list:

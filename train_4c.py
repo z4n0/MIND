@@ -111,9 +111,6 @@ def main():
 
     images, labels = np.array(images), np.array(labels)
 
-    # The initial train_test_split is removed to avoid data leakage.
-    # The cross-validation class will handle all data splitting internally.
-
     df = pd.DataFrame({"image_path": images,
                        "label": labels,
                        "patient_id": [extract_patient_id(p) for p in images]})
@@ -121,7 +118,7 @@ def main():
     unique_pats = pat_df["patient_id"].values
     pat_labels  = pat_df["label"].values
 
-    # ---------- transforms (as in notebook) --------------------------------
+    # ---------- transforms --------------------------------
     train_transforms, val_transforms, test_transforms = tf.get_transforms(cfg)
 
     # ---------- model ------------------------------------------------------
@@ -189,7 +186,6 @@ def main():
         test_images_paths_np=te_imgs,
         test_true_labels_np=te_y,
         yaml_path=str(PROJ_ROOT / args.yaml),
-        color_transforms=False,
         model_library=model_library,
         pretrained_weights=pretrained_weights,
         execution_time=execution_time,
@@ -197,6 +193,8 @@ def main():
         val_counts=val_counts,
         test_counts=test_counts,
         output_dir=str(RUN_DIR),
+        test_pat_ids_per_fold=experiment.test_pat_ids_per_fold,
+        best_fold_idx=best_idx,
     )
 
     # ---------- cleanup ----------------------------------------------------

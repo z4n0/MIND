@@ -199,7 +199,6 @@ def main():
         test_images_paths_np=te_imgs,
         test_true_labels_np=te_y,
         yaml_path=str(PROJ_ROOT / args.yaml),
-        color_transforms=False,
         model_library=model_library,
         pretrained_weights=pretrained_weights,
         execution_time=execution_time,
@@ -208,7 +207,7 @@ def main():
         test_counts=test_counts,
         output_dir=str(RUN_DIR),
         test_pat_ids_per_fold=experiment.test_pat_ids_per_fold,
-        best_idx=best_idx,
+        best_fold_idx=best_idx,
     )
 
     # ---------- cleanup ----------------------------------------------------

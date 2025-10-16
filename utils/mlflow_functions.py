@@ -241,6 +241,17 @@ def log_folds_results_to_csv(fold_results, prefix='val'):
     # Log formatted tags
     if formatted_fold_tags:
         mlflow.set_tags(formatted_fold_tags)
+        # Also log formatted values as metrics
+        formatted_metrics = {}
+        for tag_key, tag_value in formatted_fold_tags.items():
+            # Extract mean value from "mean ± std" format
+            try:
+                mean_str = tag_value.split(' ± ')[0]
+                formatted_metrics[tag_key] = float(mean_str)
+            except (ValueError, IndexError):
+                pass
+        if formatted_metrics:
+            mlflow.log_metrics(formatted_metrics)
 
     # Log the full table as CSV artifact
     csv_path = f"{prefix}_fold_metrics.csv"
@@ -422,7 +433,6 @@ def log_run_to_mlflow(
     yaml_path: str,
     *,
     device: Optional[torch.device] = None,  # <-- Make device optional
-    color_transforms: bool = False,
     model_library: str = "torchvision",
     pretrained_weights: Optional[str] = None,
     ssl: bool = False,
@@ -543,7 +553,7 @@ def log_run_to_mlflow(
                 }
             )
         # --------------------- METRICS
-        log_kfold_epoch_metrics(per_fold_metrics, prefix="val")
+        # log_kfold_epoch_metrics(per_fold_metrics, prefix="val")
         per_fold = np.asarray(
             [
                 (
@@ -693,6 +703,17 @@ def log_run_to_mlflow(
             
             if formatted_tags:
                 mlflow.set_tags(formatted_tags)
+                # Also log formatted values as metrics
+                formatted_metrics = {}
+                for tag_key, tag_value in formatted_tags.items():
+                    # Extract mean value from "mean ± std" format
+                    try:
+                        mean_str = tag_value.split(' ± ')[0]
+                        formatted_metrics[tag_key] = float(mean_str)
+                    except (ValueError, IndexError):
+                        pass
+                if formatted_metrics:
+                    mlflow.log_metrics(formatted_metrics)
                 
         except Exception as e:
             print(f"Warning: failed to log patient-level metrics: {e}")

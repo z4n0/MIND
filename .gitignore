@@ -6,6 +6,7 @@
 /tmp_gradcam
 /venv
 /.venv
+/clinica
 *.pth
 /learning_curves/*
 /__pycache__

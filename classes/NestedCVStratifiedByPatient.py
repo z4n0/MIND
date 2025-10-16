@@ -11,6 +11,7 @@ import os
 import matplotlib.pyplot as plt # Assuming plt is used by plotting functions
 # Assume these are in your utils files:
 from utils.data_visualization_functions import plot_learning_curves, plot_confusion_matrix
+from classes.ModelManager import ModelManager
 from utils.test_functions import evaluate_model
 # Also assume make_loader, train_epoch, val_epoch, oversample_minority,
 # undersample_majority, freeze_layers_up_to, print_model_summary are available
@@ -64,7 +65,7 @@ class NestedCVStratifiedByPatient:
         self.best_lr = None
         self.class_names = class_names
         self.model_factory = model_factory # e.g., a function: def create_model(lr): ...
-        self.model_manager = model_manager # e.g., an object with setup_model method
+        self.model_manager: ModelManager = model_manager # e.g., an object with setup_model method
         self.train_fn = train_fn if train_fn is not None else train_epoch
         self.val_fn = val_fn if val_fn is not None else val_epoch
         self.num_folds = num_folds if num_folds is not None else self.cfg.get_num_folds()
@@ -93,7 +94,7 @@ class NestedCVStratifiedByPatient:
         self.cm_dir = str(self.output_dir / "confusion_matrices")
         self.cm_patient_dir = str(self.output_dir / "confusion_matrices" / "patient")
         self.learning_dir = str(self.output_dir / "learning_curves")
-        self.test_pat_ids_per_fold = {} #<-- to store test patient ids for each fold
+        self._test_pat_ids_per_fold = {} #<-- to store test patient ids for each fold
 
         print(f"Detected {self.num_classes} unique classes.")
 
@@ -240,7 +241,7 @@ class NestedCVStratifiedByPatient:
     @property
     def test_pat_ids_per_fold(self):
         """Returns the patient IDs used for the outer test set in all folds."""
-        return self.test_pat_ids_per_fold
+        return self._test_pat_ids_per_fold
     
     @property
     def num_outer_images(self):
@@ -272,7 +273,7 @@ class NestedCVStratifiedByPatient:
         arg: fold_idx (int): The index of the fold for which to get the test patient IDs array
         return: np.ndarray: The patient IDs used for the outer test set in the given fold decided by index arg
         ."""
-        return self.test_pat_ids_per_fold.get(fold_idx)
+        return self._test_pat_ids_per_fold.get(fold_idx)
     
     
     def _determine_num_classes(self):
@@ -331,19 +332,23 @@ class NestedCVStratifiedByPatient:
             When using model_factory, the learning rate is passed to the factory function.
             When using model_manager, the model setup is delegated to the manager's setup_model method.
         """
-        torch.manual_seed(self.cfg.data_splitting["random_seed"])
+        torch.manual_seed(self.cfg.get_random_seed())
+        
         if self.model_manager is not None:
             # print(f"Using model manager: {self.model_manager}") # For debugging
             model, device = self.model_manager.setup_model(
                 num_classes=self.num_classes,
                 pretrained_weights=self.pretrained_weights
             )
+            
         elif self.model_factory is not None:
             # print(f"Using passed model factory.") # For debugging
             device = self.device
             if learning_rate_for_factory is None:
                 # This case might need a default LR from cfg or error if not for Optuna
-                lr = self.cfg.optimizer.get("lr", 0.001) # Get a default if not for Optuna
+                if "lr" not in self.cfg.optimizer:
+                    raise ValueError("lr not found in optimizer config")
+                lr = self.cfg.optimizer["lr"]# Get a default if not for Optuna
                 print(f"Warning: model_factory used without specific LR, using default/cfg LR: {lr}")
             else:
                 lr = learning_rate_for_factory
@@ -782,6 +787,7 @@ class NestedCVStratifiedByPatient:
             model, device = self._get_model_and_device(
                 learning_rate_for_factory=lr
             )
+            
             loss_fn = self._get_loss_function(y_tr_bal)
             optimizer = self._get_optimizer(
                 model, lr, opt_overrides=opt_overrides
@@ -1183,7 +1189,7 @@ class NestedCVStratifiedByPatient:
 
             train_patients = self.unique_pat_ids[train_pat_idx]
             test_patients = self.unique_pat_ids[test_pat_idx]
-            self.test_pat_ids_per_fold[fold_idx_actual] = test_patients # store test patient ids
+            self._test_pat_ids_per_fold[fold_idx_actual] = test_patients # store test patient ids
 
             train_mask = self.df["patient_id"].isin(train_patients)
             test_mask = self.df["patient_id"].isin(test_patients)

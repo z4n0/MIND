@@ -135,8 +135,11 @@ class ConfigLoader:
         #         raise ValueError("Missing required configuration sections")
             
         if self.get_in_channels() == 4 and self.training["transfer_learning"] == True:
-            print(f"found {self.model['in_channels']} channels in input data and {self.training['transfer_learning']} in transfer learning")
-            raise ValueError("Transfer learning is not supported for 4-channel input")
+            print(f"⚠️  Warning: Using 4-channel input with pretrained weights (transfer_learning=True)")
+            print(f"   Found {self.model['in_channels']} channels in input data")
+            print(f"   The first convolution layer will be automatically adapted to handle 4 channels.")
+            print(f"   Pretrained weights will be used for the first 3 channels.")
+            # Note: The model factory will handle channel adaptation automatically
                 
         self.training["pretrained"] = self.training["transfer_learning"]
         # if self.training["transfer_learning"] and self.training["fine_tuning"]:

@@ -341,6 +341,34 @@ class MonaiModelFactory():
             "efficientnet_b0": self._build_efficientnet_b0,
             "efficientnet_b3": self._build_efficientnet_b3,
         }
+    
+    def _adapt_first_conv(self, model: nn.Module, in_channels: int) -> nn.Module:
+        """Adapt the first convolution layer to handle different input channels."""
+        if in_channels > 3:
+            # Get the first conv layer
+            first_conv = model.conv1
+            if isinstance(first_conv, nn.Conv2d):
+                # Ensure kernel_size, stride, and padding are proper 2D tuples
+                kernel_size = (first_conv.kernel_size[0], first_conv.kernel_size[0]) if isinstance(first_conv.kernel_size, tuple) else (first_conv.kernel_size, first_conv.kernel_size)
+                stride = (first_conv.stride[0], first_conv.stride[0]) if isinstance(first_conv.stride, tuple) else (first_conv.stride, first_conv.stride)
+                padding = (first_conv.padding[0], first_conv.padding[0]) if isinstance(first_conv.padding, tuple) else (first_conv.padding, first_conv.padding)
+                
+                # Create new conv layer with correct number of input channels
+                new_conv = nn.Conv2d(
+                    in_channels=in_channels,
+                    out_channels=first_conv.out_channels,
+                    kernel_size=kernel_size,
+                    stride=stride,
+                    padding=padding,
+                    bias=first_conv.bias is not None
+                )
+                # Initialize the new conv layer
+                nn.init.kaiming_normal_(new_conv.weight, mode='fan_out', nonlinearity='relu')
+                if new_conv.bias is not None:
+                    nn.init.constant_(new_conv.bias, 0)
+                # Replace the first conv layer
+                model.conv1 = new_conv
+        return model
 
     def create_model(self, model_name, pretrained_weights=None, num_classes=None): # Added defaults
         
@@ -503,7 +531,7 @@ class MonaiModelFactory():
             pretrained=self.pretrained,
         )
         # EfficientNetBN needs manual first‑conv patch for >3 channels
-        model = _adapt_first_conv(model, self.input_channels)
+        model = self._adapt_first_conv(model, self.input_channels)
         return model
 
     def _build_efficientnet_b3(self, num_classes: int) -> nn.Module:
@@ -514,7 +542,7 @@ class MonaiModelFactory():
             num_classes=num_classes,
             pretrained=self.pretrained,
         )
-        model = _adapt_first_conv(model, self.input_channels)
+        model = self._adapt_first_conv(model, self.input_channels)
         return model
 
     # Vision Transformer -------------------------------------------------
@@ -539,36 +567,11 @@ class MonaiModelFactory():
         print(f" -> ViT configured with {num_classes} output classes.")
         return model
 
-    def _adapt_first_conv(self, model: nn.Module, in_channels: int) -> nn.Module:
-        """Adapt the first convolution layer to handle different input channels."""
-        if in_channels > 3:
-            # Get the first conv layer
-            first_conv = model.conv1
-            if isinstance(first_conv, nn.Conv2d):
-                # Ensure kernel_size, stride, and padding are proper 2D tuples
-                kernel_size = (first_conv.kernel_size[0], first_conv.kernel_size[0]) if isinstance(first_conv.kernel_size, tuple) else (first_conv.kernel_size, first_conv.kernel_size)
-                stride = (first_conv.stride[0], first_conv.stride[0]) if isinstance(first_conv.stride, tuple) else (first_conv.stride, first_conv.stride)
-                padding = (first_conv.padding[0], first_conv.padding[0]) if isinstance(first_conv.padding, tuple) else (first_conv.padding, first_conv.padding)
-                
-                # Create new conv layer with correct number of input channels
-                new_conv = nn.Conv2d(
-                    in_channels=in_channels,
-                    out_channels=first_conv.out_channels,
-                    kernel_size=kernel_size,
-                    stride=stride,
-                    padding=padding,
-                    bias=first_conv.bias is not None
-                )
-                # Initialize the new conv layer
-                nn.init.kaiming_normal_(new_conv.weight, mode='fan_out', nonlinearity='relu')
-                if new_conv.bias is not None:
-                    nn.init.constant_(new_conv.bias, 0)
-                # Replace the first conv layer
-                model.conv1 = new_conv
-        return model
+    
 
 
 # TIMM Model Factory -----------------------------------------------------
+# timm stands for torch image models
 class TimmModelFactory:
     """
     Factory for creating timm classification backbones that natively support
@@ -608,7 +611,10 @@ class TimmModelFactory:
             "efficientnet_b0": "efficientnet_b0",
             "efficientnet_b3": "efficientnet_b3",
             "vit_base_patch16_224": "vit_base_patch16_224",
+            "vit_small_patch16_224": "vit_small_patch16_224",      # ADD THIS
+            "vit_base_patch16_384": "vit_base_patch16_384",        # ADD THIS
             "deit_small_patch16_224": "deit_small_patch16_224",
+            "deit_base_patch16_224": "deit_base_patch16_224",      # ADD THIS
             "swin_tiny_patch4_window7_224": "swin_tiny_patch4_window7_224",
         }
 
@@ -633,35 +639,174 @@ class TimmModelFactory:
             return pretrained_weights.lower() == "imagenet"
         return bool(pretrained_weights)
 
+    def _adapt_first_layer_for_4ch(self, model: nn.Module, pretrained: bool) -> nn.Module:
+        """
+        Adapt the first layer to handle 4-channel input when using 3-channel pretrained weights.
+        
+        Three strategies:
+        1. 'repeat_avg': Average the 3-channel weights and repeat for the 4th channel (default)
+        2. 'random_init': Keep first 3 channels pretrained, initialize 4th randomly
+        3. 'zero_init': Keep first 3 channels pretrained, initialize 4th to zeros
+        
+        Args:
+            model: The model with pretrained weights
+            pretrained: Whether pretrained weights were loaded
+            
+        Returns:
+            Modified model with 4-channel first layer
+        """
+        import torch
+        
+        strategy = self.model_cfg.get("channel_adaptation_strategy", "repeat_avg")
+        
+        # Find the first conv layer (different for different architectures)
+        first_conv = None
+        first_conv_name = None
+        
+        # Common first layer names in different architectures
+        # ViT/DeiT use 'patch_embed.proj', CNNs use 'conv1' or similar
+        for name, module in model.named_modules():
+            if isinstance(module, nn.Conv2d):
+                # Check if it's likely the first conv (has 3 input channels if pretrained)
+                if module.in_channels == 3 and pretrained:
+                    first_conv = module
+                    first_conv_name = name
+                    break
+        
+        if first_conv is None:
+            print("⚠️  Could not find first conv layer with 3 input channels to adapt.")
+            print("   The model may already support 4 channels or may fail during forward pass.")
+            return model
+            
+        print(f"📌 Adapting first layer '{first_conv_name}' from 3 to 4 channels using '{strategy}' strategy")
+        
+        # Get original weights and parameters
+        old_weight = first_conv.weight.data  # Shape: (out_channels, 3, kH, kW)
+        out_channels = first_conv.out_channels
+        # Ensure kernel_size, stride, padding are tuples for type safety
+        kernel_size = first_conv.kernel_size if isinstance(first_conv.kernel_size, tuple) else (first_conv.kernel_size, first_conv.kernel_size)
+        stride = first_conv.stride if isinstance(first_conv.stride, tuple) else (first_conv.stride, first_conv.stride)
+        padding = first_conv.padding if isinstance(first_conv.padding, tuple) else (first_conv.padding, first_conv.padding)
+        bias = first_conv.bias is not None
+        
+        # Create new conv layer with 4 input channels
+        new_conv = nn.Conv2d(
+            in_channels=4,
+            out_channels=out_channels,
+            kernel_size=kernel_size,  # type: ignore
+            stride=stride,  # type: ignore
+            padding=padding,  # type: ignore
+            bias=bias
+        )
+        
+        # Initialize new weights based on strategy
+        with torch.no_grad():
+            if strategy == "repeat_avg":
+                # Average the RGB weights for the 4th channel
+                avg_weight = old_weight.mean(dim=1, keepdim=True)  # Average across input channels
+                new_conv.weight[:, :3, :, :] = old_weight  # Copy RGB weights
+                new_conv.weight[:, 3:4, :, :] = avg_weight  # Use average for 4th channel
+                print(f"   ✓ Copied RGB pretrained weights + averaged for channel 4")
+                
+            elif strategy == "random_init":
+                # Keep RGB pretrained, initialize 4th channel randomly
+                new_conv.weight[:, :3, :, :] = old_weight  # Copy RGB weights
+                nn.init.kaiming_normal_(new_conv.weight[:, 3:4, :, :], mode='fan_out', nonlinearity='relu')
+                print(f"   ✓ Copied RGB pretrained weights + random init for channel 4")
+                
+            elif strategy == "zero_init":
+                # Keep RGB pretrained, initialize 4th channel to zeros
+                new_conv.weight[:, :3, :, :] = old_weight  # Copy RGB weights
+                new_conv.weight[:, 3:4, :, :].zero_()
+                print(f"   ✓ Copied RGB pretrained weights + zero init for channel 4")
+                
+            else:
+                raise ValueError(f"Unknown channel adaptation strategy: {strategy}")
+            
+            # Copy bias if present
+            if bias and first_conv.bias is not None and new_conv.bias is not None:
+                new_conv.bias.data = first_conv.bias.data
+        
+        # Replace the first conv layer in the model
+        # Navigate the module hierarchy to replace the layer
+        if first_conv_name is None:
+            raise ValueError("Could not determine first conv layer name")
+        
+        parts = first_conv_name.split('.')
+        if len(parts) == 1:
+            # Direct attribute (e.g., 'conv1')
+            setattr(model, first_conv_name, new_conv)
+        else:
+            # Nested attribute (e.g., 'patch_embed.proj')
+            parent = model
+            for part in parts[:-1]:
+                parent = getattr(parent, part)
+            setattr(parent, parts[-1], new_conv)
+        
+        print(f"   ✓ First layer adapted successfully")
+        return model
+
     def create_model(self, model_name: str, pretrained_weights=None,
                      num_classes: int = 2) -> nn.Module:
         """
         Build a timm model with `in_chans` taken from cfg, and the specified
         num_classes. Raises a helpful error when the name is not found.
+        
+        Supports 4-channel inputs with pretrained weights by:
+        1. Loading model with 3 channels and pretrained weights
+        2. Adapting the first conv layer to accept 4 channels
+        3. Preserving pretrained weights for first 3 channels
         """
         timm_name = self._normalize_name(model_name)
         use_pretrained = self._resolve_pretrained_flag(pretrained_weights)
 
-        try:
-            model = timm.create_model(
-                timm_name,
-                pretrained=use_pretrained,
-                in_chans=self.input_channels,           # ← 4-channel ready
-                num_classes=num_classes,
-                global_pool=self.global_pool,
-                drop_rate=self.drop_rate,
-                drop_path_rate=self.drop_path_rate,
-            )
-        except Exception as exc:
-            # Surface a readable message with close matches
-            all_models = timm.list_models(pretrained=use_pretrained)
-            suggestions = get_close_matches(timm_name, all_models, n=5, cutoff=0.3)
-            msg = (
-                f"[timm] Could not instantiate model '{timm_name}'. "
-                f"Close matches: {suggestions}. "
-                "Tip: set cfg.model['timm_name'] to the exact timm identifier."
-            )
-            raise ValueError(msg) from exc
+        # Handle 4-channel input with pretrained weights
+        if self.input_channels == 4 and use_pretrained:
+            print(f"🔧 Creating model with 3 channels first (for pretrained weights), then adapting to 4 channels")
+            try:
+                # First create model with 3 channels to load pretrained weights
+                model = timm.create_model(
+                    timm_name,
+                    pretrained=use_pretrained,
+                    in_chans=3,  # Load with 3 channels initially for pretrained weights
+                    num_classes=num_classes,
+                    global_pool=self.global_pool,
+                    drop_rate=self.drop_rate,
+                    drop_path_rate=self.drop_path_rate,
+                )
+                # Then adapt the first layer to 4 channels
+                model = self._adapt_first_layer_for_4ch(model, pretrained=use_pretrained)
+                
+            except Exception as exc:
+                all_models = timm.list_models(pretrained=use_pretrained)
+                suggestions = get_close_matches(timm_name, all_models, n=5, cutoff=0.3)
+                msg = (
+                    f"[timm] Could not instantiate model '{timm_name}'. "
+                    f"Close matches: {suggestions}. "
+                    "Tip: set cfg.model['timm_name'] to the exact timm identifier."
+                )
+                raise ValueError(msg) from exc
+        else:
+            # Standard case: 3-channel or non-pretrained models
+            try:
+                model = timm.create_model(
+                    timm_name,
+                    pretrained=use_pretrained,
+                    in_chans=self.input_channels,
+                    num_classes=num_classes,
+                    global_pool=self.global_pool,
+                    drop_rate=self.drop_rate,
+                    drop_path_rate=self.drop_path_rate,
+                )
+            except Exception as exc:
+                all_models = timm.list_models(pretrained=use_pretrained)
+                suggestions = get_close_matches(timm_name, all_models, n=5, cutoff=0.3)
+                msg = (
+                    f"[timm] Could not instantiate model '{timm_name}'. "
+                    f"Close matches: {suggestions}. "
+                    "Tip: set cfg.model['timm_name'] to the exact timm identifier."
+                )
+                raise ValueError(msg) from exc
 
         # Optional: linear-probe warmup support—freeze backbone if requested
         linear_probe = bool(self.model_cfg.get("linear_probe_warmup", False))
