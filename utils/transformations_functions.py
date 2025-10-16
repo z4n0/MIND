@@ -607,15 +607,16 @@ def get_custom_transforms_lists(cfg: ConfigLoader, fold_specific_stats: dict, cr
 def get_pretrained_model_transforms_list_without_crop(cfg:ConfigLoader)->Tuple[List[MapTransform], List[MapTransform]]:
     """
     Get the transforms for pretrained models without crop.
+    Handles both 3-channel and 4-channel inputs.
     
+    For 3-channel: applies standard ImageNet normalization
+    For 4-channel: skips ImageNet normalization (uses scaling only)
+                   The adapted first conv layer will handle the 4th channel
     """
     from monai.transforms import Resized, ScaleIntensityd, NormalizeIntensityd
 
+    num_channels = cfg.get_model_input_channels()  # Get number of channels from config
     imagenet_weights = IMAGENET_WEIGHTS.get(cfg.get_model_name().lower(), None)
-    # pull mean/std from torchvision weights
-    tv_t = imagenet_weights.transforms()
-    mean = torch.tensor(tv_t.mean)
-    std  = torch.tensor(tv_t.std)
     
     use_color_transforms = cfg.get_intensity_augmentation_preset() not in ["none", "off", "no", "0"]
 
@@ -624,16 +625,39 @@ def get_pretrained_model_transforms_list_without_crop(cfg:ConfigLoader)->Tuple[L
     train_transforms_list.extend(_get_spatial_augmentations(cfg))
     if use_color_transforms:
         train_transforms_list.extend(_get_intensity_augmentations(cfg))
-    # Apply ImageNet normalization on [0,1]-scaled tensor
-    train_transforms_list.append(
-        NormalizeIntensityd(keys=["image"], subtrahend=mean, divisor=std, channel_wise=True)
-    )
+    
+    # Apply normalization based on number of channels
+    if num_channels == 3 and imagenet_weights is not None:
+        # Standard 3-channel ImageNet normalization
+        tv_t = imagenet_weights.transforms()
+        mean = torch.tensor(tv_t.mean)
+        std  = torch.tensor(tv_t.std)
+        train_transforms_list.append(
+            NormalizeIntensityd(keys=["image"], subtrahend=mean, divisor=std, channel_wise=True)
+        )
+        print(f"✓ Using ImageNet normalization for 3-channel input")
+    elif num_channels == 4:
+        # For 4-channel: skip ImageNet normalization
+        # The channel adaptation layer will learn to handle the 4th channel
+        # ScaleIntensityd was already applied in new_get_preNormalization_transforms_list
+        print(f"✓ Using 4-channel input: Skipping ImageNet normalization (using [0,1] scaling only)")
+        print(f"  → The adapted first conv layer will handle channel-specific normalization")
+    else:
+        # Fallback for other channel counts
+        print(f"⚠️  Using {num_channels} channels without ImageNet normalization")
+    
     # -----------------------------------------------------------------------
-    # Validation: resize-only + ImageNet norm (no crop)
+    # Validation: resize-only + same normalization as training
     val_transforms_list = new_get_preNormalization_transforms_list(cfg)
-    val_transforms_list.append(
-        NormalizeIntensityd(keys=["image"], subtrahend=mean, divisor=std, channel_wise=True)
-    )
+    
+    if num_channels == 3 and imagenet_weights is not None:
+        tv_t = imagenet_weights.transforms()
+        mean = torch.tensor(tv_t.mean)
+        std  = torch.tensor(tv_t.std)
+        val_transforms_list.append(
+            NormalizeIntensityd(keys=["image"], subtrahend=mean, divisor=std, channel_wise=True)
+        )
+    # For 4-channel or other cases, no additional normalization (scaling already done in pre-normalization)
     
     return train_transforms_list, val_transforms_list
 

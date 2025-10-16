@@ -23,18 +23,24 @@ data_loading:
   batch_size: 16  # DeiT-Base can be memory-intensive
 
 training:
-  num_epochs: 450
+  num_epochs: 200
   transfer_learning: true
-  early_stopping_patience: 50
+  early_stopping_patience: 30
   oversample: true
   undersample: false
   weighted_loss: false
   mixup_alpha: 0
+  # Transfer learning freeze points for DeiT-Base (152 layers, 12 blocks):
+  #   -1  = No freezing (full fine-tuning)
+  #   75  = Freeze first 6 blocks (50%)
+  #   111 = Freeze first 9 blocks (75%) ← RECOMMENDED START
+  #   149 = Linear probe (freeze all except head)
+  freezed_layerIndex: 111  # Freeze more for larger model to prevent overfitting
 
 optimizer:
-  learning_rate: 5e-5  # DeiT often works better with slightly lower LR
+  learning_rate: 3e-5  # Lower LR for larger model
   optimizer_name: "AdamW"
-  weight_decay: 0.05  # DeiT typically uses higher weight decay
+  weight_decay: 2e-4  # More regularization for larger model
 
 scheduler:
   scheduler_name: "ReduceLROnPlateau"

@@ -23,18 +23,24 @@ data_loading:
   batch_size: 8  # Smaller batch due to larger input (384x384)
 
 training:
-  num_epochs: 450
+  num_epochs: 200
   transfer_learning: true
-  early_stopping_patience: 50
+  early_stopping_patience: 30
   oversample: true
   undersample: false
   weighted_loss: false
   mixup_alpha: 0
+  # Transfer learning freeze points for ViT-Base-384 (152 layers, 12 blocks):
+  #   -1  = No freezing (full fine-tuning)
+  #   75  = Freeze first 6 blocks (50%)
+  #   111 = Freeze first 9 blocks (75%) ← RECOMMENDED START
+  #   149 = Linear probe (freeze all except head)
+  freezed_layerIndex: 111  # Freeze more for larger model and larger input size
 
 optimizer:
-  learning_rate: 1e-4
+  learning_rate: 3e-5  # Lower LR for large model with 384x384 input
   optimizer_name: "AdamW"
-  weight_decay: 1e-5
+  weight_decay: 2e-4  # More regularization
 
 scheduler:
   scheduler_name: "ReduceLROnPlateau"

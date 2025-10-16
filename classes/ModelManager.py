@@ -764,16 +764,22 @@ class TimmModelFactory:
         if self.input_channels == 4 and use_pretrained:
             print(f"🔧 Creating model with 3 channels first (for pretrained weights), then adapting to 4 channels")
             try:
+                # Prepare model creation kwargs
+                model_kwargs = {
+                    "pretrained": use_pretrained,
+                    "in_chans": 3,  # Load with 3 channels initially for pretrained weights
+                    "num_classes": num_classes,
+                    "global_pool": self.global_pool,
+                    "drop_rate": self.drop_rate,
+                }
+                
+                # Only add drop_path_rate for models that support it (ViT, DeiT, ConvNext, etc.)
+                # DenseNet and ResNet don't support this parameter
+                if any(x in timm_name.lower() for x in ['vit', 'deit', 'swin', 'convnext', 'efficientnet']):
+                    model_kwargs["drop_path_rate"] = self.drop_path_rate
+                
                 # First create model with 3 channels to load pretrained weights
-                model = timm.create_model(
-                    timm_name,
-                    pretrained=use_pretrained,
-                    in_chans=3,  # Load with 3 channels initially for pretrained weights
-                    num_classes=num_classes,
-                    global_pool=self.global_pool,
-                    drop_rate=self.drop_rate,
-                    drop_path_rate=self.drop_path_rate,
-                )
+                model = timm.create_model(timm_name, **model_kwargs)
                 # Then adapt the first layer to 4 channels
                 model = self._adapt_first_layer_for_4ch(model, pretrained=use_pretrained)
                 
@@ -781,23 +787,30 @@ class TimmModelFactory:
                 all_models = timm.list_models(pretrained=use_pretrained)
                 suggestions = get_close_matches(timm_name, all_models, n=5, cutoff=0.3)
                 msg = (
-                    f"[timm] Could not instantiate model '{timm_name}'. "
-                    f"Close matches: {suggestions}. "
+                    f"[timm] Could not instantiate 4-channel model '{timm_name}'. "
+                    f"Error: {type(exc).__name__}: {exc}\n"
+                    f"Suggested models: {suggestions}. "
                     "Tip: set cfg.model['timm_name'] to the exact timm identifier."
                 )
                 raise ValueError(msg) from exc
         else:
             # Standard case: 3-channel or non-pretrained models
             try:
-                model = timm.create_model(
-                    timm_name,
-                    pretrained=use_pretrained,
-                    in_chans=self.input_channels,
-                    num_classes=num_classes,
-                    global_pool=self.global_pool,
-                    drop_rate=self.drop_rate,
-                    drop_path_rate=self.drop_path_rate,
-                )
+                # Prepare model creation kwargs
+                model_kwargs = {
+                    "pretrained": use_pretrained,
+                    "in_chans": self.input_channels,
+                    "num_classes": num_classes,
+                    "global_pool": self.global_pool,
+                    "drop_rate": self.drop_rate,
+                }
+                
+                # Only add drop_path_rate for models that support it (ViT, DeiT, ConvNext, etc.)
+                # DenseNet and ResNet don't support this parameter
+                if any(x in timm_name.lower() for x in ['vit', 'deit', 'swin', 'convnext', 'efficientnet']):
+                    model_kwargs["drop_path_rate"] = self.drop_path_rate
+                
+                model = timm.create_model(timm_name, **model_kwargs)
             except Exception as exc:
                 all_models = timm.list_models(pretrained=use_pretrained)
                 suggestions = get_close_matches(timm_name, all_models, n=5, cutoff=0.3)

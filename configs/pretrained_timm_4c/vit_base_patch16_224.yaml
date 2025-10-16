@@ -23,18 +23,24 @@ data_loading:
   batch_size: 16  # ViT-Base can be memory-intensive
 
 training:
-  num_epochs: 450
+  num_epochs: 200
   transfer_learning: true
-  early_stopping_patience: 50
+  early_stopping_patience: 30
   oversample: true
   undersample: false
   weighted_loss: false
   mixup_alpha: 0
+  # Transfer learning freeze points for ViT-Base (12 blocks, similar to ViT-Small):
+  #   -1  = No freezing (full fine-tuning)
+  #   75  = Freeze first 6 blocks (50%) ← RECOMMENDED START
+  #   111 = Freeze first 9 blocks (75%)
+  #   149 = Linear probe (freeze all except head)
+  freezed_layerIndex: 111  # Freeze more for larger model to prevent overfitting
 
 optimizer:
-  learning_rate: 1e-4
+  learning_rate: 3e-5  # Even lower LR for larger model
   optimizer_name: "AdamW"
-  weight_decay: 1e-5
+  weight_decay: 2e-4  # More regularization for larger model
 
 scheduler:
   scheduler_name: "ReduceLROnPlateau"

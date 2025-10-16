@@ -24,7 +24,7 @@ model:
 training:
   num_epochs: 210
   early_stopping_patience: 30
-  freezed_layerIndex: 40
+  freezed_layerIndex: 40 #end of block 3
 
 # Optimizer
 optimizer:

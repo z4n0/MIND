@@ -53,6 +53,7 @@ optimizer:
   learning_rate: 1e-4  # Will be adjusted automatically
   optimizer_name: "Adam"
   weight_decay: 2e-5
+  patience: 25
 
 scheduler:
   scheduler_name: "ReduceLROnPlateau"

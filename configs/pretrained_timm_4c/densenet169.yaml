@@ -21,16 +21,22 @@ data_augmentation:
 
 data_loading:
   batch_size: 32
+  num_workers: 4
 
 training:
-  num_epochs: 450
+  num_epochs: 200
   transfer_learning: true
-  early_stopping_patience: 50
+  early_stopping_patience: 30
   oversample: true
   undersample: false
   weighted_loss: false
   mixup_alpha: 0
-
+  # Transfer learning freeze points for DenseNet169 (508 layers):
+  #   -1  = No freezing (full fine-tuning)
+  #   116 = Freeze through denseblock2 (moderate)
+  #   311 = Freeze through denseblock3 (conservative) ← RECOMMENDED
+  freezed_layerIndex: 311  # Freeze first 3 blocks, fine-tune denseblock4
+  
 optimizer:
   learning_rate: 1e-4
   optimizer_name: "Adam"

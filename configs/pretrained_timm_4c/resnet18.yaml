@@ -16,20 +16,26 @@ model:
   drop_path_rate: 0.0
 
 data_augmentation:
-  resize_spatial_size: [224, 224]
+  # resize_spatial_size: [224, 224]
   crop_size: [224, 224]
 
 data_loading:
   batch_size: 64  # ResNet18 is small, can use larger batch
 
 training:
-  num_epochs: 450
+  num_epochs: 200
   transfer_learning: true
-  early_stopping_patience: 50
+  early_stopping_patience: 30
   oversample: true
   undersample: false
   weighted_loss: false
   mixup_alpha: 0
+  # Transfer learning freeze points for ResNet18 (62 layers):
+  #   -1  = No freezing (full fine-tuning)
+  #   28  = Freeze through layer1 (moderate)
+  #   43  = Freeze through layer2 (conservative) ← RECOMMENDED
+  #   58  = Freeze through layer3 (very conservative)
+  freezed_layerIndex: 43  # Freeze early layers, fine-tune layer3-4
 
 optimizer:
   learning_rate: 1e-4
@@ -39,7 +45,6 @@ optimizer:
 scheduler:
   scheduler_name: "ReduceLROnPlateau"
   factor: 0.5
-  scheduler_patience: 25
   threshold: 1e-4
   min_lr: 1e-8
 

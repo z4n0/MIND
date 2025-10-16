@@ -44,14 +44,14 @@ echo "────────────────────────�
 # All 4-channel pretrained models using timm library with ImageNet weights
 configs=(
     "configs/pretrained_timm_4c/resnet18.yaml"
-    "configs/pretrained_timm_4c/resnet50.yaml"
+    # "configs/pretrained_timm_4c/resnet50.yaml"
     "configs/pretrained_timm_4c/densenet121.yaml"
     "configs/pretrained_timm_4c/densenet169.yaml"
     "configs/pretrained_timm_4c/vit_small_patch16_224.yaml"
-    "configs/pretrained_timm_4c/vit_base_patch16_224.yaml"
-    "configs/pretrained_timm_4c/deit_small_patch16_224.yaml"
-    "configs/pretrained_timm_4c/deit_base_patch16_224.yaml"
-    "configs/pretrained_timm_4c/vit_base_patch16_384.yaml"
+    # "configs/pretrained_timm_4c/vit_base_patch16_224.yaml"
+    # "configs/pretrained_timm_4c/deit_small_patch16_224.yaml"
+    # "configs/pretrained_timm_4c/deit_base_patch16_224.yaml"
+    # "configs/pretrained_timm_4c/vit_base_patch16_384.yaml"
 )
 
 # ── 4) run configs sequentially ─────────────────────────────────────────────

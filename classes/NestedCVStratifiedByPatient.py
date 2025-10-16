@@ -452,11 +452,29 @@ class NestedCVStratifiedByPatient:
             from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
             return CosineAnnealingWarmRestarts(optimizer, T_0=7, T_mult=2, eta_min=5e-6), True
         else:
-            try:
-                patience = self.cfg.optimizer.get("patience")
-            except:
-                raise ValueError(f"patience not found in cfg for {self.cfg.get_model_name()}")
-            return optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=patience, factor=0.5), False
+            # Get scheduler configuration
+            scheduler_cfg = self.cfg.get_scheduler()
+            if scheduler_cfg is None:
+                raise ValueError(f"Scheduler configuration not found in cfg for {self.cfg.get_model_name()}")
+            
+            # Try to get patience from scheduler config (scheduler_patience) or optimizer config (patience)
+            patience = scheduler_cfg.get("scheduler_patience") or scheduler_cfg.get("patience") or self.cfg.optimizer.get("patience")
+            if patience is None:
+                raise ValueError(f"patience (or scheduler_patience) not found in cfg for {self.cfg.get_model_name()}")
+            
+            # Get other scheduler parameters and ensure they are floats
+            factor = float(scheduler_cfg.get("factor", 0.5))
+            threshold = float(scheduler_cfg.get("threshold", 1e-4))
+            min_lr = float(scheduler_cfg.get("min_lr", 1e-8))
+            
+            return optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer, 
+                mode='min', 
+                patience=patience, 
+                factor=factor, #0.5 fixed before
+                threshold=threshold,#new
+                min_lr=min_lr#new
+            ), False
 
     # Aggiungi questo metodo all'interno della tua classe NestedCVStratifiedByPatient
 
