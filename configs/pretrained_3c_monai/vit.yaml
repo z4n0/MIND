@@ -16,7 +16,7 @@ data_augmentation:
 
 model:
   model_name: "ViT"
-  library: "monai"
+  library: "monai" #mandatory 
   vit_name: 'vit-b_32' 
   spatial_dims: 2
   in_channels: 3 # Or 3, depending on the dataset
@@ -34,14 +34,7 @@ model:
 training:
   num_epochs: 450
   early_stopping_patience: 50
-  mixup_alpha: 0
-  oversample: false
-  undersample: false
-  weighted_loss: false
-  fine_tuning: false
-  transfer_learning: true
-  freezed_layerIndex: null
-  use_color_transforms: true
+  freezed_layerIndex: 57 #end of block 3
 
 # Optimizer
 optimizer:

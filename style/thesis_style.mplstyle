@@ -44,28 +44,15 @@ legend.handletextpad: 0.6
 
 # --- Color cycle (Okabe–Ito + neutral) ---
 # Colorblind-safe, high contrast, good for print
-axes.prop_cycle: cycler('color', [
-    '#0072B2',  # blue
-    '#D55E00',  # vermillion
-    '#009E73',  # green
-    '#CC79A7',  # purple/magenta
-    '#F0E442',  # yellow (use sparingly; good on dark curves)
-    '#56B4E9',  # sky blue
-    '#E69F00',  # orange
-    '#999999'   # grey
-])
+# blue, vermillion, green, purple/magenta, yellow, sky blue, orange, grey
+axes.prop_cycle: cycler('color', ['0072B2', 'D55E00', '009E73', 'CC79A7', 'F0E442', '56B4E9', 'E69F00', '999999'])
+
+
+# POLIMI COLOR VARIANT - Uncomment and substitute to the above one if you want to use it
+# deep navy, teal-green, dark orange, purple, cyan, mid grey, warm red
+#axes.prop_cycle: cycler('color', ['004C6D', '1D9A6C', 'E17C05', '7A5195', '00A6D6', 'B3B3B3', 'EE6352'])
+
 
 # --- Images / Heatmaps ---
 image.cmap: viridis  # perceptually uniform
-
-#POLIMI COLOR VARIANT UNCOMMENT AND SOBSTITUTE TO THE ABOVE ONE IF U WANT TO USE IT
-# axes.prop_cycle: cycler('color', [
-#     '#004C6D',  # deep navy
-#     '#1D9A6C',  # teal-green
-#     '#E17C05',  # dark orange
-#     '#7A5195',  # purple
-#     '#00A6D6',  # cyan
-#     '#B3B3B3',  # mid grey
-#     '#EE6352',  # warm red
-# ])
 

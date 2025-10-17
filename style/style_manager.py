@@ -29,13 +29,14 @@ from typing import List, Optional
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from cycler import cycler
 
 try:
     import seaborn as sns
 except Exception:  # Seaborn optional
     sns = None
 
-
+# Okabe-Ito palette
 DEFAULT_PALETTE = [
     "#0072B2",  # blue
     "#D55E00",  # vermillion
@@ -57,12 +58,15 @@ class StyleManager:
     ----------
     mplstyle_path : str
         Path to a .mplstyle file to load.
-    palette : List[str]
-        List of hex colors to use for categorical data.
+    palette : 
+        List[str] = DEFAULT_PALETTE.copy() if None else List[str] List of hex colors to use for categorical data.
+    
     font_family : Optional[str]
         Override the default font family (e.g., "DejaVu Sans").
+        
     dpi : int
         Default dpi for figures and saved files.
+        
     transparent : bool
         Save figures with transparent background by default.
     """
@@ -74,10 +78,7 @@ class StyleManager:
     transparent: bool = True
 
     def activate(self) -> None:
-        """
-        Apply the style globally. Safe to call multiple times.
-        """
-        # Load Matplotlib style
+        # 1) Load .mplstyle
         try:
             plt.style.use(self.mplstyle_path)
         except OSError as exc:
@@ -90,13 +91,18 @@ class StyleManager:
             mpl.rcParams["font.family"] = "sans-serif"
             mpl.rcParams["font.sans-serif"] = [self.font_family]
 
-        # Seaborn integration (if available)
+        # 2) Sync palette from the active style cycle
+        cycle = mpl.rcParams.get("axes.prop_cycle")
+        if cycle:
+            self.palette = cycle.by_key().get("color", self.palette)
+
+        # 3) Set Seaborn theme but KEEP the cycle from .mplstyle
         if sns is not None:
-            # Use current Matplotlib rcParams but set seaborn palette and defaults
-            sns.set_theme(context="notebook", style="whitegrid", font_scale=1.0)
+            sns.set_theme(style="whitegrid", context="notebook",
+                        rc={"axes.prop_cycle": cycler(color=self.palette)})
+            # Optional: also set seaborn's categorical palette for functions that read it
             sns.set_palette(self.palette)
 
-        # Ensure default DPI aligns with saving DPI
         mpl.rcParams["figure.dpi"] = self.dpi
         mpl.rcParams["savefig.dpi"] = self.dpi
 

@@ -38,13 +38,13 @@ class ModelManager:
         manager = ModelManager(cfg)
         model, device = manager.setup_model(num_classes=2, pretrained_weights='imagenet')
     """
-    def __init__(self, cfg, library="torchvision"):
+    def __init__(self, cfg: ConfigLoader, library="torchvision"):
         self.cfg = cfg
         self.model = None
         self.device = None
         # self.input_channels = cfg.model["in_channels"]  # e.g. 1 for grayscale, 3 for RGB
         self.library = library.lower()
-        self.model_name = cfg.model["model_name"]  # e.g. "Densenet169", "Resnet50", etc.
+        self.model_name = cfg.get_model_name()  # e.g. "Densenet169", "Resnet50", etc.
     
     def detect_device(self):
         if not torch.cuda.is_available():
@@ -75,7 +75,7 @@ class ModelManager:
                 or unsupported input channels for torchvision are requested.
 
         Notes:
-            - If pretrained_weights is 'micronet' or 'microscopynet', loads weights using get_pretrained_model.
+            - If pretrained_weights is 'micronet' or 'microscopynet', loads weights using get_nasa_pretrained_model.
             - Selects the model factory (MONAI or Torchvision) based on the library.
             - Handles multi-GPU support with DataParallel or DistributedDataParallel if multiple GPUs are available.
             - Moves the model to the detected device (CPU or CUDA).
@@ -84,7 +84,7 @@ class ModelManager:
             raise ValueError("Configuration must be provided before calling setup_model")
         
         # Set random seed for reproducible model initialization
-        torch.manual_seed(self.cfg.data_splitting["random_seed"])
+        torch.manual_seed(self.cfg.get_random_seed())
         
         self.detect_device()
         

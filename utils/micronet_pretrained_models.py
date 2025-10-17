@@ -170,131 +170,131 @@ def get_nasa_pretrained_model(
     return model
 
 
-def get_pretrained_model(
-    model_name: str = 'resnet50',
-    num_classes: int = 2,
-    pretrained_weights: str = 'microscopynet'
-) -> nn.Module:
-    """
-    Returns a model with architecture 'model_name', loaded (if possible) from
-    MicroNet pretrained weights, and with the final classifier replaced by a
-    new layer producing 'num_classes' outputs.
+# def get_pretrained_model(
+#     model_name: str = 'resnet50',
+#     num_classes: int = 2,
+#     pretrained_weights: str = 'microscopynet'
+# ) -> nn.Module:
+#     """
+#     Returns a model with architecture 'model_name', loaded (if possible) from
+#     MicroNet pretrained weights, and with the final classifier replaced by a
+#     new layer producing 'num_classes' outputs.
 
-    :param model_name: Name of the model architecture
-    :param num_classes: Number of classes for the classification head
-    :param pretrained_weights: Identifier for the MicroNet pretrained weights
-    :return: A PyTorch model
-    """
-    chosen_network_name = model_name.lower()
-    print(f"Loading model: {chosen_network_name}")
+#     :param model_name: Name of the model architecture
+#     :param num_classes: Number of classes for the classification head
+#     :param pretrained_weights: Identifier for the MicroNet pretrained weights
+#     :return: A PyTorch model
+#     """
+#     chosen_network_name = model_name.lower()
+#     print(f"Loading model: {chosen_network_name}")
 
-    # Architectures that typically load from pretrainedmodels or fallback to PyTorch Hub
-    available_nets = [
-        'densenet121', 'densenet161', 'densenet169', 'densenet201',
-        'dpn107', 'dpn131', 'dpn68', 'dpn68b', 'dpn92', 'dpn98',
-        'efficientnet-b0', 'efficientnet-b1', 'efficientnet-b2',
-        'efficientnet-b3', 'efficientnet-b4', 'efficientnet-b5',
-        'inceptionresnetv2', 'inceptionv4', 'mobilenet_v2',
-        'resnet101', 'resnet152', 'resnet18', 'resnet34', 'resnet50',
-        'resnext101_32x8d', 'resnext50_32x4d',
-        'se_resnet101', 'se_resnet152', 'se_resnet50',
-        'se_resnext101_32x4d', 'se_resnext50_32x4d',
-        'senet154', 'vgg11_bn', 'vgg13_bn', 'vgg16_bn', 'xception'
-    ]
+#     # Architectures that typically load from pretrainedmodels or fallback to PyTorch Hub
+#     available_nets = [
+#         'densenet121', 'densenet161', 'densenet169', 'densenet201',
+#         'dpn107', 'dpn131', 'dpn68', 'dpn68b', 'dpn92', 'dpn98',
+#         'efficientnet-b0', 'efficientnet-b1', 'efficientnet-b2',
+#         'efficientnet-b3', 'efficientnet-b4', 'efficientnet-b5',
+#         'inceptionresnetv2', 'inceptionv4', 'mobilenet_v2',
+#         'resnet101', 'resnet152', 'resnet18', 'resnet34', 'resnet50',
+#         'resnext101_32x8d', 'resnext50_32x4d',
+#         'se_resnet101', 'se_resnet152', 'se_resnet50',
+#         'se_resnext101_32x4d', 'se_resnext50_32x4d',
+#         'senet154', 'vgg11_bn', 'vgg13_bn', 'vgg16_bn', 'xception'
+#     ]
 
-    # 1. Special-case for EfficientNet from 'efficientnet_pytorch'
-    if 'efficientnet' in chosen_network_name:
-        model = EfficientNet.from_name(chosen_network_name)
+#     # 1. Special-case for EfficientNet from 'efficientnet_pytorch'
+#     if 'efficientnet' in chosen_network_name:
+#         model = EfficientNet.from_name(chosen_network_name)
 
-    # 2. If it's in the known list from pretrainedmodels, load from there
-    elif chosen_network_name in available_nets:
-        try:
-            model = pretrainedmodels.__dict__[chosen_network_name](
-                num_classes=1000,
-                pretrained=None
-            )
-        except KeyError:
-            raise ValueError(
-                f"Architecture {chosen_network_name} not found in pretrainedmodels."
-            )
-    else:
-        raise ValueError(f"Model {chosen_network_name} not found in pretrainedmodels.")
-    # else:
-    #     # 3. Fallback to PyTorch Hub (torchvision)
-    #     print(
-    #         f"Model {chosen_network_name} not found in pretrainedmodels. "
-    #         "Loading from PyTorch Hub instead."
-    #     )
-    #     model = torch.hub.load(
-    #         'pytorch/vision:v0.10.0', 
-    #         model_name, 
-    #         weights=None
-    #     )
+#     # 2. If it's in the known list from pretrainedmodels, load from there
+#     elif chosen_network_name in available_nets:
+#         try:
+#             model = pretrainedmodels.__dict__[chosen_network_name](
+#                 num_classes=1000,
+#                 pretrained=None
+#             )
+#         except KeyError:
+#             raise ValueError(
+#                 f"Architecture {chosen_network_name} not found in pretrainedmodels."
+#             )
+#     else:
+#         raise ValueError(f"Model {chosen_network_name} not found in pretrainedmodels.")
+#     # else:
+#     #     # 3. Fallback to PyTorch Hub (torchvision)
+#     #     print(
+#     #         f"Model {chosen_network_name} not found in pretrainedmodels. "
+#     #         "Loading from PyTorch Hub instead."
+#     #     )
+#     #     model = torch.hub.load(
+#     #         'pytorch/vision:v0.10.0', 
+#     #         model_name, 
+#     #         weights=None
+#     #     )
 
-    print(f"Loaded model: {model_name} from {model.__class__.__name__}")
-    #capitalized_model_name = model_name.capitalize()
-    # Download and load MicroNet pretrained weights
+#     print(f"Loaded model: {model_name} from {model.__class__.__name__}")
+#     #capitalized_model_name = model_name.capitalize()
+#     # Download and load MicroNet pretrained weights
     
-    # 1) Istanzio ResNet50 senza pesi predefiniti
-    model = resnet50(weights=None)  
+#     # 1) Istanzio ResNet50 senza pesi predefiniti
+#     model = resnet50(weights=None)  
 
-    # 2) Scarico lo state_dict custom
-    url = get_pretrained_microscopynet_url("resnet50", "microscopynet")
-    state_dict = load_state_dict_from_url(
-        url,
-        progress=True,
-        map_location=torch.device("cpu")  # o "cuda" se preferisci
-    )
+#     # 2) Scarico lo state_dict custom
+#     url = get_pretrained_microscopynet_url("resnet50", "microscopynet")
+#     state_dict = load_state_dict_from_url(
+#         url,
+#         progress=True,
+#         map_location=torch.device("cpu")  # o "cuda" se preferisci
+#     )
 
-    # 3) Carico i pesi e metto in eval
-    model.load_state_dict(state_dict)
-    model.eval()
+#     # 3) Carico i pesi e metto in eval
+#     model.load_state_dict(state_dict)
+#     model.eval()
 
-    print("MicroscopyNet pronto su ResNet50!")  
-    # url = get_pretrained_microscopynet_url(chosen_network_name, pretrained_weights)
-    # print(f"Loading weights from: {url}")
-    # state_dict = model_zoo.load_url(url)
-    # model.load_state_dict(state_dict, strict=False)
-    # print("Model weights loaded successfully.")
-    # print("Model structure before classifier replacement:\n", model)
+#     print("MicroscopyNet pronto su ResNet50!")  
+#     # url = get_pretrained_microscopynet_url(chosen_network_name, pretrained_weights)
+#     # print(f"Loading weights from: {url}")
+#     # state_dict = model_zoo.load_url(url)
+#     # model.load_state_dict(state_dict, strict=False)
+#     # print("Model weights loaded successfully.")
+#     # print("Model structure before classifier replacement:\n", model)
 
-    # Identify which attribute is the final classifier
-    classifier_name = get_classifier_name(model)
-    print(f"Using the '{classifier_name}' attribute for final classification.")
+#     # Identify which attribute is the final classifier
+#     classifier_name = get_classifier_name(model)
+#     print(f"Using the '{classifier_name}' attribute for final classification.")
 
-    # Replace the final classifier
-    if classifier_name == '_fc':
-        in_features = model._fc.in_features
-        model._fc = nn.Linear(in_features, num_classes)
+#     # Replace the final classifier
+#     if classifier_name == '_fc':
+#         in_features = model._fc.in_features
+#         model._fc = nn.Linear(in_features, num_classes)
 
-    elif classifier_name == 'last_linear':
-        in_features = model.last_linear.in_features
-        model.last_linear = nn.Linear(in_features, num_classes)
+#     elif classifier_name == 'last_linear':
+#         in_features = model.last_linear.in_features
+#         model.last_linear = nn.Linear(in_features, num_classes)
 
-    elif classifier_name == 'fc':
-        in_features = model.fc.in_features
-        model.fc = nn.Linear(in_features, num_classes)
+#     elif classifier_name == 'fc':
+#         in_features = model.fc.in_features
+#         model.fc = nn.Linear(in_features, num_classes)
 
-    elif classifier_name == 'classifier':
-        # e.g., DenseNet, VGG, DPN
-        if isinstance(model.classifier, nn.Linear):
-            in_features = model.classifier.in_features
-            model.classifier = nn.Linear(in_features, num_classes)
-        else:
-            # e.g., DPN might store a Conv2d layer
-            raise ValueError(
-                "Classifier is not a Linear layer. Please adapt for architectures "
-                "that use a non-Linear final layer (like DPN)."
-            )
+#     elif classifier_name == 'classifier':
+#         # e.g., DenseNet, VGG, DPN
+#         if isinstance(model.classifier, nn.Linear):
+#             in_features = model.classifier.in_features
+#             model.classifier = nn.Linear(in_features, num_classes)
+#         else:
+#             # e.g., DPN might store a Conv2d layer
+#             raise ValueError(
+#                 "Classifier is not a Linear layer. Please adapt for architectures "
+#                 "that use a non-Linear final layer (like DPN)."
+#             )
 
-    else:
-        raise ValueError(
-            "Unexpected classifier attribute name. "
-            "Please extend 'get_classifier_name' to handle it."
-        )
+#     else:
+#         raise ValueError(
+#             "Unexpected classifier attribute name. "
+#             "Please extend 'get_classifier_name' to handle it."
+#         )
 
-    # print("Model structure after classifier replacement:\n", model)
-    return model
+#     # print("Model structure after classifier replacement:\n", model)
+#     return model
 
 # --- Example calls to load the desired models ---
 

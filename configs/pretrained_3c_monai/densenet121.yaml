@@ -18,7 +18,7 @@ model:
   spatial_dims: 2
   in_channels: 3
   out_channels: 2
-  pretrained_weights: "imagenet"
+  pretrained_weights: "torchvision"
   
 # Training
 training:

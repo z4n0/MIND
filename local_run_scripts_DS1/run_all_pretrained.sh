@@ -42,16 +42,17 @@ echo "────────────────────────�
 # ── 3) define scripts to run ────────────────────────────────────────────────
 SCRIPTS_DIR="local_run_scripts_DS1/pretrained"
 scripts=(
-    "run_local_densenet121_pretrained.sh"
-    "run_local_densenet169_pretrained.sh"
-    "run_local_resnet18_pretrained.sh"
+    # "run_local_densenet121_pretrained.sh"
+    # "run_local_densenet169_pretrained.sh"
+    # "run_local_resnet18_pretrained.sh"
     # "run_local_resnet50_pretrained.sh"
-    "run_local_timm_vit_3c_pretrained.sh"
-    "run_local_vit_small_patch16_224.sh"
-    "run_local_vit_base_patch16_224.sh"
-    "run_local_vit_base_patch16_384.sh"
-    "run_local_deit_small_patch16_224.sh"
-    "run_local_deit_base_patch16_224.sh"
+    "run_local_vit_pretrained_3c.sh"
+    # "run_local_timm_vit_3c_pretrained.sh"
+    # "run_local_vit_small_patch16_224.sh"
+    # # "run_local_vit_base_patch16_224.sh"
+    # "run_local_vit_base_patch16_384.sh"
+    # "run_local_deit_small_patch16_224.sh"
+    # "run_local_deit_base_patch16_224.sh"
 )
 
 # ── 4) run scripts sequentially ─────────────────────────────────────────────
