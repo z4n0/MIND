@@ -1,0 +1,89 @@
+---
+description: the rule is helpful when generating plots/images
+alwaysApply: false
+---
+description: >
+  The rule enforces a unified, thesis-grade plotting style for all
+  Matplotlib and Seaborn visualizations. It ensures figures share the same
+  look and feel (fonts, palette, linewidths, DPI, transparency) used
+  throughout Luca Zanotto's master's thesis on confocal microscopy and
+  machine-learning classification of PD vs MSA.
+
+alwaysApply: false
+
+# ===========================
+# BEHAVIORAL INSTRUCTIONS
+# ===========================
+rules:
+  - When generating any visualization (Matplotlib, Seaborn, or MONAI), always:
+      * Import and activate the StyleManager defined in `style/style_manager.py`
+        with:
+        ```python
+        from style.style_manager import StyleManager
+        sm = StyleManager()
+        sm.activate()
+        ```
+      * Assume that the `.mplstyle` file is available at `style/thesis_style.mplstyle`.
+
+      * When saving figures, always use:
+        ```python
+        sm.savefig("figures/<descriptive_name>.png")
+        ```
+        (use 300 DPI, tight layout, transparent background by default).
+
+      * Use consistent **font family** (DejaVu Sans / Arial), **font sizes**
+        (titles 14, labels 12, ticks 10), **line widths 2.0**, and **marker size 6**.
+
+      * Adopt the **Okabe–Ito colorblind-safe palette** for categorical data:
+        `#0072B2`, `#D55E00`, `#009E73`, `#CC79A7`, `#F0E442`, `#56B4E9`,
+        `#E69F00`, `#999999`.
+        (For PD vs MSA visualizations, keep class colors consistent across plots.)
+
+      * Default Seaborn theme:
+        ```python
+        sns.set_theme(style="whitegrid", palette=sm.palette)
+        ```
+
+      * Always:
+        - label axes clearly with units where applicable;
+        - use sentence-case titles;
+        - include legends only when multiple categories are present;
+        - remove spines on top/right (minimalist aesthetic);
+        - prefer `viridis` for heatmaps and intensity maps;
+        - avoid 3D effects, shadows, gradients, and excessive gridlines.
+
+      * For statistical visualizations (boxplots, violins, etc.):
+        - overlay stripplots or swarmplots to show sample distributions;
+        - use consistent class order (e.g., ["MSA-P", "MSA-C", "PD"]);
+        - show mean/median indicators where meaningful.
+
+      * For model-comparison plots:
+        - display both mean ± std with clear labels;
+        - group bars side-by-side for different models or settings;
+        - add horizontal gridlines for readability.
+
+      * For correlation heatmaps:
+        - use `sns.heatmap(df.corr(), cmap="viridis", vmin=-1, vmax=1, square=True,
+          cbar_kws={"shrink": 0.8})`
+        - set `ax.set_title("Feature Correlation Matrix")`.
+
+      * Save figures inside the `figures/` folder with descriptive names:
+        `01_dataset_distribution.png`, `02_corr_heatmap.png`, etc.
+
+      * Maintain visual coherence and scientific minimalism:
+        black or dark-gray axes, no gradients, and sufficient contrast
+        for print (white background).
+
+# ===========================
+# STYLE PROMPT (short version)
+# ===========================
+stylePrompt: |
+  Use my unified thesis plotting style:
+  - Load `style/style_manager.py` (StyleManager.activate()).
+  - Seaborn theme: whitegrid, Okabe–Ito palette.
+  - Matplotlib style: thesis_style.mplstyle (6×4 in, 300 DPI).
+  - Sans-serif fonts, 2 pt lines, clear labels/titles.
+  - Save with sm.savefig(tight, transparent, 300 DPI).
+  - No 3D, no shadows, no color gradients.
+  - Consistent PD/MSA class colors and class order.
+---

@@ -88,135 +88,41 @@ def evaluate_model(model, dataloader, class_names, device=None, return_misclassi
     """
     Comprehensive model evaluation with metrics and optional misclassified samples.
 
-    Inputs:
-    - model (torch.nn.Module): The PyTorch model to evaluate.
-    - dataloader (torch.utils.data.DataLoader): DataLoader providing batches of images and labels.
-    - class_names (list of str): List of class names for detailed classification metrics.
-    - device (torch.device, optional): Device to perform computations on (CPU/GPU). Defaults to available GPU or CPU.
-    - return_misclassified (bool, optional): Whether to include misclassified samples in the results. Default is False.
+    Args:
+        model (torch.nn.Module): The PyTorch model to evaluate.
+        dataloader (torch.utils.data.DataLoader): DataLoader providing batches.
+        class_names (list of str): List of class names for classification metrics.
+        device (torch.device, optional): Device for computations. Defaults to GPU if available.
+        return_misclassified (bool, optional): Include misclassified samples. Default False.
 
     Returns:
-    - results (dict): Contains predictions, true labels, confidences, metrics, and optionally misclassified samples.
-      If return_misclassified is False, misclassified samples are excluded from the output.
-
-    mock_results = {
-    'predictions': np.array([0, 1, 1, 1, 0]),
-    'true_labels': np.array([0, 1, 0, 1, 0]),
-    'confidences': np.array([0.89, 0.92, 0.54, 0.78, 0.95]),
-    
-    # List of misclassified samples (only if return_misclassified=True)
-    'misclassified': [
+        dict: Contains predictions, true labels, confidences, metrics, and 
+              optionally misclassified samples.
+        
+    Example output structure:
         {
-            'image': np.array(3, 224, 224),  # Mock RGB image
-            'true_label': 0,
-            'pred_label': 1,
-            'confidence': 0.54,
-            'batch_idx': 0
-        },
-        # Add more misclassified samples as needed
-    ],
-    
-    # Dictionary containing all metrics
-    'metrics': 
-    {
-        'accuracy': 0.60,
-        'f1': 0.57,
-        'balanced_accuracy': 0.67,
-        'confusion_matrix': np.array([
-            [2, 1],  # True Negatives, False Positives
-            [1, 1]   # False Negatives, True Positives
-        ]),
-        'mean_confidence': 0.816,
-        'confidence_histogram': np.array([0, 0, 0, 0, 0, 1, 0, 1, 1, 2]),  # 10 bins
-        'classification_report': {
-            'MSA': {  # Example for binary classification 
-                'precision': 0.50,
-                'recall': 0.67,
-                'f1-score': 0.57,
-                'support': 3
-            },
-            'control': {
-                'precision': 0.50,
-                'recall': 0.33,
-                'f1-score': 0.40,
-                'support': 2
-            },
-            'accuracy': 0.60,mock_results = {
-    # Array of model predictions (e.g., for 5 samples)
-    'predictions': np.array([0, 1, 1, 1, 0]),
-    
-    # Array of true labels
-    'true_labels': np.array([0, 1, 0, 1, 0]),
-    
-    # Array of confidence scores
-    'confidences': np.array([0.89, 0.92, 0.54, 0.78, 0.95]),
-    
-    # List of misclassified samples (only if return_misclassified=True)
-    'misclassified': 
-    [
-        {
-            'image': np.random.rand(3, 224, 224),  # Mock RGB image
-            'true_label': 0,
-            'pred_label': 1,
-            'confidence': 0.54,
-            'batch_idx': 0
-        },
-        # Add more misclassified samples as needed
-    ],
-    
-    # Dictionary containing all metrics
-    'metrics': {
-        'accuracy': 0.60,
-        'f1': 0.57,
-        'balanced_accuracy': 0.67,
-        'confusion_matrix': np.array([
-            [2, 1],  # True Negatives, False Positives
-            [1, 1]   # False Negatives, True Positives
-        ]),
-        'mean_confidence': 0.816,
-        'confidence_histogram': np.array([0, 0, 0, 0, 0, 1, 0, 1, 1, 2]),  # 10 bins
-        'classification_report': {
-            'cat': {  # Example for binary classification (cats vs dogs)
-                'precision': 0.50,
-                'recall': 0.67,
-                'f1-score': 0.57,
-                'support': 3
-            },
-            'dog': {
-                'precision': 0.50,
-                'recall': 0.33,
-                'f1-score': 0.40,
-                'support': 2
-            },
-            'accuracy': 0.60,
-            'macro avg': {
-                'precision': 0.50,
-                'recall': 0.50,
-                'f1-score': 0.485,
-                'support': 5
-            },
-            'weighted avg': {
-                'precision': 0.50,
-                'recall': 0.60,
-                'f1-score': 0.504,
-                'support': 5
-                    }
+            'predictions': np.array([0, 1, 1, 1, 0]),
+            'true_labels': np.array([0, 1, 0, 1, 0]),
+            'confidences': np.array([0.89, 0.92, 0.54, 0.78, 0.95]),
+            'probs': np.array([[0.89, 0.11], [0.08, 0.92], ...]),
+            'misclassified': [  # Only if return_misclassified=True
+                {
+                    'image': np.array(...),  # Shape: (C, H, W)
+                    'true_label': 0,
+                    'pred_label': 1,
+                    'confidence': 0.54,
+                    'batch_idx': 0
                 }
-            }
-            'macro avg': {
-                'precision': 0.50,
-                'recall': 0.50,
-                'f1-score': 0.485,
-                'support': 5
-            },
-            'weighted avg': {
-                'precision': 0.50,
-                'recall': 0.60,
-                'f1-score': 0.504,
-                'support': 5
+            ],
+            'metrics': {
+                'accuracy': 0.60,
+                'f1': 0.57,
+                'balanced_accuracy': 0.67,
+                'confusion_matrix': np.array([[2, 1], [1, 1]]),
+                'mean_confidence': 0.816,
+                'classification_report': {...}
             }
         }
-    }
     """
     # Determine computation device (GPU if available)
     device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -243,11 +149,12 @@ def evaluate_model(model, dataloader, class_names, device=None, return_misclassi
             labels = batch["label"].to(device).long()  # Ensure labels are integers
 
             # Forward pass through model
-            print(f"model class name: {model.__class__.__name__}")
+            # print(f"model class name: {model.__class__.__name__}")
             model_name_lower = model.__class__.__name__.lower()
-            if 'vit' in model_name_lower and not 'module' in model_name_lower: #ViTFinetuneModule should be excluded from this check
-                outputs, hidden_states = model(images)
-            else:
+            is_vit = 'vit' in model_name_lower and not 'module' in model_name_lower
+            if is_vit: #ViTFinetuneModule should be excluded from this check
+                outputs, _ = model(images) #the discarded is hidden states
+            else: # not vit
                   # Raw model outputs (logits)
                   outputs = model(images)  # Raw model outputs (logits)
 

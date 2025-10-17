@@ -42,8 +42,8 @@ echo "────────────────────────�
 # ── 3) define scripts to run ────────────────────────────────────────────────
 SCRIPTS_DIR="local_run_scripts_DS1/4c"
 scripts=(
-    # "run_local_densenet121_4c.sh"
-    # "run_local_densenet169_4c.sh"
+    "run_local_densenet121_4c.sh"
+    "run_local_densenet169_4c.sh"
     # "run_local_efficientnet_4c.sh"
     "run_local_resnet18_4c.sh"
     # "run_local_resnet50_4c.sh"

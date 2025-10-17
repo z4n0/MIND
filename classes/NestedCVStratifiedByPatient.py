@@ -434,9 +434,6 @@ class NestedCVStratifiedByPatient:
         elif optimizer_name == "AdamW":
             return optim.AdamW(param_groups, lr=learning_rate,
                             betas=betas, eps=eps)
-        elif optimizer_name == "SGD":
-            # you said to ignore SGD; keeping for completeness
-            return optim.SGD(param_groups, lr=learning_rate)
         else:
             raise ValueError(f"Optimizer {optimizer_name} not supported")
 

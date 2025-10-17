@@ -1,0 +1,71 @@
+# =========================
+# thesis_style.mplstyle
+# Minimalist, print-friendly, colorblind-safe
+# =========================
+
+# --- Figure / Save ---
+figure.figsize: 6, 4
+figure.dpi: 300
+savefig.dpi: 300
+savefig.bbox: tight
+savefig.pad_inches: 0.02
+savefig.transparent: True
+
+# --- Font ---
+font.family: sans-serif
+font.sans-serif: DejaVu Sans, Arial, Helvetica, Liberation Sans
+font.size: 11
+
+# --- Axes / Ticks / Grid ---
+axes.titlesize: 14
+axes.labelsize: 12
+axes.labelpad: 6.0
+axes.linewidth: 1.1
+axes.grid: True
+axes.grid.axis: y
+grid.alpha: 0.25
+grid.linewidth: 0.8
+xtick.labelsize: 10
+ytick.labelsize: 10
+xtick.major.size: 4
+ytick.major.size: 4
+xtick.direction: out
+ytick.direction: out
+
+# --- Lines / Markers ---
+lines.linewidth: 2.0
+lines.markersize: 6.0
+
+# --- Legend ---
+legend.fontsize: 10
+legend.frameon: False
+legend.handlelength: 1.8
+legend.handletextpad: 0.6
+
+# --- Color cycle (Okabe–Ito + neutral) ---
+# Colorblind-safe, high contrast, good for print
+axes.prop_cycle: cycler('color', [
+    '#0072B2',  # blue
+    '#D55E00',  # vermillion
+    '#009E73',  # green
+    '#CC79A7',  # purple/magenta
+    '#F0E442',  # yellow (use sparingly; good on dark curves)
+    '#56B4E9',  # sky blue
+    '#E69F00',  # orange
+    '#999999'   # grey
+])
+
+# --- Images / Heatmaps ---
+image.cmap: viridis  # perceptually uniform
+
+#POLIMI COLOR VARIANT UNCOMMENT AND SOBSTITUTE TO THE ABOVE ONE IF U WANT TO USE IT
+# axes.prop_cycle: cycler('color', [
+#     '#004C6D',  # deep navy
+#     '#1D9A6C',  # teal-green
+#     '#E17C05',  # dark orange
+#     '#7A5195',  # purple
+#     '#00A6D6',  # cyan
+#     '#B3B3B3',  # mid grey
+#     '#EE6352',  # warm red
+# ])
+

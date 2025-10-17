@@ -42,7 +42,7 @@ echo "────────────────────────�
 # ── 3) define scripts to run ────────────────────────────────────────────────
 SCRIPTS_DIR="local_run_scripts_DS1/3c"
 scripts=(
-    # "run_local_densenet121_3c.sh"
+    "run_local_densenet121_3c.sh"
     "run_local_densenet169_3c.sh"
     # "run_local_efficientnetb0_3c.sh"
     # "run_local_efficientnetb3_3c.sh"
