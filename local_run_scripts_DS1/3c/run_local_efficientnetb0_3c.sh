@@ -40,7 +40,7 @@ echo "Using GPU:    ${CUDA_VISIBLE_DEVICES}"
 echo "──────────────────────────────────────────────"
 
 # ── 3) launch training ──────────────────────────────────────────────────────
-python train_3c.py --yaml configs/3c/efficientnetb0.yaml
+python train.py --yaml configs/3c/efficientnetb0.yaml
 
 # ── 4) end ──────────────────────────────────────────────────────────────────
 echo "──────────────────────────────────────────────"

@@ -40,7 +40,7 @@ echo "Using GPU:    ${CUDA_VISIBLE_DEVICES}"
 echo "──────────────────────────────────────────────"
 
 # ── 3) launch training ──────────────────────────────────────────────────────
-python train_3c.py --yaml configs/3c/resnet50.yaml
+python train.py --yaml configs/3c/resnet50.yaml
 
 # ── 4) end ──────────────────────────────────────────────────────────────────
 echo "──────────────────────────────────────────────"

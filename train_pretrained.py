@@ -109,7 +109,7 @@ def main():
     if len(images) == 0:
         raise FileNotFoundError(f"No images found in {DATA_ROOT}. Check your dataset.")
 
-    images, labels = np.array(images), np.array(labels)
+    # images, labels = np.array(images), np.array(labels)
 
     df = pd.DataFrame({"image_path": images,
                        "label": labels,

@@ -7,7 +7,7 @@ cd "$REPO_DIR"
 
 mkdir -p logs
 ts="$(date +'%Y-%m-%d_%H-%M-%S')"
-job_name="sequential_3c_runs"
+job_name="sequential_pretrained_runs"
 final_log="logs/${ts}_${job_name}.out"
 
 exec > >(tee -a "$final_log") 2>&1
@@ -27,7 +27,7 @@ python -c "import torch, sys; print(f'Torch: {torch.__version__}, CUDA: {torch.v
 # ── 2) project-specific environment ─────────────────────────────────────────
 export DATA_ROOT="${DATA_ROOT:-$REPO_DIR/data/SUBSLICE_MIPS}"
 export MLFLOW_TRACKING_URI="${MLFLOW_TRACKING_URI:-file:$REPO_DIR/mlruns}"
-export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-DS2_3c}"
+export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-DS2_pretrained}"
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 
@@ -40,15 +40,19 @@ echo "Using GPU:    ${CUDA_VISIBLE_DEVICES}"
 echo "──────────────────────────────────────────────"
 
 # ── 3) define scripts to run ────────────────────────────────────────────────
-SCRIPTS_DIR="local_run_scripts_DS2/3c"
+SCRIPTS_DIR="local_run_scripts_DS2/pretrained"
 scripts=(
-    "run_local_densenet121_3c.sh"
-    "run_local_densenet169_3c.sh"
-    # "run_local_efficientnetb0_3c.sh"
-    # "run_local_efficientnetb3_3c.sh"
-    "run_local_resnet18_3c.sh"
-    # "run_local_resnet50_3c.sh"
-    "run_local_vit_3c.sh"
+    "run_local_densenet121_pretrained.sh"
+    "run_local_densenet169_pretrained.sh"
+    "run_local_resnet18_pretrained.sh"
+    # "run_local_resnet50_pretrained.sh"
+    "run_local_vit_pretrained_3c.sh"
+    # "run_local_timm_vit_3c_pretrained.sh"
+    # "run_local_vit_small_patch16_224.sh"
+    # # "run_local_vit_base_patch16_224.sh"
+    # "run_local_vit_base_patch16_384.sh"
+    # "run_local_deit_small_patch16_224.sh"
+    # "run_local_deit_base_patch16_224.sh"
 )
 
 # ── 4) run scripts sequentially ─────────────────────────────────────────────
@@ -112,6 +116,7 @@ if [ $failed_runs -gt 0 ]; then
     echo "⚠️  Some scripts failed. Check the log for details."
     exit 1
 else
-    echo "�� All scripts completed successfully!"
+    echo "✅ All scripts completed successfully!"
     exit 0
 fi
+

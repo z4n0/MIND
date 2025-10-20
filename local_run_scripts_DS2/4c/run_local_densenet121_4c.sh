@@ -40,7 +40,7 @@ echo "Using GPU:    ${CUDA_VISIBLE_DEVICES}"
 echo "──────────────────────────────────────────────"
 
 # ── 3) launch training ──────────────────────────────────────────────────────
-python train_4c.py --yaml configs/4c/densenet121.yaml
+python train.py --yaml configs/4c/densenet121.yaml
 
 # ── 4) end ──────────────────────────────────────────────────────────────────
 echo "──────────────────────────────────────────────"

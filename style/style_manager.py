@@ -121,7 +121,7 @@ class StyleManager:
 
     def savefig(
         self,
-        path: str,
+        path: str = "images/",
         *,
         dpi: Optional[int] = None,
         transparent: Optional[bool] = None,
@@ -145,9 +145,11 @@ class StyleManager:
             Padding around the figure.
         """
         dpi = dpi if dpi is not None else self.dpi
+        
         transparent = (
             transparent if transparent is not None else self.transparent
         )
+        # path = os.path.join(path, filename)
         plt.savefig(
             path,
             dpi=dpi,
