@@ -199,3 +199,160 @@ def create_histogram_plots(df, age_col, duration_col, diagnosis_col, colors_dict
     
     plt.tight_layout()
     return fig
+
+
+def detect_outliers_tukey(df, columns, k=1.5, by_group=None):
+    """
+    Detect outliers using Tukey's fences (IQR method).
+    
+    Tukey's fences define outliers as values outside:
+    - Lower fence = Q1 - k × IQR
+    - Upper fence = Q3 + k × IQR
+    
+    Where IQR = Q3 - Q1 (interquartile range).
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataframe
+    columns : list of str
+        Column names to check for outliers
+    k : float, default=1.5
+        Multiplier for IQR. Standard values:
+        - 1.5: mild outliers (default, Tukey's original)
+        - 3.0: extreme outliers
+    by_group : str, optional
+        Column name to group by (e.g., 'diagnosi_definita').
+        If provided, outliers are detected within each group.
+    
+    Returns
+    -------
+    outlier_summary : pd.DataFrame
+        Summary table with outlier statistics per variable
+    outlier_details : dict
+        Dictionary mapping column names to DataFrames containing
+        outlier rows and metadata
+    
+    Examples
+    --------
+    >>> summary, details = detect_outliers_tukey(
+    ...     df, 
+    ...     ['eta_attuale', 'durata_malattia'],
+    ...     by_group='diagnosi_definita'
+    ... )
+    """
+    import numpy as np
+    import pandas as pd
+
+    # -- OUTLIER DETECTION: OUTPUTS EXPLAINED --
+    # outlier_summary: a list of dictionaries (one per variable/group) with
+    #   summary statistics for Tukey outlier detection (Q1, Q3, IQR, boundaries,
+    #   counts, etc), returned as a DataFrame for downstream tabular analysis.
+    
+    # outlier_details: a dict mapping each analyzed column name to a DataFrame 
+    #   of the rows in df containing outlier values for that column (either
+    #   across the whole sample or per group if by_group is specified), with 
+    #   an additional 'outlier_in_column' column specifying the originating field.
+    # This facilitates further review, export, or traceability of individual 
+    #   outlier patient records for each biomarker/feature.
+    
+    outlier_summary = [] 
+    outlier_details = {}
+    
+    for col in columns:
+        if col not in df.columns:
+            print(f"  Column '{col}' not found, skipping.")
+            continue
+        
+        # Get numeric data, drop NaN
+        data = df[col].dropna()
+        
+        if len(data) == 0:
+            print(f" Column '{col}' has no valid data, skipping.")
+            continue
+        
+        if by_group and by_group in df.columns:
+            # Detect outliers per group (each diagnosis, etc)
+            groups = df[by_group].unique()
+            groups = groups[pd.notna(groups)] # remove Na values
+                
+            all_outlier_indices = []
+            group_stats = []
+            
+            for group in groups:
+                group_data = df[df[by_group] == group][col].dropna()
+                
+                if len(group_data) < 4:  # Need at least 4 points for IQR
+                    continue
+                
+                Q1 = group_data.quantile(0.25)
+                Q3 = group_data.quantile(0.75)
+                IQR = Q3 - Q1
+                
+                lower_fence = Q1 - k * IQR
+                upper_fence = Q3 + k * IQR
+                
+                # Find outliers in this group
+                group_outlier_mask = (
+                    (group_data < lower_fence) | (group_data > upper_fence)
+                )
+                outlier_indices = group_data[group_outlier_mask].index
+                all_outlier_indices.extend(outlier_indices)
+                
+                n_outliers = len(outlier_indices)
+                if n_outliers > 0:
+                    group_stats.append({
+                        'Variable': col,
+                        'Group': group,
+                        'N': len(group_data),
+                        'Q1': Q1,
+                        'Q3': Q3,
+                        'IQR': IQR,
+                        'Lower_Fence': lower_fence,
+                        'Upper_Fence': upper_fence,
+                        'N_Outliers': n_outliers,
+                        'Outlier_%': (n_outliers / len(group_data)) * 100
+                    })
+            
+            # Combine all groups
+            if all_outlier_indices:
+                # DataFrame of all group outliers for this col, with a marker column
+                outlier_details[col] = df.loc[all_outlier_indices, :].copy()
+                outlier_details[col]['outlier_in_column'] = col
+                outlier_summary.extend(group_stats)
+            
+        else: # Detect outliers globally (no grouping)
+            # Detect outliers globally (no grouping)
+            Q1 = data.quantile(0.25)
+            Q3 = data.quantile(0.75)
+            IQR = Q3 - Q1
+            
+            lower_fence = Q1 - k * IQR
+            upper_fence = Q3 + k * IQR
+            
+            # Find outliers
+            outlier_mask = (data < lower_fence) | (data > upper_fence)
+            outlier_indices = data[outlier_mask].index
+            n_outliers = len(outlier_indices)
+            
+            outlier_summary.append({
+                'Variable': col,
+                'Group': 'All',
+                'N': len(data),
+                'Q1': Q1,
+                'Q3': Q3,
+                'IQR': IQR,
+                'Lower_Fence': lower_fence,
+                'Upper_Fence': upper_fence,
+                'N_Outliers': n_outliers,
+                'Outlier_%': (n_outliers / len(data)) * 100
+            })
+            
+            if n_outliers > 0:
+                outlier_details[col] = df.loc[outlier_indices, :].copy()
+                outlier_details[col]['outlier_in_column'] = col
+    
+    summary_df = pd.DataFrame(outlier_summary)
+    
+    return summary_df, outlier_details
+

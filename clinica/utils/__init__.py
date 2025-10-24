@@ -6,7 +6,9 @@ Provides visualization and table generation functions for clinical data analysis
 
 from .visualization import (
     create_violin_plots,
-    create_histogram_plots
+    create_histogram_plots,
+    detect_outliers_tukey,
+    # plot_missing_by_variable,
 )
 
 from .tables import (
@@ -18,5 +20,7 @@ __all__ = [
     'create_violin_plots',
     'create_histogram_plots', 
     'create_table_image',
-    'create_summary_table'
+    'create_summary_table',
+    'detect_outliers_tukey',
+    # 'plot_missing_by_variable'
 ]
