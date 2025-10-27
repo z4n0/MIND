@@ -53,7 +53,7 @@ def create_table_image(
     import textwrap
     
     # Define the save path
-    save_path = '../images/tables/'
+    save_path = './tables/'
     # if not os.path.exists(save_path):
     #     os.makedirs(save_path)
 
@@ -190,12 +190,37 @@ def create_table_image(
             # Add padding to all cells
             cell.PAD = 0.08  # Horizontal padding (default is 0.0)
     
-    # Add title with more padding
-    plt.title(title, fontsize=14, fontweight='bold', pad=30)  # Increased from 20 to 30
-    
-    # Adjust layout to prevent title overlap
-    plt.subplots_adjust(top=0.95)  # Add this line to make room for title
-    
+    # Place title with a fixed relative gap above the table
+    # This anchors the title to the table's top, avoiding overlap on tall tables
+    # and excessive spacing on short tables.
+    try:
+        # Ensure artists are laid out before measuring extents
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+
+        # Get table bbox in figure coordinates
+        table_bbox_disp = table.get_window_extent(renderer=renderer)
+        table_bbox_fig = table_bbox_disp.transformed(fig.transFigure.inverted())
+
+        # Compute title Y just above the table with a consistent figure-relative gap
+        title_gap = 0.02  # 2% of figure height
+        title_y = table_bbox_fig.y1 + title_gap
+
+        fig.text(
+            0.5,
+            title_y,
+            title,
+            ha='center',
+            va='bottom',
+            fontsize=14,
+            fontweight='bold',
+            transform=fig.transFigure
+        )
+    except Exception:
+        # Fallback: use a modest pad and default top margin
+        plt.title(title, fontsize=14, fontweight='bold', pad=8)
+        plt.subplots_adjust(top=0.9)
+
     # Save with high quality
     try:
         fig.savefig(
@@ -207,7 +232,7 @@ def create_table_image(
             edgecolor='none'
         )
     except Exception as e:
-        print(f"❌ Error saving table image: {e}")
+        print(f" Error saving table image: {e}")
 
     print(f"✅ Table saved: {filename}")
     plt.show()

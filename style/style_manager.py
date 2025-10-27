@@ -126,7 +126,7 @@ class StyleManager:
         dpi: Optional[int] = None,
         transparent: Optional[bool] = None,
         bbox_inches: str = "tight",
-        pad_inches: float = 0.02,
+        pad_inches: float = 0.12,
     ) -> None:
         """
         Save the current figure with thesis defaults.
@@ -142,7 +142,8 @@ class StyleManager:
         bbox_inches : str
             Bounding box setting (default 'tight').
         pad_inches : float
-            Padding around the figure.
+            Padding around the figure (default 0.12 for a bit more right margin
+            in exported images).
         """
         dpi = dpi if dpi is not None else self.dpi
         
@@ -157,3 +158,5 @@ class StyleManager:
             bbox_inches=bbox_inches,
             pad_inches=pad_inches,
         )
+        
+        print(f"Figure saved to {path}")

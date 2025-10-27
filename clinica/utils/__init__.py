@@ -9,6 +9,8 @@ from .visualization import (
     create_histogram_plots,
     detect_outliers_tukey,
     plot_missing_by_variable,
+    create_single_violin_plot,
+    create_single_histogram_plot,
 )
 
 from .tables import (
@@ -22,5 +24,7 @@ __all__ = [
     'create_table_image',
     'create_summary_table',
     'detect_outliers_tukey',
-    'plot_missing_by_variable'
+    'plot_missing_by_variable',
+    'create_single_violin_plot',
+    'create_single_histogram_plot',
 ]

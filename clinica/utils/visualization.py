@@ -538,3 +538,222 @@ def plot_missing_by_variable(
         )
     
     return fig
+
+
+def create_single_violin_plot(
+    df: pd.DataFrame,
+    column: str,
+    diagnosis_col: str = 'diagnosi_definita',
+    colors_dict: dict = None,
+    figsize: tuple = (8, 6),
+    title: str = None,
+    ylabel: str = None
+) -> plt.Figure:
+    """
+    Create a single violin plot for a specified column by diagnosis.
+    
+    Shows distribution shape (violin), quartiles/median (box), and 
+    individual data points (scatter) for one variable across diagnoses.
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataframe containing the data.
+    column : str
+        Name of the column to visualize.
+    diagnosis_col : str, default='diagnosi_definita'
+        Column name containing diagnosis labels.
+    colors_dict : dict, optional
+        Dictionary mapping diagnosis labels to colors.
+        If None, uses default Okabe-Ito palette.
+    figsize : tuple, default=(8, 6)
+        Figure size (width, height) in inches.
+    title : str, optional
+        Plot title. If None, auto-generates from column name.
+    ylabel : str, optional
+        Y-axis label. If None, uses column name.
+    
+    Returns
+    -------
+    fig : plt.Figure
+        The created figure object.
+    
+    Examples
+    --------
+    >>> fig = create_single_violin_plot(
+    ...     df, 
+    ...     'eta_attuale',
+    ...     colors_dict={'MSA-P': '#0072B2', 'MSA-C': '#D55E00', 'PD': '#009E73'}
+    ... )
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    diagnoses_order = ['MSA-P', 'MSA-C', 'PD']
+    
+    # Use default colors if not provided
+    if colors_dict is None:
+        colors_dict = {
+            'MSA-P': sm.palette[0],
+            'MSA-C': sm.palette[1],
+            'PD': sm.palette[2]
+        }
+    
+    # Create violin plot
+    parts = ax.violinplot(
+        [df[df[diagnosis_col] == diag][column].dropna() 
+         for diag in diagnoses_order],
+        positions=range(len(diagnoses_order)),
+        widths=0.7,
+        showmeans=False,
+        showmedians=False,
+        showextrema=False
+    )
+    
+    # Color the violins
+    for i, pc in enumerate(parts['bodies']):
+        pc.set_facecolor(colors_dict[diagnoses_order[i]])
+        pc.set_alpha(0.3)
+        pc.set_edgecolor('black')
+        pc.set_linewidth(1.5)
+    
+    # Add box plot on top
+    bp = ax.boxplot(
+        [df[df[diagnosis_col] == diag][column].dropna() 
+         for diag in diagnoses_order],
+        positions=range(len(diagnoses_order)),
+        widths=0.3,
+        patch_artist=True,
+        showfliers=False,
+        medianprops=dict(color='black', linewidth=2),
+        boxprops=dict(facecolor='white', edgecolor='black', linewidth=1.5),
+        whiskerprops=dict(color='black', linewidth=1.5),
+        capprops=dict(color='black', linewidth=1.5)
+    )
+    
+    # Add individual points
+    for i, diag in enumerate(diagnoses_order):
+        data = df[df[diagnosis_col] == diag][column].dropna()
+        y = data.values
+        x = np.random.normal(i, 0.04, size=len(y))  # Add jitter
+        ax.scatter(x, y, alpha=0.6, s=40, color=colors_dict[diag], 
+                  edgecolors='black', linewidth=0.5, zorder=3)
+    
+    # Customize
+    ax.set_xticks(range(len(diagnoses_order)))
+    ax.set_xticklabels(diagnoses_order, fontsize=12, fontweight='bold')
+    ax.set_ylabel(ylabel if ylabel else column, fontsize=12, 
+                  fontweight='bold')
+    ax.set_title(
+        title if title else f'{column} distribution by diagnosis',
+        fontsize=14, fontweight='bold', pad=15
+    )
+    ax.grid(True, alpha=0.3, axis='y')
+    ax.set_axisbelow(True)
+    
+    # Add mean ± SD annotations
+    for i, diag in enumerate(diagnoses_order):
+        data = df[df[diagnosis_col] == diag][column].dropna()
+        mean_val = data.mean()
+        std_val = data.std()
+        n = len(data)
+        ax.text(i, ax.get_ylim()[1] * 0.98, 
+               f'n={n}\n{mean_val:.1f}±{std_val:.1f}',
+               ha='center', va='top', fontsize=9, fontweight='bold',
+               bbox=dict(boxstyle='round,pad=0.5', facecolor='white', 
+                        edgecolor='black', alpha=0.8))
+    
+    plt.tight_layout()
+    return fig
+
+
+def create_single_histogram_plot(
+    df: pd.DataFrame,
+    column: str,
+    diagnosis_col: str = 'diagnosi_definita',
+    colors_dict: dict = None,
+    figsize: tuple = (8, 6),
+    bins: int = 10,
+    title: str = None,
+    xlabel: str = None
+) -> plt.Figure:
+    """
+    Create a single histogram with KDE overlay for a specified column.
+    
+    Shows the distribution shape clearly with histogram bars and 
+    kernel density estimation curves for each diagnosis group.
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataframe containing the data.
+    column : str
+        Name of the column to visualize.
+    diagnosis_col : str, default='diagnosi_definita'
+        Column name containing diagnosis labels.
+    colors_dict : dict, optional
+        Dictionary mapping diagnosis labels to colors.
+        If None, uses default Okabe-Ito palette.
+    figsize : tuple, default=(8, 6)
+        Figure size (width, height) in inches.
+    bins : int, default=10
+        Number of histogram bins.
+    title : str, optional
+        Plot title. If None, auto-generates from column name.
+    xlabel : str, optional
+        X-axis label. If None, uses column name.
+    
+    Returns
+    -------
+    fig : plt.Figure
+        The created figure object.
+    
+    Examples
+    --------
+    >>> fig = create_single_histogram_plot(
+    ...     df, 
+    ...     'durata_malattia',
+    ...     bins=15,
+    ...     colors_dict={'MSA-P': '#0072B2', 'MSA-C': '#D55E00', 'PD': '#009E73'}
+    ... )
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    diagnoses_order = ['MSA-P', 'MSA-C', 'PD']
+    
+    # Use default colors if not provided
+    if colors_dict is None:
+        colors_dict = {
+            'MSA-P': sm.palette[0],
+            'MSA-C': sm.palette[1],
+            'PD': sm.palette[2]
+        }
+    
+    # Create histograms with KDE overlay
+    for diag in diagnoses_order:
+        data = df[df[diagnosis_col] == diag][column].dropna()
+        ax.hist(data, bins=bins, alpha=0.4, label=f'{diag} (n={len(data)})',
+               color=colors_dict[diag], edgecolor='black', linewidth=1.5)
+        
+        # Add KDE
+        if len(data) > 1:
+            kde = stats.gaussian_kde(data)
+            x_range = np.linspace(data.min(), data.max(), 100)
+            kde_values = kde(x_range) * len(data) * (
+                data.max() - data.min()
+            ) / bins
+            ax.plot(x_range, kde_values, color=colors_dict[diag], 
+                   linewidth=2.5)
+    
+    ax.set_xlabel(xlabel if xlabel else column, fontsize=12, 
+                  fontweight='bold')
+    ax.set_ylabel('Frequency', fontsize=12, fontweight='bold')
+    ax.set_title(
+        title if title else f'{column} distribution by diagnosis',
+        fontsize=14, fontweight='bold', pad=15
+    )
+    ax.legend(fontsize=10, framealpha=0.9, loc='upper right')
+    ax.grid(True, alpha=0.3, axis='y')
+    ax.set_axisbelow(True)
+    
+    plt.tight_layout()
+    return fig
