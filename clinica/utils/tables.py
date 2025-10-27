@@ -53,12 +53,12 @@ def create_table_image(
     import textwrap
     
     # Define the save path
-    SAVE_PATH = 'images/tables/'
-    if not os.path.exists(SAVE_PATH):
-        os.makedirs(SAVE_PATH)
-        
-    filename = os.path.join(SAVE_PATH, filename)
-    
+    save_path = '../images/tables/'
+    # if not os.path.exists(save_path):
+    #     os.makedirs(save_path)
+
+    filename = os.path.join(save_path, filename)
+
     # Calculate optimal column widths
     def get_text_length(text):
         """Get effective length of text content."""
@@ -85,7 +85,7 @@ def create_table_image(
     total_width = sum(col_widths) * 100  # Convert to inches (approx)
     fig_width = max(12, min(total_width, 20))  # Between 12 and 20 inches
     fig_height = max(
-        len(df_table) * 0.5 + 2,
+        len(df_table) * 0.5 + 3,  # Changed from +2 to +3 for extra space for title
         6
     )  # Min 6 inches height
     
@@ -190,20 +190,25 @@ def create_table_image(
             # Add padding to all cells
             cell.PAD = 0.08  # Horizontal padding (default is 0.0)
     
-    # Add title
-    plt.title(title, fontsize=14, fontweight='bold', pad=20)
+    # Add title with more padding
+    plt.title(title, fontsize=14, fontweight='bold', pad=30)  # Increased from 20 to 30
     
-    plt.tight_layout()
+    # Adjust layout to prevent title overlap
+    plt.subplots_adjust(top=0.95)  # Add this line to make room for title
     
     # Save with high quality
-    fig.savefig(
-        filename,
-        dpi=300,
-        bbox_inches='tight',
-        pad_inches=0.3,  # Increased padding to prevent edge cutoff
-        facecolor='white',
-        edgecolor='none'
-    )
+    try:
+        fig.savefig(
+            filename,
+            dpi=300,
+            bbox_inches='tight',
+            pad_inches=0.5,  # Increased from 0.3 to 0.5 for more padding
+            facecolor='white',
+            edgecolor='none'
+        )
+    except Exception as e:
+        print(f"❌ Error saving table image: {e}")
+
     print(f"✅ Table saved: {filename}")
     plt.show()
     plt.close(fig)
