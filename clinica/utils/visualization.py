@@ -461,12 +461,28 @@ def plot_missing_by_variable(
         'pathologic_laughter_or_crying'
     ]
 
-    
+    colors_dict = {
+        'MSA-P': sm.palette[0],
+        'MSA-C': sm.palette[1],
+        'PD': sm.palette[2],
+        'MSA': sm.palette[3]
+    }
+    if diagnosis_name:
+        if diagnosis_name == 'MSA-P':
+            color = colors_dict['MSA-P']
+        elif diagnosis_name == 'MSA-C':
+            color = colors_dict['MSA-C']
+        elif diagnosis_name == 'PD':
+            color = colors_dict['PD']
+        elif diagnosis_name == 'MSA':
+            color = colors_dict['MSA']
+        else:
+            color = colors_dict['MSA']
     # Create bar chart
     bars = ax.bar(
         range(len(missing_data)),
         missing_data.values,
-        color=sm.palette[1],  # Use vermillion from Okabe-Ito palette
+        color=color,  # Use vermillion from Okabe-Ito palette
         alpha=0.8,
         edgecolor="black",
         linewidth=0.5
