@@ -4,6 +4,7 @@
 /mlruns
 /snelled_requirements.txt
 /tmp_gradcam
+/images
 /venv
 /.venv
 *.pth
