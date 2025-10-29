@@ -4,13 +4,9 @@ _base_: base.yaml
 # Data Splitting
 data_splitting:
   random_seed: 42
-  val_set_size: 0.15
-  test_set_size: 0.1
-  num_folds: 8  # Changed from base
-
 # Data Loading
 data_loading:
-  batch_size: 32  # Custom batch size for DenseNet
+  # batch_size: 32  # Custom batch size for DenseNet
   num_workers: 4  
 
 model:
@@ -25,19 +21,19 @@ training:
   # num_epochs: 125
   early_stopping_patience: 40
   # mixup_alpha: 0  # Added mixup
-  oversample: true
-  undersample: false
-  weighted_loss: false
-  fine_tuning: false
-  transfer_learning: false
-  freezed_layerIndex: null #263
+  # oversample: true
+  # undersample: false
+  # weighted_loss: false
+  # fine_tuning: false
+  # transfer_learning: false
+  # freezed_layerIndex: null #263
 
 # Optimizer
 optimizer:
-  learning_rate: 2e-4  # Custom learning rate
+  # learning_rate: 2e-4  # Custom learning rate
   optimizer_name: "AdamW"  # Changed optimizer
   weight_decay: 1e-4
-  patience: 25
+  # patience: 25
 
 # # Data Augmentation
 # data_augmentation:

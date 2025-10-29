@@ -22,7 +22,7 @@ model:
 # Training
 training:
   num_epochs: 210
-  early_stopping_patience: 40
+  # early_stopping_patience: 40
   mixup_alpha: 0  # Added mixup
   freezed_layerIndex: 263
 

@@ -20,12 +20,12 @@ data_augmentation:
   crop_size: [224, 224]
 
 data_loading:
-  batch_size: 64  # ResNet18 is small, can use larger batch
+  # batch_size: 64  # ResNet18 is small, can use larger batch
 
 training:
   num_epochs: 200
   transfer_learning: true
-  early_stopping_patience: 30
+  # early_stopping_patience: 30
   oversample: true
   undersample: false
   weighted_loss: false
@@ -39,7 +39,7 @@ training:
 
 optimizer:
   learning_rate: 1e-4
-  optimizer_name: "Adam"
+  # optimizer_name: "Adam"
   weight_decay: 1e-4
 
 scheduler:

@@ -4,7 +4,7 @@ dataset:
 # config.yaml
 data_splitting:
   random_seed: 42
-  val_set_size: 0.2
+  val_set_size: 0.15
   test_set_size: 0.10
   num_folds: 8
   lr_discovery_folds: 4
@@ -40,7 +40,7 @@ model:
 
 training:
   num_epochs: 150
-  early_stopping_patience: 20
+  early_stopping_patience: 35
   mixup_alpha: 0
   oversample: true
   undersample: false
@@ -52,14 +52,14 @@ training:
 
 optimizer:
   learning_rate: 1e-4  # Will be adjusted automatically
-  optimizer_name: "Adam"
+  optimizer_name: "AdamW"
   weight_decay: 2e-5
   patience: 25
 
 scheduler:
   scheduler_name: "ReduceLROnPlateau"
   factor: 0.5
-  scheduler_patience: 9
+  scheduler_patience: 10
   threshold: 1e-4
   min_lr: 1e-8
 

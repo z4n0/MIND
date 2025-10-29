@@ -3,12 +3,12 @@ _base_: base.yaml
 # Data Splitting
 data_splitting:
   random_seed: 42
-  val_set_size: 0.15
-  test_set_size: 0.1
+  # val_set_size: 0.15
+  # test_set_size: 0.1
 
 # Data Loading
 data_loading:
-  batch_size: 32  # ViT can be memory-intensive, start with a smaller batch size
+  # batch_size: 32  # ViT can be memory-intensive, start with a smaller batch size
   num_workers: 4
 
 data_augmentation:
@@ -31,7 +31,7 @@ model:
 # Training
 training:
   num_epochs: 450
-  early_stopping_patience: 50
+  # early_stopping_patience: 50
   # mixup_alpha: 0
   oversample: false
   undersample: false

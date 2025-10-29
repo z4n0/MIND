@@ -17,7 +17,7 @@ model:
 # Training
 training:
   # num_epochs: 210
-  early_stopping_patience: 40
+  # early_stopping_patience: 40
   # mixup_alpha: 0
   # transfer_learning: false
   freezed_layerIndex: null

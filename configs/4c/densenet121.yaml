@@ -7,7 +7,7 @@ data_splitting:
 
 # Data Loading
 data_loading:
-  batch_size: 16  # Custom batch size for DenseNet
+  # batch_size: 16  # Custom batch size for DenseNet
   num_workers: 4  
 
 model:
@@ -17,7 +17,7 @@ model:
 # Training
 training:
   num_epochs: 210
-  early_stopping_patience: 35
+  # early_stopping_patience: 35
   # mixup_alpha:   # Added mixup
   freezed_layerIndex: null
 

@@ -4,13 +4,13 @@ _base_: base.yaml
 # Data Splitting
 data_splitting:
   random_seed: 42
-  val_set_size: 0.15
+  # val_set_size: 0.15
   test_set_size: 0.1
 
 
 # Data Loading
 data_loading:
-  batch_size: 32  # Custom batch size for DenseNet
+  # batch_size: 32  # Custom batch size for DenseNet
   num_workers: 4  
 
 model:
@@ -23,7 +23,7 @@ model:
 # Training
 training:
   num_epochs: 125
-  early_stopping_patience: 25
+  # early_stopping_patience: 25
   mixup_alpha: 0  # Added mixup
   oversample: true
   undersample: false

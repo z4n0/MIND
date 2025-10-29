@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import StratifiedKFold, train_test_split
+from sklearn.model_selection import StratifiedKFold, train_test_split, StratifiedShuffleSplit
 from sklearn.utils.class_weight import compute_class_weight
 import optuna
 import re
@@ -1037,12 +1037,33 @@ class NestedCVStratifiedByPatient:
         Train on outer-train with an early-stopping split and return best model path.
         `opt_cfg` is a dict with keys: lr, weight_decay, betas, eps, backbone_lr_mult, ...
         """
-        X_train_es, X_val_es, y_train_es, y_val_es = train_test_split(
-            X_train_outer, y_train_outer,
-            test_size=self.val_set_size,
-            stratify=y_train_outer,
-            random_state=self.random_seed
+        # Patient-wise inner validation split to avoid leakage
+        df_outer_train = pd.DataFrame({
+            "image_path": X_train_outer,
+            "label": y_train_outer,
+        })
+        df_outer_train["patient_id"] = df_outer_train["image_path"].apply(self._extract_patient_id)
+
+        # One row per patient for stratification
+        df_pat = df_outer_train.groupby("patient_id", as_index=False)["label"].first()
+        pat_ids = df_pat["patient_id"].values
+        pat_labels = df_pat["label"].values
+
+        sss = StratifiedShuffleSplit(
+            n_splits=1, test_size=self.val_set_size, random_state=self.random_seed
         )
+        train_pat_idx, val_pat_idx = next(sss.split(pat_ids, pat_labels))
+        train_pat_ids = set(pat_ids[train_pat_idx])
+        val_pat_ids = set(pat_ids[val_pat_idx])
+
+        train_mask = df_outer_train["patient_id"].isin(train_pat_ids)
+        val_mask = df_outer_train["patient_id"].isin(val_pat_ids)
+
+        X_train_es = df_outer_train.loc[train_mask, "image_path"].values
+        y_train_es = df_outer_train.loc[train_mask, "label"].values
+        X_val_es = df_outer_train.loc[val_mask, "image_path"].values
+        y_val_es = df_outer_train.loc[val_mask, "label"].values
+
         self.train_image_counts_per_fold[fold_idx] = len(X_train_es)
         self.val_image_counts_per_fold[fold_idx] = len(X_val_es)
         self.per_fold_val_images_paths[fold_idx] = X_val_es
