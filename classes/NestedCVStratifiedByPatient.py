@@ -95,6 +95,10 @@ class NestedCVStratifiedByPatient:
         self.cm_patient_dir = str(self.output_dir / "confusion_matrices" / "patient")
         self.learning_dir = str(self.output_dir / "learning_curves")
         self._test_pat_ids_per_fold = {} #<-- to store test patient ids for each fold
+        # Cumulative storage for image-level confusion matrix across folds
+        self._cumulative_true_labels: list[int] = []
+        self._cumulative_pred_labels: list[int] = []
+        self._transforms_saved = False  # ensure we log transforms once per run
 
         print(f"Detected {self.num_classes} unique classes.")
 
@@ -1154,6 +1158,16 @@ class NestedCVStratifiedByPatient:
             eval_results=eval_results,
             fold_idx=fold_idx,
         )
+
+        # Accumulate image-level predictions for a cumulative confusion matrix
+        try:
+            preds_img_all = np.array(eval_results.get('predictions'))
+            true_img_all = np.array(y_test_outer)
+            if preds_img_all is not None and true_img_all is not None:
+                self._cumulative_pred_labels.extend(preds_img_all.tolist())
+                self._cumulative_true_labels.extend(true_img_all.tolist())
+        except Exception as e:
+            print(f"Warning: could not accumulate predictions for cumulative CM: {e}")
         
         # Plot learning curves for the fold
         fig_learning_curves = plot_learning_curves(
@@ -1257,6 +1271,20 @@ class NestedCVStratifiedByPatient:
                 fold_specific_stats=fold_stats # note that is None if pretrained=True
                 )
                 print(f"Transforms generated for Fold {fold_display_idx}.")
+                # Save a one-time human-readable description of transform pipelines
+                if not self._transforms_saved:
+                    try:
+                        def _describe(comp):
+                            return "\n".join([str(t) for t in getattr(comp, 'transforms', [])])
+                        with open(os.path.join(self.output_dir, "transforms_train.txt"), "w") as f:
+                            f.write(_describe(self.current_fold_train_transforms))
+                        with open(os.path.join(self.output_dir, "transforms_val.txt"), "w") as f:
+                            f.write(_describe(self.current_fold_val_transforms))
+                        with open(os.path.join(self.output_dir, "transforms_test.txt"), "w") as f:
+                            f.write(_describe(self.current_fold_test_transforms))
+                        self._transforms_saved = True
+                    except Exception as e:
+                        print(f"Warning: failed to save transforms description: {e}")
             else:
                 # If transforms are already set, use them
                 print("Using the train and val transform passed as arguments")
@@ -1295,6 +1323,8 @@ class NestedCVStratifiedByPatient:
             self._evaluate_fold_on_test_set(fold_idx_actual, best_model_path, loss_func_for_eval, X_test_outer, y_test_outer, best_lr)
 
         self._print_summary() # Ensure this method exists and is correctly implemented
+        # After completing all folds, compute and save cumulative confusion matrix
+        self._save_cumulative_confusion_matrix()
         return self.per_fold_metrics, self.fold_results
 
     
@@ -1331,4 +1361,28 @@ class NestedCVStratifiedByPatient:
             print(f"Avg Test Recall: {avg_recall:.4f} +/- {std_recall:.4f}")
             print(f"Avg Test MCC: {avg_mcc:.4f} +/- {std_mcc:.4f}")
         print("-------------------------------------------------")
+
+    def _save_cumulative_confusion_matrix(self) -> None:
+        """Compute and save the cumulative image-level confusion matrix.
+
+        Aggregates predictions and true labels collected across all outer
+        folds, computes a single confusion matrix, and saves it under the
+        current run's `confusion_matrices/` directory so it is logged by
+        downstream MLflow artifact collection.
+        """
+        try:
+            if self._cumulative_true_labels and self._cumulative_pred_labels:
+                from sklearn.metrics import confusion_matrix
+                cum_cm = confusion_matrix(
+                    np.asarray(self._cumulative_true_labels, dtype=int),
+                    np.asarray(self._cumulative_pred_labels, dtype=int),
+                )
+                cm_fig_cum = plot_confusion_matrix(
+                    cum_cm, self.class_names, 'Cumulative Test Confusion Matrix (All Folds)'
+                )
+                cum_path = os.path.join(self.cm_dir, "confusion_matrix_cumulative.png")
+                cm_fig_cum.savefig(cum_path, dpi=100, bbox_inches='tight')
+                plt.close(cm_fig_cum)
+        except Exception as e:
+            print(f"Warning: failed to compute/save cumulative confusion matrix: {e}")
 

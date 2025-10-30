@@ -35,9 +35,9 @@ training:
 # Optimizer
 optimizer:
   learning_rate: 2e-4  # Custom learning rate
-  optimizer_name: "AdamW"  # Changed optimizer
+  # optimizer_name: "AdamW"  # Changed optimizer
   weight_decay: 1e-4
-  patience: 25
+  # patience: 25
 
 # # Data Augmentation
 # data_augmentation:

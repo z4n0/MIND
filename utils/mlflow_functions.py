@@ -760,6 +760,16 @@ def log_run_to_mlflow(
 
         if lc_dir and lc_dir.is_dir():
             mlflow.log_artifacts(str(lc_dir), artifact_path="learning_curves")
+
+        # 4b. Log transforms description files if present in output_dir
+        try:
+            if output_dir:
+                for name in ("transforms_train.txt", "transforms_val.txt", "transforms_test.txt"):
+                    candidate = Path(output_dir) / name
+                    if candidate.is_file():
+                        mlflow.log_artifact(str(candidate), artifact_path="transforms")
+        except Exception as e:
+            print(f"Warning: failed to log transform descriptions: {e}")
         
         # 2b. utils/transformations_functions.py
         tf_path = None

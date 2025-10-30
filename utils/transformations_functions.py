@@ -138,7 +138,7 @@ def get_preNormalization_transforms_list(cfg, is_supported_by_torchvision=False)
     if not is_supported_by_torchvision or not is_model_pretrained: #if using a custom model or a pretrained model not supported by torchvision
         # Resize the image to the desired spatial size
         base_transforms_list.append(
-            Resized(keys="image", spatial_size=cfg.data_augmentation["resize_spatial_size"],
+            Resized(keys="image", spatial_size=cfg.get_spatial_size(),
                     mode='bilinear', size_mode='all') # bilinear interpolation during resizing ie for each pixel is taken the average of the 4 nearest pixels
         )
         base_transforms_list.append(ScaleIntensityd(keys="image"))  # scales intensities to [0,1] before computing stats since most color transforms expect [0,1] range

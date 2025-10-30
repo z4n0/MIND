@@ -19,19 +19,19 @@ model:
 # Training
 training:
   # num_epochs: 125
-  early_stopping_patience: 40
+  # early_stopping_patience: 40
   # mixup_alpha: 0  # Added mixup
   # oversample: true
   # undersample: false
   # weighted_loss: false
   # fine_tuning: false
-  # transfer_learning: false
+  transfer_learning: false
   # freezed_layerIndex: null #263
 
 # Optimizer
 optimizer:
   # learning_rate: 2e-4  # Custom learning rate
-  optimizer_name: "AdamW"  # Changed optimizer
+  # optimizer_name: "AdamW"  # Changed optimizer
   weight_decay: 1e-4
   # patience: 25
 
