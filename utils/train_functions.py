@@ -27,9 +27,6 @@ import warnings
 warnings.filterwarnings("ignore", message=".*`torch.cuda.amp.autocast(args...)` is deprecated.*", category=UserWarning)
 warnings.filterwarnings("ignore", message=".*`torch.cuda.amp.GradScaler(args...)` is deprecated.*", category=UserWarning)
 
-from torch.cuda.amp import autocast, GradScaler
-import torch
-import torch.nn as nn
 
 class MixupState:
     """Reusable GPU buffer to avoid per-batch allocations."""
@@ -66,13 +63,6 @@ def mixup_inplace(
     x.mul_(lam).add_(buf, alpha=1.0 - lam)      # x = lam*x + (1-lam)*buf  (in-place)
     return x, y, y[idx], lam
 
-
-# ===========================
-# TRAIN (no MixUp, as before)
-# ===========================
-import torch
-from torch.cuda.amp import autocast, GradScaler  # vecchia API
-from torch import nn
 
 def train_epoch(
     model: nn.Module, 
@@ -532,55 +522,91 @@ def print_layers(model):
 import numpy as np
 from sklearn.utils import resample
 
+import numpy as np
+from sklearn.utils import resample  # Questa è la funzione chiave per il ricampionamento
+
 def oversample_minority(train_x, train_y, random_seed=42):
     """
-    Oversamples each class so that all classes have the same number of samples as the majority.
-    This function works for binary as well as multi-class datasets.
+    Esegue l'oversampling di ogni classe in modo che tutte le classi abbiano 
+    lo stesso numero di campioni della classe maggioritaria.
+    Questa funzione funziona sia per dataset binari che multi-classe.
     
     Args:
-        train_x: Feature array (can be list or numpy array)
-        train_y: Labels array (can be list or numpy array)
-        random_seed: Seed for reproducibility
+        train_x: Array dei path delle immagini
+        train_y: Array delle etichette (label)
+        random_seed: Seed per la riproducibilità
         
     Returns:
-        balanced_x: Oversampled feature array
-        balanced_y: Oversampled labels array
+        balanced_x: Array delle feature bilanciato
+        balanced_y: Array delle etichette bilanciato
     """
-    # Convert to numpy arrays if not already
-    train_x = np.array(train_x)
-    train_y = np.array(train_y)
     
-    # Get unique classes and counts
+    train_x = np.array(train_x) # [image1_path, image2_path, image3_path, ..., imageN_path]
+    train_y = np.array(train_y) # [0, 0, 0, ..., 1, 1, 1, ..., 2, 2, 2, ...]
+    
+    # Analizza l'array delle etichette (train_y)
+    # unique_classes: conterrà un array delle classi uniche (es. [0, 1] per PD/MSA)
+    # class_counts: conterrà il numero di campioni per ciascuna classe (es. [300, 150])
     unique_classes, class_counts = np.unique(train_y, return_counts=True)
     
-    # Determine the target count: maximum number of samples among classes
+    # Trova il numero massimo di campioni tra tutte le classi.
+    # Questo sarà il nostro "obiettivo" (target_count).
+    # Esempio: se le counts sono [300, 150], target_count sarà 300.
     target_count = np.max(class_counts)
     
-    # Container lists for oversampled data
+    # Inizializza due liste vuote che useremo per accumulare
+    # i nuovi dati bilanciati per ciascuna classe.
     oversampled_x_list = []
     oversampled_y_list = []
     
-    # Oversample each class independently
     for cls in unique_classes:
+        # Trova tutti gli indici (posizioni) nell'array train_y
+        # che corrispondono alla classe corrente (cls).
+        # Esempio: se cls=1, trova tutti gli indici dove train_y è 1.
         cls_indices = np.where(train_y == cls)[0]
-        # Resample with replacement to get target_count samples for this class
+        
+        # --- Qui avviene la magia ---
+        # Usa la funzione 'resample' di scikit-learn.
         cls_oversampled_x = resample(
-            train_x[cls_indices],
-            replace=True,
-            n_samples=target_count,
-            random_state=random_seed
+            train_x[cls_indices],   # 1. Prendi i campioni (X) solo di QUESTA classe
+            replace=True,           # 2. 'replace=True' è FONDAMENTALE. 
+                                    #    Significa: "pesca un campione, usalo, e RIMETTILO NEL MUCCHIO".
+                                    #    Questo permette di pescare lo stesso campione più volte.
+                                    #    È così che avviene la duplicazione (oversampling).
+            n_samples=target_count, # 3. Chiedi di "pescare" un numero di campioni pari a target_count.
+                                    #    - Se la classe è minoritaria (150 campioni, target 300),
+                                    #      pescherà 300 volte, duplicando campioni.
+                                    #    - Se la classe è maggioritaria (300 campioni, target 300),
+                                    #      pescherà 300 volte. (Bootstrap sampling)
+            random_state=random_seed 
         )
+        
+        # Crea un array di etichette (Y) per i campioni appena creati.
+        # Sarà un array riempito con il valore della classe corrente (es. [1, 1, 1, ..., 1])
+        # e lungo esattamente 'target_count'.
         cls_oversampled_y = np.full(target_count, cls)
+        
+        # Aggiungi i dati e le etichette (ora bilanciati per questa classe)
+        # alle nostre liste contenitore.
         oversampled_x_list.append(cls_oversampled_x)
         oversampled_y_list.append(cls_oversampled_y)
     
-    # Combine the oversampled data for all classes
+    # --- 3. Unione e Mescolamento ---
+    # Alla fine del ciclo, le liste contengono gli array di ciascuna classe.
+    # 'np.concatenate' li unisce tutti in un unico, grande array.
+    # Ora abbiamo un dataset dove ogni classe ha 'target_count' campioni.
     balanced_x = np.concatenate(oversampled_x_list)
     balanced_y = np.concatenate(oversampled_y_list)
-
-    # Shuffle the combined dataset to avoid any ordering bias
+    
     np.random.seed(random_seed)
+    
+    # Crea un array di indici (da 0 a N-1) e mescolali casualmente.
+    # Esempio: se N=4, crea [0, 1, 2, 3] e lo mescola in [2, 0, 3, 1].
     shuffle_indices = np.random.permutation(len(balanced_x))
+    
+    # Applica il mescolamento: riordina sia 'x' che 'y' usando
+    # *esattamente* la stessa sequenza di indici casuali.
+    # Questo mantiene la corrispondenza corretta tra campione (x) ed etichetta (y).
     balanced_x = balanced_x[shuffle_indices]
     balanced_y = balanced_y[shuffle_indices]
 

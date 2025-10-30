@@ -39,7 +39,7 @@ model:
   
 training:
   num_epochs: 150
-  early_stopping_patience: 20
+  early_stopping_patience: 35
   mixup_alpha: 0
   oversample: true
   undersample: false
@@ -53,7 +53,7 @@ optimizer:
   learning_rate: 1e-4  # Will be adjusted automatically
   optimizer_name: "Adam"
   weight_decay: 2e-5
-  patience: 25
+  patience: 20
 
 scheduler:
   scheduler_name: "ReduceLROnPlateau"
