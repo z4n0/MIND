@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from utils.data_extraction_functions import extract_labels_meaning
 import os, re, torch, tifffile, random
 import seaborn as sns
+from typing import List
 
 
 def get_image_array(item):
@@ -25,110 +26,332 @@ def get_image_array(item):
     else:
         raise ValueError("Unsupported type in images_or_tensors")
     
+from typing import List
+import numpy as np
+import tifffile
+
+def load_images_as_chw_float32(paths: np.ndarray) -> List[np.ndarray]:
+    """
+    Load TIFF images from an array of string paths, returning a list of 
+    images as (C, H, W) float32 NumPy arrays.
+
+    This function is specifically designed for input where `paths` is a NumPy 
+    array of strings. Each string should be a valid file path to a TIFF image.
+    The function verifies the loaded image shape and ensures channel-first format
+    for scientific reproducibility in confocal microscopy settings.
+    
+    Parameters
+    ----------
+    paths : np.ndarray (dtype=str or object)
+        1D array of string file paths to images.
+
+    Returns
+    -------
+    List[np.ndarray]
+        List of images as (C, H, W) float32 NumPy arrays.
+
+    Raises
+    ------
+    ValueError
+        If image shape is not 3D or channels are not in expected locations.
+
+    Notes
+    -----
+    - Supports both 3-channel [G, B, R] and 4-channel [G, B, Gray, R] images.
+    - Does not alter channel order beyond enforcing (C, H, W).
+    - Intended for batch scientific use in sweat gland confocal datasets.
+    - Follows PEP 8 and biomedical data handling best practices.
+
+    Examples
+    --------
+    >>> arr = np.array(["img1.tif", "img2.tif"])
+    >>> imgs = load_images_as_chw_float32(arr)
+    >>> imgs[0].shape
+    (4, 256, 256)
+    """
+    arrays: List[np.ndarray] = []
+    # Defensive conversion (if someone sends e.g. np.chararray)
+    path_list = np.asarray(paths).astype(str).tolist()
+
+    for p in path_list:
+        arr = tifffile.imread(p) # channel first (C, H, W)
+        if arr is None:
+            continue
+        # print(f"Image loaded from '{p}'; shape: {arr.shape}")
+        if arr.ndim != 3:
+            raise ValueError(f"{p}: expected 3D array, got shape {arr.shape}")
+        # If already channel-first (C, H, W)
+        if arr.shape[0] not in (3, 4):
+            raise ValueError(f"{p}: expected 3 or 4 channels (C=first or last); got {arr.shape}")
+        
+        arrays.append(arr.astype(np.float32, copy=False))
+    return arrays
+
+
 def visualize_and_compare_pixel_intensity_histograms(
-    images_or_tensors: list,
-    labels: list,
+    img_paths: np.ndarray,
+    labels: np.ndarray,
     class1_name: str,
     class0_name: str,
-    bins: int = 256
+    bins: int = 32,
+    output_path: str = "images/channels_intensity_histograms.png",
+    *,
+    robust_zoom: bool = True,
+    lower_percentile: float = 1.0,
+    upper_percentile: float = 99.5,
+    log_x: bool = False,
+    y_log: bool = False,
+    percentile_sample_per_channel: int = 200_000
 ) -> None:
     """
-    Visualizes and compares the average pixel intensity histograms for two classes of images.
+    Visualize thesis-style averaged per-channel pixel intensity histograms for
+    two classes. Supports 3-channel (G, B, R) and 4-channel (G, B, Gray, R)
+    confocal images.
 
-    This function computes per-channel histograms for each image, averages them by class,
-    normalizes them to relative frequencies, and plots the results for visual comparison.
+    Parameters
+    ----------
+    img_paths : np.ndarray
+        List of image file paths, numpy arrays, or tensors. Each image must be
+        (C, H, W) or (H, W, C). Channels are expected in the following order:
+        - 3 channels: [Green, Blue, Red]
+        - 4 channels: [Green, Blue, Gray, Red]
+    labels : list
+        Integer labels (0 or 1) corresponding to each image.
+    class1_name : str
+        Name of class for label=1.
+    class0_name : str
+        Name of class for label=0.
+    bins : int
+        Number of bins for histograms (on the display range).
+    output_path : str | None
+        If provided, save figure to this path using StyleManager settings.
+    robust_zoom : bool
+        If True, compute a per-channel robust display range using
+        [lower_percentile, upper_percentile] and zoom x-limits to that range.
+        Histogram bins are also computed over that range to avoid clustering at 0.
+    lower_percentile : float
+        Lower percentile for robust range (default 1.0).
+    upper_percentile : float
+        Upper percentile for robust range (default 99.5).
+    log_x : bool
+        If True, use logarithmic x scaling (requires strictly positive values).
+    y_log : bool
+        If True, use logarithmic y scaling to better expose tails.
+    percentile_sample_per_channel : int
+        Maximum number of samples used per channel to estimate percentiles
+        (to keep memory bounded). Set higher for more precise bounds.
 
-    Args:
-        images_or_tensors (list): List of image file paths, numpy arrays.
-        labels (list): List of integer labels (0 or 1) corresponding to each image.
-        class1_name (str): Name of class 1 (label 1).
-        class0_name (str): Name of class 0 (label 0).
-        bins (int, optional): Number of bins for the histograms. Default is 256.
-
-    Raises:
-        ValueError: If no images are found for class 0 or class 1.
-
-    Returns:
-        None. Displays the histogram plots using matplotlib.
+    Assumptions
+    -----------
+    - images_or_tensors and labels have the same length and contain at least
+      one sample per class.
+    - Images are 3- or 4-channel and follow the specified channel order.
+    - Pixel intensities are comparable across images; global min/max binning is
+      appropriate.
     """
-    histograms_class_0 = []
-    histograms_class_1 = []
-    all_images = []  # To store the actual image arrays for global min/max
+    # --- Imports and style activation ---
+    try:
+        from style.style_manager import StyleManager
+        sm = StyleManager()
+        sm.activate()
+        okabe_palette = sm.palette
+    except Exception:
+        sm = None
+        okabe_palette = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#F0E442", "#56B4E9", "#E69F00", "#999999"]
 
-    for item, label in zip(images_or_tensors, labels):
-        image_array = get_image_array(item)
-        if image_array is None:
-            continue
-        # Save the image for global min/max calculation
-        all_images.append(image_array)
+    img_np_arrays = load_images_as_chw_float32(img_paths)
+    # --- Input validation ---
+    if not isinstance(img_np_arrays, list):
+        raise TypeError("img_np_arrays must be a list")
+    # Accept list/array-like labels; coerce to numpy int array
+    labels = np.asarray(labels)
+    if labels.ndim != 1:
+        raise ValueError("labels must be 1D array-like of integers 0/1")
+    if len(img_np_arrays) != len(labels):
+        raise ValueError("img_np_arrays and labels must have the same length")
 
-        # Convert to torch.Tensor if needed for your histogram function
-        image_tensor = torch.from_numpy(image_array)
-        histograms = calculate_tensor_histogram(image_tensor, bins)
-        if histograms is None:
-            continue
-        if label == 0:
-            histograms_class_0.append(histograms)
+    # Materialize arrays and collect for global min/max
+    arrays: list[np.ndarray] = []
+    y: list[int] = []
+    for item, lab in zip(img_np_arrays, labels):
+        arrays.append(item)
+        y.append(int(lab))
+
+    if len(img_np_arrays) == 0:
+        raise ValueError("No valid images found after loading")
+
+    # Ensure both classes are present
+    if (0 not in y) or (1 not in y):
+        raise ValueError("Both classes (0 and 1) must be present in labels")
+
+    # Determine channel count from first image and validate consistency
+    n_channels = img_np_arrays[0].shape[0]
+    if n_channels not in (3, 4):
+        raise ValueError("Images must have 3 or 4 channels")
+    if any(a.shape[0] != n_channels for a in arrays):
+        raise ValueError("All images must have the same number of channels")
+
+    # Channel names in acquisition order
+    channel_names = ["Green", "Blue", "Red"] if n_channels == 3 else ["Green", "Blue", "Gray", "Red"]
+
+    # Compute display ranges per channel (robust or global)
+    # We estimate percentiles using random subsampling to avoid memory spikes
+    rng = np.random.default_rng(12345)
+    display_mins = np.zeros(n_channels, dtype=np.float64)
+    display_maxs = np.zeros(n_channels, dtype=np.float64)
+
+    for c in range(n_channels):
+        # Concatenate sampled values from all images for channel c
+        samples = []
+        remaining = percentile_sample_per_channel
+        for a in arrays:
+            ch = a[c].ravel()
+            n = ch.size
+            if remaining <= 0:
+                break
+            take = min(remaining, n)
+            if take < n:
+                idx = rng.choice(n, size=take, replace=False)
+                samples.append(ch[idx])
+            else:
+                samples.append(ch)
+            remaining -= take
+        pooled = np.concatenate(samples) if samples else np.array([0.0], dtype=np.float64)
+
+        if robust_zoom:
+            lo = np.percentile(pooled, lower_percentile)
+            hi = np.percentile(pooled, upper_percentile)
         else:
-            histograms_class_1.append(histograms)
+            lo = float(np.min(pooled))
+            hi = float(np.max(pooled))
+        if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
+            lo, hi = float(np.min(pooled)), float(np.max(pooled))
+            if hi <= lo:
+                hi = lo + 1e-6
+        display_mins[c] = lo
+        display_maxs[c] = hi
 
-    # Convert lists to arrays and average
-    histograms_class_0 = np.array(histograms_class_0)
-    histograms_class_1 = np.array(histograms_class_1)
+    # Prepare per-channel bin edges (supporting log_x if requested and valid)
+    per_channel_edges = []
+    for c in range(n_channels):
+        lo, hi = display_mins[c], display_maxs[c]
+        if log_x:
+            # Require strictly positive bounds; shift if needed
+            eps = 1e-8
+            lo = max(lo, eps)
+            edges = np.logspace(np.log10(lo), np.log10(hi), bins + 1)
+        else:
+            edges = np.linspace(lo, hi, bins + 1)
+        per_channel_edges.append(edges)
 
-    if histograms_class_0.size > 0:
-        avg_histograms_class_0 = np.mean(histograms_class_0, axis=0)
-    else:
+    # Compute histograms per-image with consistent range
+    class0_hists = []  # list of (C, bins)
+    class1_hists = []
+    for arr, lab in zip(arrays, y):
+        # arr: (C, H, W)
+        h = np.zeros((n_channels, bins), dtype=np.float64)
+        for c in range(n_channels):
+            ch = arr[c].reshape(-1)
+            edges = per_channel_edges[c]
+            # Clip to display range to avoid extreme tails dominating scale
+            ch = np.clip(ch, edges[0], edges[-1])
+            hist, _ = np.histogram(ch, bins=edges, density=False)
+            h[c] = hist
+        if lab == 0:
+            class0_hists.append(h)
+        else:
+            class1_hists.append(h)
+
+    if len(class0_hists) == 0:
         raise ValueError("No images found for class 0")
-
-    if histograms_class_1.size > 0:
-        avg_histograms_class_1 = np.mean(histograms_class_1, axis=0)
-    else:
+    if len(class1_hists) == 0:
         raise ValueError("No images found for class 1")
 
-    # Normalize to relative frequencies
-    avg_histograms_class_0 = avg_histograms_class_0 / np.sum(avg_histograms_class_0, axis=1, keepdims=True)
-    avg_histograms_class_1 = avg_histograms_class_1 / np.sum(avg_histograms_class_1, axis=1, keepdims=True)
+    # Average histograms per class, then normalize per channel to relative frequency
+    avg0 = np.mean(np.stack(class0_hists, axis=0), axis=0)  # (C, bins)
+    avg1 = np.mean(np.stack(class1_hists, axis=0), axis=0)  # (C, bins)
+    # Normalize to relative frequencies per channel
+    def _safe_row_normalize(x: np.ndarray) -> np.ndarray:
+        x = x.astype(np.float64)
+        sums = np.sum(x, axis=1, keepdims=True)
+        sums[sums == 0] = 1.0
+        return x / sums
 
-    # Compute the overall global min and max from the actual image arrays
-    global_min = min(img.min() for img in all_images)
-    global_max = max(img.max() for img in all_images)
-    bin_edges = np.linspace(global_min, global_max, bins + 1)
-    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    avg0 = _safe_row_normalize(avg0)
+    avg1 = _safe_row_normalize(avg1)
 
-    # Plot the averaged histograms using the computed bin centers
-    import matplotlib.pyplot as plt
-    plt.figure(figsize=(15, 5))
-    channel_names = ['R', 'G', 'B']
-
-    # Example: Assuming extract_labels_meaning returns proper labels.
+    # Class labels for legend (consistent order: class0 then class1)
     label_0 = extract_labels_meaning([0], class1_name, class0_name)[0]
     label_1 = extract_labels_meaning([1], class1_name, class0_name)[0]
 
-    for i in range(3):
-        plt.subplot(1, 3, i + 1)
-        plt.bar(
+    # Plot
+    ncols = n_channels
+    # Larger, readable figure per thesis style
+    fig, axes = plt.subplots(1, ncols, figsize=(5.5 * ncols, 3.8))
+    # Normalize axes to a 1D list for consistent indexing (avoid numpy typing on Axes)
+    if isinstance(axes, np.ndarray):
+        axes_list = axes.ravel().tolist()
+    else:
+        axes_list = [axes]
+
+    # Colors: keep fixed mapping across all figures
+    color_0 = okabe_palette[0]
+    color_1 = okabe_palette[1]
+    # Plot per channel using its own bin centers
+
+    for i in range(n_channels):
+        ax = axes_list[i]
+        edges = per_channel_edges[i]
+        bin_centers = (edges[:-1] + edges[1:]) / 2.0
+        bar_width = (edges[1] - edges[0]) * 0.9
+        ax.bar(
             bin_centers,
-            avg_histograms_class_0[i],
-            width=bin_edges[1] - bin_edges[0],
+            avg0[i],
+            width=bar_width,
             label=label_0,
-            color='blue',
-            alpha=0.7
+            color=color_0,
+            alpha=0.6,
+            linewidth=0.0
         )
-        plt.bar(
+        ax.bar(
             bin_centers,
-            avg_histograms_class_1[i],
-            width=bin_edges[1] - bin_edges[0],
+            avg1[i],
+            width=bar_width,
             label=label_1,
-            color='red',
-            alpha=0.5
+            color=color_1,
+            alpha=0.45,
+            linewidth=0.0
         )
-        plt.title(f"{channel_names[i]} Histogram")
-        plt.xlabel("Pixel Value")
-        plt.ylabel("Relative Frequency")
-        plt.legend()
+        ax.set_title(f"{channel_names[i]} histogram", fontsize=14)
+        ax.set_xlabel("Pixel value", fontsize=12)
+        ax.set_ylabel("Relative frequency", fontsize=12)
+        ax.grid(True, axis="y", alpha=0.3, linestyle="--")
+        ax.set_xlim(edges[0], edges[-1])
+        if log_x:
+            ax.set_xscale("log")
+        if y_log:
+            ax.set_yscale("log")
+        # Minimalist spines
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+
+    # Show legend only once if multiple channels
+    handles, labels_ = axes_list[0].get_legend_handles_labels()
+    if n_channels > 1:
+        axes_list[0].legend(handles, labels_, frameon=True, fontsize=10)
+    else:
+        axes_list[0].legend(frameon=True, fontsize=10)
 
     plt.tight_layout()
+    if output_path:
+        # Ensure output directory exists
+        out_dir = os.path.dirname(output_path)
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
+        if sm is not None:
+            sm.savefig(output_path)
+        else:
+            plt.savefig(output_path, dpi=300, bbox_inches="tight", transparent=True)
     plt.show()
 
 def print_class_statistics(class_paths, class_name):
@@ -214,7 +437,7 @@ def print_image_statistic(image_paths, image_labels, num_samples, class1_name, c
             print(f"  Likely standardized: {ch_is_standardized}")
         print("\n" + "-"*50)
 
-def visualize_tiff(image_path, channel_wise_norm=True, figsize=(10,10)):
+def visualize_tiff(image_path, channel_wise_norm=True, figsize=(3, 3), overlay_alpha=0.35):
     """
     Visualize a TIFF image with proper scaling and channel ordering.
     Applies channel-wise min-max scaling for visualization by default
@@ -242,12 +465,13 @@ def visualize_tiff(image_path, channel_wise_norm=True, figsize=(10,10)):
     if num_channels == 3:
         channel_names = ['Green', 'Blue', 'Red']
         # Reorder channels from [Green, Blue, Red] to [Red, Green, Blue] for display
-        display_img = scaled_img[:,:,[2,0,1]]
+        display_img = scaled_img[:,:,[2,0,1]] #reorder to R,G,B for display
     elif num_channels == 4:
         channel_names = ['Green', 'Blue', 'Grey', 'Red']
         # Reorder channels from [Green, Blue, Grey, Red] to [Red, Green, Blue] for display
-        # We'll drop the Grey channel as RGB image can only show 3 channels
-        display_img = scaled_img[:,:,[3,0,1]]
+        # Base RGB from R,G,B and keep Grey as separate overlay
+        display_img = scaled_img[:,:,[3,0,1]] #reorder to R,G,B for display
+        overlay_gray = scaled_img[..., 2]
     else:
         channel_names = [f'Channel {i}' for i in range(num_channels)]
         display_img = scaled_img  # No reordering for generic case
@@ -257,7 +481,8 @@ def visualize_tiff(image_path, channel_wise_norm=True, figsize=(10,10)):
         plt.imshow(display_img)
     elif num_channels == 4:
         plt.imshow(display_img)
-        print("Note: Grey channel is not shown in the RGB visualization")
+        # Overlay the Grey channel on top as grayscale with transparency
+        plt.imshow(overlay_gray, cmap='gray', alpha=overlay_alpha)
     else:
         plt.imshow(display_img[:,:,:3])  # Show only first 3 channels
         print(f"Note: Only showing 3 out of {num_channels} channels")
@@ -266,12 +491,12 @@ def visualize_tiff(image_path, channel_wise_norm=True, figsize=(10,10)):
     plt.show()
 
     # Print value ranges for reference
-    print("\nOriginal value ranges:")
+    # print("\nOriginal value ranges:")
     
-    for i, name in enumerate(channel_names):
-        if i < num_channels:  # Only print for channels that exist
-            channel = img[..., i]
-            print(f"{name}: min={np.min(channel):.2f}, max={np.max(channel):.2f}")
+    # for i, name in enumerate(channel_names):
+    #     if i < num_channels:  # Only print for channels that exist
+    #         channel = img[..., i]
+    #         print(f"{name}: min={np.min(channel):.2f}, max={np.max(channel):.2f}")
 
 # Now do a min-max scale for display, so negative => 0, max => 1
 def min_max_normalization(array, channel_wise=False):
@@ -1067,3 +1292,189 @@ def show_misclassified_images(misclassified_images, num_images=10, figsize=(20, 
     plt.show()
     
     
+    
+    import numpy as np
+import matplotlib.pyplot as plt
+import tifffile
+from typing import List, Tuple, Optional
+
+def _load_paths_as_chw_float32(paths: List[str]) -> List[np.ndarray]:
+    arrays: List[np.ndarray] = []
+    for p in paths:
+        arr = tifffile.imread(p)
+        if arr is None or arr.ndim != 3:
+            continue
+        if arr.shape[0] in (3, 4):
+            chw = arr
+        elif arr.shape[-1] in (3, 4):
+            chw = np.transpose(arr, (2, 0, 1))
+        else:
+            raise ValueError(f"{p}: expected 3 or 4 channels; got {arr.shape}")
+        arrays.append(chw.astype(np.float32, copy=False))
+    if not arrays:
+        raise ValueError("No valid images loaded.")
+    return arrays
+
+def _prepare_style():
+    okabe = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#F0E442", "#56B4E9", "#E69F00", "#999999"]
+    sm = None
+    try:
+        from style.style_manager import StyleManager
+        sm = StyleManager(); sm.activate()
+        okabe = sm.palette
+    except Exception:
+        pass
+    return sm, okabe
+
+def plot_intensity_ecdf(
+    img_paths: List[str],
+    labels: List[int],
+    class1_name: str,
+    class0_name: str,
+    *,
+    output_path: Optional[str] = "images/channels_intensity_ecdf.png",
+    robust_zoom: bool = True,
+    lower_percentile: float = 0.5,
+    upper_percentile: float = 99.5,
+    log_x: bool = False,
+    ecdf_points: int = 512,
+    sample_limit_per_channel: int = 500_000,
+) -> None:
+    """
+    ECDF comparison of pixel intensities per channel for two classes (0 vs 1).
+    - Supports 3c [G,B,R] and 4c [G,B,Gray,R].
+    - Uses robust per-channel x-limits via percentiles (optional).
+    - log_x plots if all values > 0 (typical for fluorescence).
+
+    Parameters
+    ----------
+    img_paths : list[str]
+        TIFF paths (C,H,W or H,W,C; 3 or 4 channels).
+    labels : list[int]
+        0/1 class labels aligned with img_paths.
+    class1_name, class0_name : str
+        Display names for classes 1 and 0.
+    output_path : str|None
+        If set, saves figure at 300 DPI (thesis style).
+    robust_zoom : bool
+        Use [lower_percentile, upper_percentile] for x-limits per channel.
+    lower_percentile, upper_percentile : float
+        Percentiles for robust x-limits.
+    log_x : bool
+        Log scale on x if data are strictly positive.
+    ecdf_points : int
+        Number of x grid points for ECDF lines.
+    sample_limit_per_channel : int
+        Max pooled samples per channel for percentile estimation.
+    """
+    if len(img_paths) != len(labels):
+        raise ValueError("img_paths and labels must match in length.")
+    arrays = _load_paths_as_chw_float32(img_paths)
+    y = np.asarray(labels).astype(int)
+    if (0 not in y) or (1 not in y):
+        raise ValueError("Both classes 0 and 1 must be present.")
+
+    n_channels = arrays[0].shape[0]
+    if n_channels not in (3, 4):
+        raise ValueError("Images must have 3 or 4 channels.")
+    if any(a.shape[0] != n_channels for a in arrays):
+        raise ValueError("All images must have the same number of channels.")
+
+    channel_names = ["Green", "Blue", "Red"] if n_channels == 3 else ["Green", "Blue", "Gray", "Red"]
+
+    sm, okabe = _prepare_style()
+    color0, color1 = okabe[0], okabe[1]
+
+    # Pool values per class/channel (with memory safety via sampling)
+    rng = np.random.default_rng(42)
+    pooled0 = [None] * n_channels
+    pooled1 = [None] * n_channels
+    for c in range(n_channels):
+        vals0, vals1 = [], []
+        remain0 = remain1 = sample_limit_per_channel
+        for arr, lab in zip(arrays, y):
+            ch = arr[c].ravel()
+            if lab == 0 and remain0 > 0:
+                take = min(remain0, ch.size)
+                if take < ch.size:
+                    idx = rng.choice(ch.size, size=take, replace=False)
+                    vals0.append(ch[idx])
+                else:
+                    vals0.append(ch)
+                remain0 -= take
+            elif lab == 1 and remain1 > 0:
+                take = min(remain1, ch.size)
+                if take < ch.size:
+                    idx = rng.choice(ch.size, size=take, replace=False)
+                    vals1.append(ch[idx])
+                else:
+                    vals1.append(ch)
+                remain1 -= take
+        pooled0[c] = np.concatenate(vals0) if vals0 else np.array([0.0], dtype=np.float32)
+        pooled1[c] = np.concatenate(vals1) if vals1 else np.array([0.0], dtype=np.float32)
+
+    # Determine per-channel x-limits (robust or full)
+    xmins = np.zeros(n_channels, dtype=float)
+    xmaxs = np.zeros(n_channels, dtype=float)
+    for c in range(n_channels):
+        v = np.concatenate([pooled0[c], pooled1[c]])
+        if robust_zoom:
+            lo = np.percentile(v, lower_percentile)
+            hi = np.percentile(v, upper_percentile)
+        else:
+            lo, hi = float(np.min(v)), float(np.max(v))
+        if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
+            lo, hi = float(np.min(v)), float(np.max(v))
+            if hi <= lo:
+                hi = lo + 1e-6
+        xmins[c], xmaxs[c] = lo, hi
+
+    # Build x-grid and ECDFs
+    fig, axes = plt.subplots(1, n_channels, figsize=(5.6 * n_channels, 3.8))
+    axes = axes if isinstance(axes, np.ndarray) else np.array([axes])
+
+    for c, ax in enumerate(axes):
+        lo, hi = xmins[c], xmaxs[c]
+        if log_x:
+            eps = 1e-12
+            lo = max(lo, eps)
+            x = np.logspace(np.log10(lo), np.log10(hi), ecdf_points)
+        else:
+            x = np.linspace(lo, hi, ecdf_points)
+
+        # ECDF function: F(t) = (number <= t) / N
+        v0 = np.sort(pooled0[c])
+        v1 = np.sort(pooled1[c])
+        def ecdf(values: np.ndarray, grid: np.ndarray) -> np.ndarray:
+            # rightmost indices where values <= grid
+            idx = np.searchsorted(values, grid, side="right")
+            return idx / max(1, values.size)
+
+        F0 = ecdf(v0, x)
+        F1 = ecdf(v1, x)
+
+        ax.plot(x, F0, color=color0, lw=2, label=class0_name)
+        ax.plot(x, F1, color=color1, lw=2, label=class1_name)
+        ax.set_title(f"{channel_names[c]} ECDF", fontsize=14)
+        ax.set_xlabel("Pixel value", fontsize=12)
+        ax.set_ylabel("Cumulative probability", fontsize=12)
+        ax.grid(True, axis="both", alpha=0.3, linestyle="--")
+        if log_x:
+            ax.set_xscale("log")
+        # minimal spines
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        if c == 0:
+            ax.legend(frameon=True, fontsize=10)
+
+    plt.tight_layout()
+    if output_path:
+        import os
+        out_dir = os.path.dirname(output_path)
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
+        if sm is not None:
+            sm.savefig(output_path)
+        else:
+            plt.savefig(output_path, dpi=300, bbox_inches="tight", transparent=True)
+    plt.show()

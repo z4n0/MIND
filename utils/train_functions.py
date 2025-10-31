@@ -19,8 +19,7 @@ import matplotlib
 matplotlib.use("Agg", force=True)
 import matplotlib.pyplot as plt
 from configs.ConfigLoader import ConfigLoader
-from torch.cuda.amp import GradScaler, autocast
-from torch.cuda.amp.autocast_mode import autocast
+from torch.amp import GradScaler
 import warnings
 
 # Suppress specific UserWarnings from PyTorch AMP
@@ -455,7 +454,7 @@ def train_epoch_mixUp(model, loader, optimizer, loss_function, device, mixup_alp
     
     # Initialize gradient scaler for AMP
     # scaler = torch.cuda.amp.GradScaler() #DEPRECATED
-    scaler = torch.amp.GradScaler('cuda')
+    scaler = torch.amp.GradScaler(device='cuda')
 
     for batch in loader:
         images_batch = batch["image"].to(device)

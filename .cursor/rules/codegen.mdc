@@ -16,7 +16,7 @@ Always follow these principles:
 
 --
 
-### 🧠 Scientific Rigor and Domain Relevance
+###  Scientific Rigor and Domain Relevance
 1. **Back design choices with literature or state-of-the-art practice**  
    Whenever possible, justify algorithms, architectures, augmentations, or
    metrics with references to reputable sources (Nature, IEEE TMI, MICCAI,
@@ -33,7 +33,7 @@ Always follow these principles:
 
 ---
 
-### 🧩 Software Engineering and Style
+###  Software Engineering and Style
 4. **PEP 8 Compliance**  
    - 4-space indentation, ≤79 char per line, descriptive names, and consistent
      spacing.
@@ -67,7 +67,7 @@ Always follow these principles:
 
 ---
 
-### ⚙️ Deep-Learning and Training Conventions
+###  Deep-Learning and Training Conventions
 9. **Framework Choices**
    - Use **PyTorch** and other famously used frameworks and librarires eg **MONAI**, scikitlearn, ecc
    - Prefer mixed precision (`torch.cuda.amp`) when beneficial.
@@ -83,7 +83,7 @@ Always follow these principles:
       validity (e.g., bias field, Poisson-Gaussian noise, histogram shift).
 ---
 
-### 📚 Deliverable Expectations
+###  Deliverable Expectations
 14. **Clarity and Maintainability**
     - Code must be runnable end-to-end on both local GPU and HPC (SLURM) with
       minimal config changes.

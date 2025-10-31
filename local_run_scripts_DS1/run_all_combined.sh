@@ -121,15 +121,15 @@ overall_total=0
 # Group 1: 3-channel experiments
 SCRIPTS_DIR_3C="local_run_scripts_DS1/3c"
 scripts_3c=(
-    # "run_local_densenet121_3c.sh"
-    # "run_local_densenet169_3c.sh"
-    # "run_local_resnet18_3c.sh"
-    # "run_local_vit_3c.sh"
+    "run_local_densenet121_3c.sh"
+    "run_local_densenet169_3c.sh"
+    "run_local_resnet18_3c.sh"
+    "run_local_vit_3c.sh"
 )
-run_script_group "3C" "$SCRIPTS_DIR_3C" "DS1_3c" "${scripts_3c[@]}"
-overall_successful=$((overall_successful + ${3C_successful:-0}))
-overall_failed=$((overall_failed + ${3C_failed:-0}))
-overall_total=$((overall_total + ${3C_total:-0}))
+run_script_group "group3C" "$SCRIPTS_DIR_3C" "DS1_3c" "${scripts_3c[@]}"
+overall_successful=$((overall_successful + ${group3C_successful:-0}))
+overall_failed=$((overall_failed + ${group3C_failed:-0}))
+overall_total=$((overall_total + ${group3C_total:-0}))
 
 # Group 2: 4-channel experiments
 SCRIPTS_DIR_4C="local_run_scripts_DS1/4c"
@@ -139,15 +139,15 @@ scripts_4c=(
     "run_local_resnet18_4c.sh"
     "run_local_vit_4c.sh"
 )
-run_script_group "4C" "$SCRIPTS_DIR_4C" "DS1_4c" "${scripts_4c[@]}"
-overall_successful=$((overall_successful + ${4C_successful:-0}))
-overall_failed=$((overall_failed + ${4C_failed:-0}))
-overall_total=$((overall_total + ${4C_total:-0}))
+run_script_group "group4C" "$SCRIPTS_DIR_4C" "DS1_4c" "${scripts_4c[@]}"
+overall_successful=$((overall_successful + ${group4C_successful:-0}))
+overall_failed=$((overall_failed + ${group4C_failed:-0}))
+overall_total=$((overall_total + ${group4C_total:-0}))
 
 # Group 3: Pretrained experiments
 SCRIPTS_DIR_PRETRAINED="local_run_scripts_DS1/pretrained"
 scripts_pretrained=(
-    "run_local_vit_pretrained_3c.sh"
+    "run_local_vit_pretrained_3c.sh" 
     run_local_resnet18_pretrained.sh
     run_local_densenet121_pretrained.sh
     run_local_densenet169_pretrained.sh
@@ -157,10 +157,10 @@ scripts_pretrained=(
     # run_local_vit_base_patch16_224_pretrained.sh
     # run_local_vit_base_patch16_384_pretrained.sh
 )
-run_script_group "PRETRAINED" "$SCRIPTS_DIR_PRETRAINED" "DS1_pretrained" "${scripts_pretrained[@]}"
-overall_successful=$((overall_successful + ${PRETRAINED_successful:-0}))
-overall_failed=$((overall_failed + ${PRETRAINED_failed:-0}))
-overall_total=$((overall_total + ${PRETRAINED_total:-0}))
+run_script_group "groupPRETRAINED" "$SCRIPTS_DIR_PRETRAINED" "DS1_pretrained" "${scripts_pretrained[@]}"
+overall_successful=$((overall_successful + ${groupPRETRAINED_successful:-0}))
+overall_failed=$((overall_failed + ${groupPRETRAINED_failed:-0}))
+overall_total=$((overall_total + ${groupPRETRAINED_total:-0}))
 
 # ── 5) final summary ────────────────────────────────────────────────────────
 echo ""
