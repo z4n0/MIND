@@ -119,45 +119,44 @@ overall_failed=0
 overall_total=0
 
 # Group 1: 3-channel experiments
-SCRIPTS_DIR_3C="local_run_scripts_DS1/3c"
+SCRIPTS_DIR_3C="local_run_scripts_DS2/3c"
 scripts_3c=(
-    "run_local_densenet121_3c.sh"
-    "run_local_densenet169_3c.sh"
-    "run_local_resnet18_3c.sh"
-    "run_local_vit_3c.sh"
+    # "run_local_densenet121_3c.sh"
+    # "run_local_densenet169_3c.sh"
+    # "run_local_resnet18_3c.sh"
+    # "run_local_resnet50_3c.sh"
+    # "run_local_vit_3c.sh"
 )
-run_script_group "group3C" "$SCRIPTS_DIR_3C" "DS1_3c" "${scripts_3c[@]}"
+run_script_group "group3C" "$SCRIPTS_DIR_3C" "DS2_3c" "${scripts_3c[@]}"
 overall_successful=$((overall_successful + ${group3C_successful:-0}))
 overall_failed=$((overall_failed + ${group3C_failed:-0}))
 overall_total=$((overall_total + ${group3C_total:-0}))
 
 # Group 2: 4-channel experiments
-SCRIPTS_DIR_4C="local_run_scripts_DS1/4c"
+SCRIPTS_DIR_4C="local_run_scripts_DS2/4c"
 scripts_4c=(
-    "run_local_densenet121_4c.sh"
-    "run_local_densenet169_4c.sh"
-    "run_local_resnet18_4c.sh"
-    "run_local_vit_4c.sh"
+    # "run_local_densenet121_4c.sh"
+    # "run_local_densenet169_4c.sh"
+    # "run_local_resnet18_4c.sh"
+    # "run_local_resnet50_4c.sh"
+    # "run_local_efficientnet_4c.sh"
+    # "run_local_vit_4c.sh"
 )
-run_script_group "group4C" "$SCRIPTS_DIR_4C" "DS1_4c" "${scripts_4c[@]}"
+run_script_group "group4C" "$SCRIPTS_DIR_4C" "DS2_4c" "${scripts_4c[@]}"
 overall_successful=$((overall_successful + ${group4C_successful:-0}))
 overall_failed=$((overall_failed + ${group4C_failed:-0}))
 overall_total=$((overall_total + ${group4C_total:-0}))
 
 # Group 3: Pretrained experiments
-SCRIPTS_DIR_PRETRAINED="local_run_scripts_DS1/pretrained"
+SCRIPTS_DIR_PRETRAINED="local_run_scripts_DS2/pretrained"
 scripts_pretrained=(
     "run_local_vit_pretrained_3c.sh" 
     "run_local_resnet18_pretrained.sh"
+    # "run_local_resnet50_pretrained.sh"
     "run_local_densenet121_pretrained.sh"
     "run_local_densenet169_pretrained.sh"
-    # run_local_vit_small_patch16_224_pretrained.sh
-    # run_local_deit_small_patch16_224_pretrained.sh
-    # run_local_deit_base_patch16_224_pretrained.sh
-    # run_local_vit_base_patch16_224_pretrained.sh
-    # run_local_vit_base_patch16_384_pretrained.sh
 )
-run_script_group "groupPRETRAINED" "$SCRIPTS_DIR_PRETRAINED" "DS1_pretrained" "${scripts_pretrained[@]}"
+run_script_group "groupPRETRAINED" "$SCRIPTS_DIR_PRETRAINED" "DS2_pretrained" "${scripts_pretrained[@]}"
 overall_successful=$((overall_successful + ${groupPRETRAINED_successful:-0}))
 overall_failed=$((overall_failed + ${groupPRETRAINED_failed:-0}))
 overall_total=$((overall_total + ${groupPRETRAINED_total:-0}))
