@@ -294,7 +294,10 @@ class ConfigLoader:
         """Get whether the model is pretrained"""
         if self.training is None:
             raise ValueError("Training configuration is not set")
-        return self.training.get("pretrained", False)
+        is_pretrained = self.training.get("transfer_learning")
+        if is_pretrained is None:
+            raise ValueError("transfer_learning is not set in training configuration")
+        return bool(is_pretrained)
 
     def set_spatial_size(self, spatial_size: tuple) -> None:
         """Set the spatial size for data augmentation

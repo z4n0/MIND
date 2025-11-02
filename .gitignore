@@ -9,6 +9,7 @@
 /.venv
 *.pth
 /learning_curves/*
+latex_tables/*
 /__pycache__
 *.pyc
 *.pyo

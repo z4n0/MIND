@@ -53,7 +53,7 @@ def create_table_image(
     import textwrap
     
     # Define the save path
-    save_path = './tables/'
+    save_path = './images/tables/'
     # if not os.path.exists(save_path):
     #     os.makedirs(save_path)
 

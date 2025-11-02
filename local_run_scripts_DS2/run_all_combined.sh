@@ -25,7 +25,7 @@ echo "Running on:   $(hostname)"
 python -c "import torch, sys; print(f'Torch: {torch.__version__}, CUDA: {torch.version.cuda}, GPU Available: {torch.cuda.is_available()}'); sys.exit(0 if torch.cuda.is_available() else 1)"
 
 # ── 2) project-specific environment ─────────────────────────────────────────
-export DATA_ROOT="${DATA_ROOT:-$REPO_DIR/data}"
+export DATA_ROOT="${DATA_ROOT:-$REPO_DIR/data/SUBSLICE_MIPS}"
 export MLFLOW_TRACKING_URI="${MLFLOW_TRACKING_URI:-file:$REPO_DIR/mlruns}"
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
@@ -121,11 +121,11 @@ overall_total=0
 # Group 1: 3-channel experiments
 SCRIPTS_DIR_3C="local_run_scripts_DS2/3c"
 scripts_3c=(
-    # "run_local_densenet121_3c.sh"
-    # "run_local_densenet169_3c.sh"
-    # "run_local_resnet18_3c.sh"
+    "run_local_densenet121_3c.sh"
+    "run_local_densenet169_3c.sh"
+    "run_local_resnet18_3c.sh"
     # "run_local_resnet50_3c.sh"
-    # "run_local_vit_3c.sh"
+    "run_local_vit_3c.sh"
 )
 run_script_group "group3C" "$SCRIPTS_DIR_3C" "DS2_3c" "${scripts_3c[@]}"
 overall_successful=$((overall_successful + ${group3C_successful:-0}))
@@ -135,12 +135,12 @@ overall_total=$((overall_total + ${group3C_total:-0}))
 # Group 2: 4-channel experiments
 SCRIPTS_DIR_4C="local_run_scripts_DS2/4c"
 scripts_4c=(
-    # "run_local_densenet121_4c.sh"
-    # "run_local_densenet169_4c.sh"
-    # "run_local_resnet18_4c.sh"
+    "run_local_densenet121_4c.sh"
+    "run_local_densenet169_4c.sh"
+    "run_local_resnet18_4c.sh"
     # "run_local_resnet50_4c.sh"
     # "run_local_efficientnet_4c.sh"
-    # "run_local_vit_4c.sh"
+    "run_local_vit_4c.sh"
 )
 run_script_group "group4C" "$SCRIPTS_DIR_4C" "DS2_4c" "${scripts_4c[@]}"
 overall_successful=$((overall_successful + ${group4C_successful:-0}))
@@ -150,11 +150,11 @@ overall_total=$((overall_total + ${group4C_total:-0}))
 # Group 3: Pretrained experiments
 SCRIPTS_DIR_PRETRAINED="local_run_scripts_DS2/pretrained"
 scripts_pretrained=(
-    "run_local_vit_pretrained_3c.sh" 
-    "run_local_resnet18_pretrained.sh"
-    # "run_local_resnet50_pretrained.sh"
-    "run_local_densenet121_pretrained.sh"
-    "run_local_densenet169_pretrained.sh"
+    # "run_local_vit_pretrained_3c.sh" 
+    # "run_local_resnet18_pretrained.sh"
+    # # "run_local_resnet50_pretrained.sh"
+    # "run_local_densenet121_pretrained.sh"
+    # "run_local_densenet169_pretrained.sh"
 )
 run_script_group "groupPRETRAINED" "$SCRIPTS_DIR_PRETRAINED" "DS2_pretrained" "${scripts_pretrained[@]}"
 overall_successful=$((overall_successful + ${groupPRETRAINED_successful:-0}))

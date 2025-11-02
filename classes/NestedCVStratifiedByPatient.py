@@ -23,6 +23,8 @@ from utils.transformations_functions import get_transforms, compute_dataset_mean
 from configs.ConfigLoader import ConfigLoader
 from pathlib import Path # Added for Path operations
 from optuna.exceptions import TrialPruned
+from utils.train_functions import print_model_summary
+from utils.transformations_functions import is_supported_by_torchvision as tv_supported_by_model
 
 class NestedCVStratifiedByPatient:
     """
@@ -75,30 +77,28 @@ class NestedCVStratifiedByPatient:
         self.val_set_size = self.cfg.get_val_set_size()
         self.num_epochs = self.cfg.get_num_epochs()
         self.lr_discovery_folds = self.cfg.get_lr_discovery_folds()
-        self.is_supported_by_torchvision = self.pretrained_weights is not None
+        self.use_imagenet_norm = bool(self.cfg.is_pretrained() and tv_supported_by_model(self.cfg.get_model_name()))
         self.train_transforms = train_transforms
         self.val_transforms = val_transforms
         self.random_seed = self.cfg.get_random_seed()
-        #store current fold's transforms
         self.current_fold_train_transforms = None
         self.current_fold_val_transforms = None
         self.current_fold_test_transforms = None
         self.per_fold_val_images_paths = {} #type: ignore store validation set image paths for each fold
         self.compute_custom_normalization = compute_custom_normalization
-        self.x_outer_len = None
-        self.x_outer_len = None
         self.train_image_counts_per_fold = {} #type: ignore
         self.val_image_counts_per_fold = {} #type: ignore
         self._num_outer_images = None
         self.output_dir = Path(output_dir or ".").resolve()
         self.cm_dir = str(self.output_dir / "confusion_matrices")
-        self.cm_patient_dir = str(self.output_dir / "confusion_matrices" / "patient")
-        self.learning_dir = str(self.output_dir / "learning_curves")
-        self._test_pat_ids_per_fold = {} #<-- to store test patient ids for each fold
+        self.cm_patient_dir: str = str(self.output_dir / "confusion_matrices" / "patient")
+        self.learning_dir: str = str(self.output_dir / "learning_curves")
+        self._val_pat_ids_per_fold: dict[int, list[str]] = {} # Stores validation patient IDs for each fold; key: fold index, value: list of patient IDs
+        self._test_pat_ids_per_fold: dict[int, list[str]] = {}  # Stores test patient IDs for each fold; key: fold index, value: list of patient IDs
         # Cumulative storage for image-level confusion matrix across folds
         self._cumulative_true_labels: list[int] = []
         self._cumulative_pred_labels: list[int] = []
-        self._transforms_saved = False  # ensure we log transforms once per run
+        self._transforms_saved: bool = False  # Ensures we log transforms once per run
 
         print(f"Detected {self.num_classes} unique classes.")
 
@@ -129,16 +129,6 @@ class NestedCVStratifiedByPatient:
     
     def set_best_lr(self, best_lr):
         self.best_lr = best_lr
-    
-    def _setup_directories(self):
-        """Create output subdirectories for metrics and plots for this run.
-
-        Creates `confusion_matrices/` and `learning_curves/` inside
-        the configured `output_dir` so concurrent runs don't clash.
-        """
-        os.makedirs(self.cm_dir, exist_ok=True)
-        os.makedirs(self.cm_patient_dir, exist_ok=True)
-        os.makedirs(self.learning_dir, exist_ok=True)
         
 
     def _compute_patient_level_metrics(self, X_test_outer, y_test_outer, eval_results, fold_idx: int) -> dict:
@@ -548,12 +538,11 @@ class NestedCVStratifiedByPatient:
 
             # Create DataLoaders
             train_stats = None
-            val_stats = None
+            
             if self.train_transforms is None:
-                train_stats = compute_dataset_mean_std(X_train_bal, self.cfg, is_supported_by_torchvision=self.is_supported_by_torchvision)
-            if self.val_transforms is None:
-                val_stats = compute_dataset_mean_std(X_train_bal, self.cfg, is_supported_by_torchvision=self.is_supported_by_torchvision)
-
+                train_stats = compute_dataset_mean_std(X_train_bal, self.cfg, is_supported_by_torchvision=self.use_imagenet_norm)
+                val_stats = train_stats
+                
             train_transforms = self.train_transforms or get_transforms(self.cfg, fold_specific_stats=train_stats)[0]
             val_transforms = self.val_transforms or get_transforms(self.cfg, fold_specific_stats=val_stats)[1]
             train_loader = make_loader(X_train_bal, y_train_bal, train_transforms, self.cfg, shuffle=True)
@@ -1036,10 +1025,59 @@ class NestedCVStratifiedByPatient:
                 self.per_fold_metrics['val_auc'][fold_idx].append(val_auc)
                 self.per_fold_metrics['val_mcc'][fold_idx].append(val_mcc)
 
-    def _train_model_with_early_stopping(self, fold_idx, X_train_outer, y_train_outer, opt_cfg):
+    def _train_model_with_early_stopping(
+        self,
+        fold_idx: int,
+        X_train_outer: list[str],
+        y_train_outer: list[int],
+        opt_cfg: dict[str, float | int | bool | object],
+    ) -> tuple[str, torch.nn.Module]:
         """
-        Train on outer-train with an early-stopping split and return best model path.
-        `opt_cfg` is a dict with keys: lr, weight_decay, betas, eps, backbone_lr_mult, ...
+        Train a model on the outer-training set using an inner patient-wise
+        validation split for early stopping. Returns the path to the best model
+        (by validation loss) and the instantiated loss function.
+
+        The split avoids patient-level leakage by stratifying once per patient
+        (using the patient's first label for stratification) and then mapping
+        back to the corresponding images. Early stopping is driven by validation
+        loss with a patience defined in `self.cfg.training["early_stopping_patience"]`.
+
+        Parameters
+        ----------
+        fold_idx : int
+            Index of the current outer fold.
+        X_train_outer : list[str]
+            Image paths belonging to the outer-training portion of the data for
+            this fold. Multiple images from the same patient can be present.
+        y_train_outer : list[int]
+            Integer labels (e.g., 0/1) aligned with `X_train_outer`.
+        opt_cfg : dict[str, float | int | bool | object]
+            Optimizer and scheduler hyperparameters. Expected keys include:
+            - "lr": float, base learning rate.
+            - "weight_decay": float, weight decay.
+            - "betas": tuple[float, float] or similar for Adam-like optimizers.
+            - "eps": float, epsilon for numerical stability.
+            - "backbone_lr_mult": float, optional LR multiplier for backbone.
+            Other optimizer-specific keys can be provided and will be forwarded.
+
+        Returns
+        -------
+        tuple[str, torch.nn.Module]
+            - model_save_path: str
+              Filesystem path to the best model checkpoint for this fold.
+            - loss_function: torch.nn.Module
+              The loss function instance used during training.
+
+        Notes
+        -----
+        - Splitting is performed with `StratifiedShuffleSplit` at the patient ID
+          level to prevent leakage across train/validation sets.
+        - If `self.oversample` or `self.undersample` is enabled, sampling is
+          applied on the training subset only.
+        - Learning rate scheduling supports cosine or validation-loss-based
+          schedulers depending on configuration.
+        - Reproducibility depends on `self.random_seed` and the configured seeds
+          within dataloaders/augmentations.
         """
         # Patient-wise inner validation split to avoid leakage
         df_outer_train = pd.DataFrame({
@@ -1080,11 +1118,11 @@ class NestedCVStratifiedByPatient:
             X_train_es_bal, y_train_es_bal = X_train_es, y_train_es
 
         train_loader_es = make_loader(X_train_es_bal, y_train_es_bal, self.current_fold_train_transforms, self.cfg, shuffle=True)
-        val_loader_es   = make_loader(X_val_es, y_val_es, self.current_fold_val_transforms, self.cfg, shuffle=False)
+        val_loader_es = make_loader(X_val_es, y_val_es, self.current_fold_val_transforms, self.cfg, shuffle=False)
 
         lr_for_fold = float(opt_cfg["lr"])
         model, device = self._get_model_and_device(learning_rate_for_factory=lr_for_fold)
-        from utils.train_functions import print_model_summary
+        
         print_model_summary(model)
 
         loss_function = self._get_loss_function(y_train_es_bal)
@@ -1257,7 +1295,7 @@ class NestedCVStratifiedByPatient:
             # if not pretrained or compute_custom_normalization is forced via flag
             if not self.cfg.is_pretrained() or self.compute_custom_normalization:
                 print(f"--- Calculating normalization stats for Fold {fold_display_idx} Training Data ---")
-                fold_stats = compute_dataset_mean_std(X_train_outer, self.cfg, is_supported_by_torchvision=self.is_supported_by_torchvision)
+                fold_stats = compute_dataset_mean_std(X_train_outer, self.cfg, is_supported_by_torchvision=self.use_imagenet_norm)
                 print(f"Fold {fold_display_idx} stats: {fold_stats}")
             else:
                 print("Using pretrained model; ImageNet normalization will be applied by torchvision transforms.")
@@ -1271,7 +1309,7 @@ class NestedCVStratifiedByPatient:
                 fold_specific_stats=fold_stats # note that is None if pretrained=True
                 )
                 print(f"Transforms generated for Fold {fold_display_idx}.")
-                # Save a one-time human-readable description of transform pipelines
+                # Save a one-time human-readable description of transform pipelines that will log in mlflow
                 if not self._transforms_saved:
                     try:
                         def _describe(comp):

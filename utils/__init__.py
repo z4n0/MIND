@@ -1,10 +1,11 @@
-from .data_visualization_functions import (
-    visualize_tiff,
-    visualize_dict_image,
-    visualize_and_compare_pixel_intensity_histograms,
-    calculate_tensor_histogram,
-    min_max_normalization
-)
+# Note: These functions are currently commented out in data_visualization_functions.py
+# from .data_visualization_functions import (
+#     visualize_tiff,
+#     visualize_dict_image,
+#     visualize_and_compare_pixel_intensity_histograms,
+#     calculate_tensor_histogram,
+#     min_max_normalization
+# )
 
 from .train_functions import (
     train_epoch,
@@ -60,20 +61,29 @@ from .mlflow_functions import (
     start_mlflow_ui,
 )
 
+# from .mlflow_data_analyisis_helpers import (
+#     pick_newest_run_per_arch,
+#     extract_metrics_for_comparison,
+#     create_comparison_figure,
+# )
+
 from .vit_explanation_functions import (
     save_attention_overlays_side_by_side,
 )
 
 __all__ = [
-    
+    # MLflow data analysis helpers
+    # 'pick_newest_run_per_arch',
+    # 'extract_metrics_for_comparison',
+    # 'create_comparison_figure',
     # Pretrained model functions
     'get_nasa_pretrained_model',
-    # Data visualization functions
-    'visualize_tiff',
-    'visualize_dict_image',
-    'visualize_and_compare_pixel_intensity_histograms',
-    'calculate_tensor_histogram',
-    'min_max_normalization',
+    # Data visualization functions (currently commented out in source file)
+    # 'visualize_tiff',
+    # 'visualize_dict_image',
+    # 'visualize_and_compare_pixel_intensity_histograms',
+    # 'calculate_tensor_histogram',
+    # 'min_max_normalization',
     
     # Training functions
     'train_epoch',

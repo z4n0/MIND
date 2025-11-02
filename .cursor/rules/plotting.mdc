@@ -38,6 +38,14 @@ rules:
         `#0072B2`, `#D55E00`, `#009E73`, `#CC79A7`, `#F0E442`, `#56B4E9`,
         `#E69F00`, `#999999`.
         (For PD vs MSA visualizations, keep class colors consistent across plots.)
+        associate sm.palette[1],[2],[3] to the classes and
+      * architecture_colors = {
+          'vit': '#E69F00',           # Amber (palette[6])
+          'resnet18': '#999999',      # Gray (palette[7])
+          'densenet121': '#8B4513',  # Saddle brown (dark, distinct)
+          'densenet169': '#6A5ACD',   # Slate blue (distinct from blue palette[0])
+      }
+
 
       * Default Seaborn theme:
         ```python
