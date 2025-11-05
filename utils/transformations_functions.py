@@ -255,7 +255,6 @@ def _weak_bleedthrough_lambda(keys=("image",), max_frac=0.05):
         return x
     return LambdaD(keys=keys, func=_fn)
 
-
 # ---------- main block ----------
 
 def _get_intensity_augmentations(cfg, preset: str = "medium") -> List:

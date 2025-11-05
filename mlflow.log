@@ -5,3 +5,9 @@
 [2025-11-01 22:48:17 +0100] [2455893] [INFO] Booting worker with pid: 2455893
 [2025-11-01 22:48:17 +0100] [2455901] [INFO] Booting worker with pid: 2455901
 [2025-11-01 22:48:17 +0100] [2455902] [INFO] Booting worker with pid: 2455902
+[2025-11-03 13:55:19 +0100] [2455888] [INFO] Handling signal: term
+[2025-11-03 13:55:19 +0100] [2455902] [INFO] Worker exiting (pid: 2455902)
+[2025-11-03 13:55:19 +0100] [2455901] [INFO] Worker exiting (pid: 2455901)
+[2025-11-03 13:55:19 +0100] [2455890] [INFO] Worker exiting (pid: 2455890)
+[2025-11-03 13:55:19 +0100] [2455893] [INFO] Worker exiting (pid: 2455893)
+[2025-11-03 13:55:21 +0100] [2455888] [INFO] Shutting down: Master

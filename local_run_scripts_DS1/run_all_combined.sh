@@ -121,10 +121,10 @@ overall_total=0
 # Group 1: 3-channel experiments
 SCRIPTS_DIR_3C="local_run_scripts_DS1/3c"
 scripts_3c=(
-    "run_local_densenet121_3c.sh"
-    "run_local_densenet169_3c.sh"
-    "run_local_resnet18_3c.sh"
-    "run_local_vit_3c.sh"
+    # "run_local_densenet121_3c.sh"
+    # "run_local_densenet169_3c.sh"
+    # "run_local_resnet18_3c.sh"
+    # "run_local_vit_3c.sh"
 )
 run_script_group "group3C" "$SCRIPTS_DIR_3C" "DS1_3c" "${scripts_3c[@]}"
 overall_successful=$((overall_successful + ${group3C_successful:-0}))
@@ -134,10 +134,10 @@ overall_total=$((overall_total + ${group3C_total:-0}))
 # Group 2: 4-channel experiments
 SCRIPTS_DIR_4C="local_run_scripts_DS1/4c"
 scripts_4c=(
-    "run_local_densenet121_4c.sh"
-    "run_local_densenet169_4c.sh"
-    "run_local_resnet18_4c.sh"
-    "run_local_vit_4c.sh"
+    # "run_local_densenet121_4c.sh"
+    # "run_local_densenet169_4c.sh"
+    # "run_local_resnet18_4c.sh"
+    # "run_local_vit_4c.sh"
 )
 run_script_group "group4C" "$SCRIPTS_DIR_4C" "DS1_4c" "${scripts_4c[@]}"
 overall_successful=$((overall_successful + ${group4C_successful:-0}))
