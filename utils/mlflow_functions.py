@@ -421,6 +421,40 @@ from utils.train_functions import make_loader
 from utils.data_visualization_functions import min_max_normalization
 
 # ---------------------------------------------------------------------------
+def log_ablation_params_to_mlflow(
+    ablated_channel: int,
+    total_channels: int,
+    ablation_iteration: str,
+) -> None:
+    """
+    Log ablation-specific parameters to the current MLflow run.
+    
+    Scientific context:
+    - Tracks which channel was ablated in this experiment
+    - Enables filtering/comparison across ablation configurations in MLflow UI
+    - Documents the systematic channel importance study methodology
+    
+    Args:
+        ablated_channel: Index of the ablated channel (0-indexed)
+        total_channels: Total number of input channels
+        ablation_iteration: String representation of iteration (e.g., "1/4")
+    """
+    mlflow.log_params({
+        "ablation_study": "single_channel",
+        "ablated_channel_idx": ablated_channel,
+        "ablation_iteration": ablation_iteration,
+        "total_channels_available": total_channels,
+    })
+    
+    # Add human-readable tags for easy filtering in MLflow UI
+    mlflow.set_tags({
+        "ablation.study_type": "single_channel_knockout",
+        "ablation.channel": f"ch{ablated_channel}",
+        "ablation.iteration": ablation_iteration,
+    })
+    
+    print(f"✓ Logged ablation params: channel {ablated_channel} ablated ({ablation_iteration})")
+
 def log_run_to_mlflow(
     cfg: ConfigLoader,
     model: nn.Module,
@@ -432,7 +466,7 @@ def log_run_to_mlflow(
     test_true_labels_np: np.ndarray,
     yaml_path: str,
     *,
-    device: Optional[torch.device] = None,  # <-- Make device optional
+    device: Optional[torch.device] = None,
     model_library: str = "torchvision",
     pretrained_weights: Optional[str] = None,
     ssl: bool = False,
@@ -445,6 +479,7 @@ def log_run_to_mlflow(
     output_dir: Optional[str] = None,
     test_pat_ids_per_fold: Optional[Dict[str, List[str]]] = None,
     best_fold_idx: Optional[int] = None,
+    ablation_config: Optional[Dict[str, Any]] = None,  # <-- NEW parameter
 ) -> None:
     """
     Log parameters, metrics and artifacts to MLflow (file store).
@@ -472,6 +507,8 @@ def log_run_to_mlflow(
         output_dir: Directory where run outputs (models, plots) are stored
         test_pat_ids_per_fold: Dictionary containing test patient IDs for each fold
         best_fold_idx: Index of the best fold
+        ablation_config: Optional dict with keys {'ablated_channel', 'total_channels', 'iteration'}
+                         If provided, logs ablation-specific metadata for channel importance studies.
     """
     # ------------------------------------------------------------------ URI
     env_experiment_name = os.getenv("MLFLOW_EXPERIMENT_NAME")
@@ -540,6 +577,23 @@ def log_run_to_mlflow(
                 # "creation_timestamp": now.timestamp(),  # Unix timestamp for sorting
             }
         )
+        # --------------------- ABLATION-SPECIFIC PARAMS (if applicable)
+        if ablation_config is not None:
+            log_ablation_params_to_mlflow(
+                ablated_channel=ablation_config["ablated_channel"],
+                total_channels=ablation_config["total_channels"],
+                ablation_iteration=ablation_config["iteration"],
+            )
+        
+        if cfg.get_use_ablation():
+            mlflow.log_params(
+                {
+                    "ablation_study": "single_channel",
+                    "ablated_channel": cfg.get_channels_to_ablate()[0],
+                    # "ablation_iteration": f"{len(cfg.get_channels_to_ablate())}/{cfg.get_in_channels()}"
+                }
+            )
+            
         if test_pat_ids_per_fold:
             mlflow.log_params(
                 {
@@ -558,7 +612,7 @@ def log_run_to_mlflow(
             [
                 (
                     r["test_loss"],
-                    r["test_acc"],
+                    # r["test_accuracy"],
                     r["test_balanced_acc"],
                     r["test_f1"],
                     r.get("test_auc", 0.0),
@@ -572,20 +626,18 @@ def log_run_to_mlflow(
         metrics = {
             "mean_test_loss": float(per_fold[:, 0].mean()),
             "std_test_loss": float(per_fold[:, 0].std()),
-            "mean_test_accuracy": float(per_fold[:, 1].mean()),
-            "std_test_accuracy": float(per_fold[:, 1].std()),
-            "mean_test_balanced_acc": float(per_fold[:, 2].mean()),
-            "std_test_balanced_acc": float(per_fold[:, 2].std()),
-            "mean_test_f1": float(per_fold[:, 3].mean()),
-            "std_test_f1": float(per_fold[:, 3].std()),
-            "mean_test_auc": float(per_fold[:, 4].mean()),
-            "std_test_auc": float(per_fold[:, 4].std()),
-            "mean_test_mcc": float(per_fold[:, 5].mean()),
-            "std_test_mcc": float(per_fold[:, 5].std()),
-            "mean_test_precision": float(per_fold[:, 6].mean()),
-            "std_test_precision": float(per_fold[:, 6].std()),
-            "mean_test_recall": float(per_fold[:, 7].mean()),
-            "std_test_recall": float(per_fold[:, 7].std()),
+            "mean_test_balanced_acc": float(per_fold[:, 1].mean()),  # ← Fixed: was index 2
+            "std_test_balanced_acc": float(per_fold[:, 1].std()),    # ← Fixed: was index 2
+            "mean_test_f1": float(per_fold[:, 2].mean()),            # ← Fixed: was index 3
+            "std_test_f1": float(per_fold[:, 2].std()),              # ← Fixed: was index 3
+            "mean_test_auc": float(per_fold[:, 3].mean()),           # ← Fixed: was index 4
+            "std_test_auc": float(per_fold[:, 3].std()),             # ← Fixed: was index 4
+            "mean_test_mcc": float(per_fold[:, 4].mean()),           # ← Fixed: was index 5
+            "std_test_mcc": float(per_fold[:, 4].std()),             # ← Fixed: was index 5
+            "mean_test_precision": float(per_fold[:, 5].mean()),     # ← Fixed: was index 6
+            "std_test_precision": float(per_fold[:, 5].std()),       # ← Fixed: was index 6
+            "mean_test_recall": float(per_fold[:, 6].mean()),        # ← Fixed: was index 7
+            "std_test_recall": float(per_fold[:, 6].std()),          # ← Fixed: was index 7
             "exec_time_min": execution_time / 60.0,
         }
         metrics = {k: round(v, 3) for k, v in metrics.items()}

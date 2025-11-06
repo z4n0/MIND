@@ -1383,6 +1383,10 @@ def plot_intensity_ecdf(
     channel_names = ["Green", "Blue", "Red"] if n_channels == 3 else ["Green", "Blue", "Gray", "Red"]
 
     sm, okabe = _prepare_style()
+    classes_colors_dict = {
+        class0_name: okabe[0],
+        class1_name: okabe[1],
+    }
     color0, color1 = okabe[0], okabe[1]
 
     # Pool values per class/channel (with memory safety via sampling)

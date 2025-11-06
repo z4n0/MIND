@@ -274,9 +274,9 @@ def val_epoch(model, loader, loss_function, device):
                 avg_mode = 'weighted' # Or 'macro' depending on preference
 
             # Use zero_division=0 to prevent errors and return 0 if a class has no predictions/labels
-            precision = precision_score(all_labels, all_predictions, average=avg_mode, zero_division=0)
-            recall = recall_score(all_labels, all_predictions, average=avg_mode, zero_division=0)
-            f1 = f1_score(all_labels, all_predictions, average=avg_mode, zero_division=0)
+            precision = 0#precision_score(all_labels, all_predictions, average=avg_mode, zero_division=0)
+            recall = 0 #recall_score(all_labels, all_predictions, average=avg_mode, zero_division=0)
+            f1 = 0 # f1_score(all_labels, all_predictions, average=avg_mode, zero_division=0)
             balanced_acc = balanced_accuracy_score(all_labels, all_predictions) # Handles multi-class directly
             mcc = matthews_corrcoef(all_labels, all_predictions)
 

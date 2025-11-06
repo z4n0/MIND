@@ -15,7 +15,6 @@ Multiple System Atrophy (MSA).
 Always follow these principles:
 
 --
-
 ###  Scientific Rigor and Domain Relevance
 1. **Back design choices with literature or state-of-the-art practice**  
    Whenever possible, justify algorithms, architectures, augmentations, or

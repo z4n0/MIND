@@ -111,6 +111,7 @@ class NestedCVStratifiedByPatient:
             'train_loss': {},
             'val_loss': {},
             'train_accuracy': {},
+            # 'train_balanced_accuracy': {},
             'val_accuracy': {},
             'val_f1': {},
             'val_balanced_accuracy': {},
@@ -779,14 +780,14 @@ class NestedCVStratifiedByPatient:
             train_loader = make_loader(
                 image_paths=np.asarray(X_tr_bal, dtype=str),
                 labels=np.asarray(y_tr_bal, dtype=int),
-                transforms=self.current_fold_train_transforms,
+                transforms=self.current_fold_train_transforms,  # ← Ablation is embedded here
                 cfg=self.cfg,
                 shuffle=True,
             )
             val_loader = make_loader(
                 image_paths=np.asarray(X_va, dtype=str),
                 labels=np.asarray(y_va, dtype=int),
-                transforms=self.current_fold_val_transforms,
+                transforms=self.current_fold_val_transforms,  # ← Ablation is here too
                 cfg=self.cfg,
                 shuffle=False,
             )
@@ -1181,10 +1182,10 @@ class NestedCVStratifiedByPatient:
         print(f"percentage of classes in test set: {pd.Series(y_test_outer).value_counts() / len(y_test_outer)}")
 
         # Using val_epoch for evaluation metrics
-        (final_test_loss, final_test_acc, final_test_prec, final_test_recall,
+        (final_test_loss, final_test_acc , final_test_prec, final_test_recall,
          final_test_f1, final_test_balanced_acc, test_auc, test_mcc) = self.val_fn(model, test_loader, loss_function_for_eval, device)
 
-        print(f" [FOLD {fold_idx} FINAL] Test Loss: {final_test_loss:.4f} | Test Acc: {final_test_acc:.4f} | test Balanced Acc: {final_test_balanced_acc:.4f} | test F1: {final_test_f1:.4f} | Test AUC: {test_auc:.4f} | Test MCC: {test_mcc:.4f}")
+        print(f" [FOLD {fold_idx} FINAL] Test Loss: {final_test_loss:.4f}  | test Balanced Acc: {final_test_balanced_acc:.4f} | Test AUC: {test_auc:.4f} | Test MCC: {test_mcc:.4f}")
 
         # Assuming evaluate_model
         eval_results = evaluate_model(model=model, dataloader=test_loader, class_names=self.class_names, return_misclassified=True)
@@ -1210,7 +1211,7 @@ class NestedCVStratifiedByPatient:
         # Plot learning curves for the fold
         fig_learning_curves = plot_learning_curves(
             self.per_fold_metrics['train_loss'][fold_idx], self.per_fold_metrics['val_loss'][fold_idx],
-            self.per_fold_metrics['train_accuracy'][fold_idx], self.per_fold_metrics['val_accuracy'][fold_idx],
+            self.per_fold_metrics['train_accuracy'][fold_idx], self.per_fold_metrics['val_balanced_accuracy'][fold_idx],
             ignore_first_epoch_loss=True
         )
         
@@ -1225,7 +1226,8 @@ class NestedCVStratifiedByPatient:
         plt.close(cm_fig)
 
         self.fold_results.append({
-            "fold": fold_idx, "test_loss": final_test_loss, "test_acc": final_test_acc,
+            "fold": fold_idx,
+            "test_loss": final_test_loss,
             "test_f1": final_test_f1, "test_balanced_acc": final_test_balanced_acc,
             "test_auc": test_auc, "test_precision": final_test_prec,
             "test_recall": final_test_recall, "test_mcc": test_mcc, "best_lr": best_lr_for_fold,
@@ -1292,10 +1294,22 @@ class NestedCVStratifiedByPatient:
             self._num_outer_images = len(X_test_outer)
             # --- Calculate fold-specific normalization statistics ---
             fold_stats = None
-            # if not pretrained or compute_custom_normalization is forced via flag
-            if not self.cfg.is_pretrained() or self.compute_custom_normalization:
+            
+            # MODIFICATION: Always compute stats if ablation is enabled
+            if self.cfg.get_use_ablation():
+                print(f"⚠️  Ablation enabled: computing ablation-aware stats for Fold {fold_display_idx}")
+                fold_stats = compute_dataset_mean_std(
+                    X_train_outer, self.cfg, 
+                    is_supported_by_torchvision=self.use_imagenet_norm
+                )
+                print(f"Ablated stats: {fold_stats}")
+            elif not self.cfg.is_pretrained() or self.compute_custom_normalization:
+                # Original logic for non-pretrained or forced custom norm
                 print(f"--- Calculating normalization stats for Fold {fold_display_idx} Training Data ---")
-                fold_stats = compute_dataset_mean_std(X_train_outer, self.cfg, is_supported_by_torchvision=self.use_imagenet_norm)
+                fold_stats = compute_dataset_mean_std(
+                    X_train_outer, self.cfg, 
+                    is_supported_by_torchvision=self.use_imagenet_norm
+                )
                 print(f"Fold {fold_display_idx} stats: {fold_stats}")
             else:
                 print("Using pretrained model; ImageNet normalization will be applied by torchvision transforms.")
@@ -1304,9 +1318,8 @@ class NestedCVStratifiedByPatient:
             print(f"--- Generating data transforms for Fold {fold_display_idx} ---")
             if self.train_transforms is None or self.val_transforms is None:
                 #if the transformations are not set, generate them
-                self.current_fold_train_transforms, self.current_fold_val_transforms, self.current_fold_test_transforms = get_transforms(
-                self.cfg,
-                fold_specific_stats=fold_stats # note that is None if pretrained=True
+                self.current_fold_train_transforms, self.current_fold_val_transforms, _ = get_transforms(
+                self.cfg, fold_specific_stats=fold_stats  # ← Ablation params embedded
                 )
                 print(f"Transforms generated for Fold {fold_display_idx}.")
                 # Save a one-time human-readable description of transform pipelines that will log in mlflow
@@ -1371,13 +1384,13 @@ class NestedCVStratifiedByPatient:
         print("\n-------------------------------------------------")
         print("Cross-validation results (outer folds):")
         for res in self.fold_results:
-            print(f"  Fold {res['fold']}: Test Loss={res['test_loss']:.4f}, Acc={res['test_acc']:.4f}, "
-                  f"F1={res['test_f1']:.4f}, Bal Acc={res['test_balanced_acc']:.4f}, AUC={res['test_auc']:.4f}, MCC={res['test_mcc']:.4f} (Best LR={res['best_lr']:.6f})")
+            print(f"  Fold {res['fold']}: Test Loss={res['test_loss']:.4f} ",
+                  f"F1={res['test_f1']:.4f}, Bal Acc={res['test_balanced_acc']:.4f}, "
+                  f"AUC={res['test_auc']:.4f}, MCC={res['test_mcc']:.4f} "
+                  f"(Best LR={res['best_lr']:.6f})")
 
         # Aggregate and print mean/std if desired
         if self.fold_results:
-            avg_acc = np.mean([r['test_acc'] for r in self.fold_results])
-            std_acc = np.std([r['test_acc'] for r in self.fold_results])
             avg_f1 = np.mean([r['test_f1'] for r in self.fold_results])
             std_f1 = np.std([r['test_f1'] for r in self.fold_results])
             avg_auc = np.mean([r['test_auc'] for r in self.fold_results])
@@ -1391,9 +1404,7 @@ class NestedCVStratifiedByPatient:
             avg_mcc = np.mean([r['test_mcc'] for r in self.fold_results])
             std_mcc = np.std([r['test_mcc'] for r in self.fold_results])
             print("\n--- Aggregate Results ---")
-            print(f"Avg Test Accuracy: {avg_acc:.4f} +/- {std_acc:.4f}")
             print(f"Avg Test F1-Score: {avg_f1:.4f} +/- {std_f1:.4f}")
-            # print(f"Avg Test AUC:      {avg_auc:.4f} +/- {std_auc:.4f}")
             print(f"Avg Test Balanced Acc: {avg_balanced_acc:.4f} +/- {std_balanced_acc:.4f}")
             print(f"Avg Test Precision: {avg_precision:.4f} +/- {std_precision:.4f}")
             print(f"Avg Test Recall: {avg_recall:.4f} +/- {std_recall:.4f}")

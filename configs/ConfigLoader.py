@@ -30,6 +30,7 @@ class ConfigLoader:
     # Define fields with proper defaults
     dataset : Optional[List[str]] = None
     class_names: Optional[List[str]] = None
+    ablation: Optional[Dict[str, Any]] = None
     data_splitting: Optional[Dict[str, Any]] = None
     data_augmentation: Optional[Dict[str, Any]] = None
     data_loading: Optional[Dict[str, Any]] = None
@@ -805,3 +806,73 @@ class ConfigLoader:
     def as_dict(self):
         """Convert the Config instance to a dictionary"""
         return asdict(self)  # Using dataclasses.asdict()
+    
+    def get_use_ablation(self) -> bool:
+        """Get whether to use ablation study.
+        
+        Returns:
+            bool: True if ablation is enabled, False otherwise.
+        """
+        if self.ablation is None:
+            return False
+        return self.ablation.get("use_ablation", False)
+    
+    def set_use_ablation(self, enabled: bool) -> None:
+        """Set whether to use ablation study.
+        
+        Args:
+            enabled: Boolean flag to enable/disable ablation.
+        """
+        if self.ablation is None:
+            self.ablation = {}
+        self.ablation["use_ablation"] = enabled
+    
+    def get_channels_to_ablate(self) -> List[int]:
+        """Get the list of channel indices to ablate.
+        
+        Returns:
+            List[int]: List of channel indices to ablate. Returns empty list if not set.
+        """
+        if self.ablation is None:
+            return []
+        return self.ablation.get("channels_index_to_ablate", [])
+    
+    def set_channels_to_ablate(self, channels: List[int]) -> None:
+        """Set the list of channel indices to ablate.
+        
+        Args:
+            channels: List of channel indices to ablate (e.g., [0, 2] for first and third channels).
+        
+        Raises:
+            ValueError: If channel indices are out of valid range.
+        """
+        if self.ablation is None:
+            self.ablation = {}
+        
+        # Validate channel indices if model is configured
+        if self.model is not None and "in_channels" in self.model:
+            max_channels = self.model["in_channels"]
+            if any(ch >= max_channels or ch < 0 for ch in channels):
+                raise ValueError(
+                    f"Channel indices must be in range [0, {max_channels-1}], "
+                    f"got {channels}"
+                )
+        
+        self.ablation["channels_index_to_ablate"] = channels
+    
+    def get_ablation_config(self) -> Optional[Dict[str, Any]]:
+        """Get the complete ablation configuration.
+        
+        Returns:
+            Optional[Dict[str, Any]]: Ablation configuration dictionary or None if not set.
+        """
+        return self.ablation
+    
+    def set_ablation_config(self, ablation: Dict[str, Any]) -> None:
+        """Set the complete ablation configuration.
+        
+        Args:
+            ablation: Ablation configuration dictionary containing 'use_ablation' 
+                     and 'channels_index_to_ablate' keys.
+        """
+        self.ablation = ablation
