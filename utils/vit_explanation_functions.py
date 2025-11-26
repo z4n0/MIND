@@ -31,7 +31,7 @@ def compute_attention_rollout_matrix(all_layers_attention: List[torch.Tensor], h
     for layer_idx, layer_attn in enumerate(all_layers_attention):
         
         # 1. Fusion of Attention Heads
-        # We usually average the heads to get a holistic view of the layer's attention.
+        # usually average the heads to get a holistic view of the layer's attention.
         # Input: [B, Heads, N, N] -> Output: [B, N, N]
         if head_fusion == 'mean':
             attn_fused = layer_attn.mean(dim=1)

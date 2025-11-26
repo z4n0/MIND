@@ -6,11 +6,8 @@ from style.style_manager import StyleManager
 import os
 import pandas as pd
 from pathlib import Path
-# Get the absolute path to this notebook's directory
-# Get the absolute path to this notebook's directory
-NOTEBOOK_DIR = Path.cwd()
 
-# Find the project root by looking for a marker file/directory
+NOTEBOOK_DIR = Path.cwd()
 PROJ_ROOT = NOTEBOOK_DIR
 while PROJ_ROOT != PROJ_ROOT.parent:
     if (PROJ_ROOT / "style").exists() and (PROJ_ROOT / "clinica").exists():

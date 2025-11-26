@@ -25,7 +25,7 @@ from monai.transforms import (
     # Rand2DElasticd,
     # RandGridPatchd,
     # ScaleIntensityRangePercentilesd,
-    ClipIntensityPercentilesd,  # Clip intensities at specified low and high percentiles to remove extreme outlier pixels.
+    # ClipIntensityPercentilesd,  # Clip intensities at specified low and high percentiles to remove extreme outlier pixels.
     # HistogramNormalized  # Standardizes image histograms, can be useful if illumination/staining varies significantly.
 )
 
@@ -263,7 +263,7 @@ def _poisson_gaussian_lambda(
     - **Gaussian component**: readout/thermal noise (signal-independent)
     
     Model: y = Poisson(gain × x) / gain + N(0, σ²)
-    where x ∈ [0,1] is the normalized input intensity.
+    where x ∈ [0,1] is the scaled input intensity.
     
     Args:
         keys (Tuple[str, ...]): Dictionary keys to apply the transform to.
@@ -272,7 +272,7 @@ def _poisson_gaussian_lambda(
             Higher gain → lower shot noise (typical confocal: 30–80).
             Default: (30.0, 80.0)
         sigma_range (Tuple[float, float]): Range [σ_min, σ_max] for Gaussian noise std.
-            Typical values for 8-bit normalized images: 0.005–0.015.
+            Typical values for 8-bit scaled images: 0.005–0.015.
             Default: (0.005, 0.015)
     
     Returns:
@@ -297,18 +297,14 @@ def _poisson_gaussian_lambda(
         """
         # Ensure input is in valid range [0, 1]
         x = x.float().clamp(0, 1)
-        
         # Sample random gain and sigma for this augmentation instance
         g = random.uniform(*gain_range)
         s = random.uniform(*sigma_range)
-        
         # Apply Poisson noise: scale up, sample, scale back
         # torch.poisson(λ) samples from Poisson(λ), so we use λ = g*x
         y = torch.poisson(x * g) / g
-        
         # Add Gaussian readout noise
         y = y + s * torch.randn_like(y)
-        
         # Clamp to valid intensity range
         return y.clamp(0, 1)
     
@@ -335,8 +331,7 @@ def _weak_bleedthrough_lambda(
         - M[i,j] = random([0, max_frac]) for i ≠ j (off-diagonal, cross-talk)
     
     This augmentation improves model robustness to acquisition variability and is
-    standard practice in multi-channel biomedical imaging (Schindelin et al., 2012,
-    Nature Methods; Sage et al., 2019, Methods).
+    standard practice in multi-channel biomedical imaging
     
     Args:
         keys (Tuple[str, ...]): Dictionary keys to apply the transform to.
@@ -349,8 +344,6 @@ def _weak_bleedthrough_lambda(
         LambdaD: MONAI dictionary transform that applies spectral mixing.
         
     Notes:
-        - Only the first four channels are mixed (typical RGB + grayscale stack). If
-          fewer channels are available the existing channels are mixed
         - Input images must have ≥3 channels; 1-2 channel images are returned unchanged.
     
     Example:
@@ -530,11 +523,6 @@ def compute_dataset_mean_std(
     Computes per-channel mean and standard deviation using VECTORIZED Welford's
     algorithm for numerical stability and performance.
     
-    - Welford's algorithm  provides numerically stable variance computation
-    - Single-pass design minimizes memory footprint (critical for large datasets)
-    - Vectorized operations leverage GPU/SIMD for 10,000× speedup vs naive loops
-    
-    **CRITICAL for Ablation Studies:**
     If cfg.get_use_ablation() is True, this function applies ChannelAblationD
     BEFORE computing statistics, ensuring normalization parameters reflect the
     actual ablated distribution
