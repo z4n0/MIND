@@ -1,30 +1,34 @@
+# Standard library imports
+import os
+import re
+from pathlib import Path
+
+# Third-party imports
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.model_selection import StratifiedKFold, train_test_split, StratifiedShuffleSplit
 from sklearn.utils.class_weight import compute_class_weight
-import optuna
-import re
-import os
-import matplotlib.pyplot as plt # Assuming plt is used by plotting functions
-# Assume these are in your utils files:
-from utils.data_visualization_functions import plot_learning_curves, plot_confusion_matrix
-from classes.ModelManager import ModelManager
-from utils.test_functions import evaluate_model
-# Also assume make_loader, train_epoch, val_epoch, oversample_minority,
-# undersample_majority, freeze_layers_up_to, print_model_summary are available
-# from utils or other modules. For brevity, I won't redefine them here.
-from utils.train_functions import train_epoch, val_epoch, freeze_layers_up_to, train_epoch_mixUp, oversample_minority, undersample_majority, make_loader
-# from utils.data_utils import make_loader, oversample_minority, undersample_majority
-# from utils.model_utils import print_model_summary
-from utils.transformations_functions import get_transforms, compute_dataset_mean_std
-from configs.ConfigLoader import ConfigLoader
-from pathlib import Path # Added for Path operations
 from optuna.exceptions import TrialPruned
-from utils.train_functions import print_model_summary
-from utils.transformations_functions import is_supported_by_torchvision as tv_supported_by_model
+import optuna
+import optuna.visualization as vis
+
+# Local imports
+from configs.ConfigLoader import ConfigLoader
+from classes.ModelManager import ModelManager
+from utils.data_visualization_functions import plot_learning_curves, plot_confusion_matrix
+from utils.test_functions import evaluate_model
+from utils.train_functions import (
+    train_epoch, val_epoch, freeze_layers_up_to, train_epoch_mixUp,
+    oversample_minority, undersample_majority, make_loader, print_model_summary
+)
+from utils.transformations_functions import (
+    get_transforms, compute_dataset_mean_std,
+    is_supported_by_torchvision as tv_supported_by_model
+)
 
 class NestedCVStratifiedByPatient:
     """
@@ -84,7 +88,8 @@ class NestedCVStratifiedByPatient:
         self.current_fold_train_transforms = None
         self.current_fold_val_transforms = None
         self.current_fold_test_transforms = None
-        self.per_fold_val_images_paths = {} #type: ignore store validation set image paths for each fold
+        #store validation set image paths for each fold
+        self.per_fold_val_images_paths = {} #type: ignore 
         self.compute_custom_normalization = compute_custom_normalization
         self.train_image_counts_per_fold = {} #type: ignore
         self.val_image_counts_per_fold = {} #type: ignore
@@ -99,6 +104,7 @@ class NestedCVStratifiedByPatient:
         self._cumulative_true_labels: list[int] = []
         self._cumulative_pred_labels: list[int] = []
         self._transforms_saved: bool = False  # Ensures we log transforms once per run
+        self.fold_normalization_stats: dict[int, dict[str, np.ndarray]] = {}
 
         print(f"Detected {self.num_classes} unique classes.")
 
@@ -111,7 +117,6 @@ class NestedCVStratifiedByPatient:
             'train_loss': {},
             'val_loss': {},
             'train_accuracy': {},
-            # 'train_balanced_accuracy': {},
             'val_accuracy': {},
             'val_f1': {},
             'val_balanced_accuracy': {},
@@ -124,12 +129,45 @@ class NestedCVStratifiedByPatient:
         # Stores results for each fold (e.g., dicts of metrics or results)
         self.fold_results: list[dict] = []
         self._setup_directories()
+        
+    @property
+    def cfg(self):
+        return self._cfg
+
+    @property
+    def test_pat_ids_per_fold(self):
+        """Returns the patient IDs used for the outer test set in all folds."""
+        return self._test_pat_ids_per_fold
+    
+    @property
+    def num_outer_images(self):
+        """Returns the number of images in the outer test fold."""
+        return self._num_outer_images # CORRECT: The property reads from the internal attribute
     
     def get_best_lr(self):
         return self.best_lr
     
     def set_best_lr(self, best_lr):
         self.best_lr = best_lr
+        
+    def get_fold_normalization_statistics(self, fold_idx: int) -> dict[str, np.ndarray] | None:
+        """
+        Retrieve normalization statistics for a specific fold.
+        
+        Args:
+            fold_idx (int): The outer fold index (0-based).
+            
+        Returns:
+            dict[str, np.ndarray] | None: Dictionary with keys 'mean' and 'std',
+                each containing per-channel normalization statistics as numpy arrays.
+                Returns None if statistics were not computed for this fold.
+                
+        Example:
+            >>> stats = experiment.get_fold_statistics(fold_idx=2)
+            >>> print(stats)
+            {'mean': array([0.485, 0.456, 0.406]), 'std': array([0.229, 0.224, 0.225])}
+        """
+        return self.fold_normalization_stats.get(fold_idx)
         
 
     def _compute_patient_level_metrics(self, X_test_outer, y_test_outer, eval_results, fold_idx: int) -> dict:
@@ -229,19 +267,6 @@ class NestedCVStratifiedByPatient:
                 "patient_soft_recall": None,
             }
     
-    @property
-    def cfg(self):
-        return self._cfg
-
-    @property
-    def test_pat_ids_per_fold(self):
-        """Returns the patient IDs used for the outer test set in all folds."""
-        return self._test_pat_ids_per_fold
-    
-    @property
-    def num_outer_images(self):
-        """Returns the number of images in the outer test fold."""
-        return self._num_outer_images # CORRECT: The property reads from the internal attribute
     
     def get_early_stopping_split_counts(self):
         """
@@ -312,8 +337,8 @@ class NestedCVStratifiedByPatient:
         
         Args:
             learning_rate_for_factory (float, optional): Learning rate to pass to the model factory.
-                Only used when using a model_factory instead of model_manager. If None and using
-                model_factory, falls back to the learning rate from config.
+                Only used when using a model_factory instead of model_manager. 
+                If None and using model_factory, falls back to the learning rate from config.
                 
         Returns:
             tuple: A tuple containing:
@@ -464,8 +489,8 @@ class NestedCVStratifiedByPatient:
                 mode='min', 
                 patience=patience, 
                 factor=factor, #0.5 fixed before
-                threshold=threshold,#new
-                min_lr=min_lr#new
+                threshold=threshold,
+                min_lr=min_lr
             ), False
 
     # Aggiungi questo metodo all'interno della tua classe NestedCVStratifiedByPatient
@@ -506,7 +531,7 @@ class NestedCVStratifiedByPatient:
 
                 # Chiama la nuova funzione UNA VOLTA prima di iniziare la CV
         # lr_candidates = lr_candidates_for_this_model
-        lr_performance = { lr: [] for lr in lr_candidates_for_this_model }
+        lr_performance = { lr: [] for lr in lr_candidates_for_this_model}
 
         # Improvement 1: Mini cross-validation for the grid search
         skf = StratifiedKFold(n_splits=n_splits_lr, shuffle=True, random_state=self.random_seed)
@@ -617,23 +642,53 @@ class NestedCVStratifiedByPatient:
         # Optional discriminative LR: scale backbone layers
         if backbone_lr_mult != 1.0:
             head_names = ("fc", "classifier", "head")
-            head_params, bb_params = [], []
-            for n, p in model.named_parameters():
-                if not p.requires_grad:
-                    continue
-                if any(h in n.lower() for h in head_names):
-                    head_params.append(p)
+            
+            # Split decay params into backbone vs head
+            head_params_decay = []
+            bb_params_decay = []
+            for param in decay:
+                # Find parameter name (reverse lookup)
+                param_name = next(n for n, p in model.named_parameters() if p is param)
+                if any(h in param_name.lower() for h in head_names):
+                    head_params_decay.append(param)
                 else:
-                    bb_params.append(p)
-            if head_params and bb_params:
-                groups = [
-                    {"params": bb_params, "weight_decay": float(weight_decay),
-                    "lr": base_lr * float(backbone_lr_mult)},
-                    {"params": head_params, "weight_decay": float(weight_decay),
-                    "lr": base_lr},
-                ]
-                # Preserve the no-decay split inside each group if you wish;
-                # to keep it simple, we keep weight_decay on head/backbone groups.
+                    bb_params_decay.append(param)
+            
+            # Split no-decay params into backbone vs head
+            head_params_no_decay = []
+            bb_params_no_decay = []
+            for param in no_decay:
+                param_name = next(n for n, p in model.named_parameters() if p is param)
+                if any(h in param_name.lower() for h in head_names):
+                    head_params_no_decay.append(param)
+                else:
+                    bb_params_no_decay.append(param)
+            
+            # Create 4 parameter groups (backbone/head × decay/no-decay)
+            groups = [
+                {
+                    "params": bb_params_decay,
+                    "lr": base_lr * float(backbone_lr_mult),  
+                    "weight_decay": float(weight_decay),
+                },
+                {
+                    "params": head_params_decay,
+                    "lr": base_lr,  # ← Full LR
+                    "weight_decay": float(weight_decay),
+                },
+                {
+                    "params": bb_params_no_decay,
+                    "lr": base_lr * float(backbone_lr_mult),  
+                    "weight_decay": 0.0,  # ← No weight decay on BN/bias
+                },
+                {
+                    "params": head_params_no_decay,
+                    "lr": base_lr,  # ← Full LR
+                    "weight_decay": 0.0,  # ← No weight decay
+                },
+            ]
+            # Filter out empty groups (e.g., models without BN)
+            groups = [g for g in groups if len(g["params"]) > 0]
 
         return groups
     
@@ -689,6 +744,14 @@ class NestedCVStratifiedByPatient:
             "no_decay_on_norm_bias": True,
         }
         print(f"Best inner-CV hparams: {best_opt}")
+        
+        # # --- Save Optuna study results as images ---
+        # fig_history = vis.plot_optimization_history(study)
+        # fig_history.write_image(os.path.join(self.output_dir, "optuna_history.png"))
+
+        # fig_importance = vis.plot_param_importances(study)
+        # fig_importance.write_image(os.path.join(self.output_dir, "optuna_importance.png"))
+        
         return best_opt
     
     def _run_combined_hparam_tuning(self, X_train_outer, y_train_outer):
@@ -715,8 +778,8 @@ class NestedCVStratifiedByPatient:
         # ── 0) Sample hyper-parameters for THIS trial ────────────────────────────
         lr = trial.suggest_float("lr", 5e-6, 2e-4, log=True)
         weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
-        beta2 = trial.suggest_float("beta2", 0.95, 0.999)  # optional but cheap
-        eps = trial.suggest_float("eps", 1e-9, 1e-7, log=True)  # optional
+        beta2 = trial.suggest_float("beta2", 0.95, 0.999) 
+        eps = trial.suggest_float("eps", 1e-9, 1e-7, log=True) 
         backbone_lr_mult = trial.suggest_categorical(
             "backbone_lr_mult", [0.1, 0.3, 1.0]
         )
@@ -734,6 +797,7 @@ class NestedCVStratifiedByPatient:
         df_outer = pd.DataFrame(
             {"image_path": X_train_outer_fold, "label": y_train_outer_fold}
         )
+        
         df_outer["patient_id"] = df_outer["image_path"].apply(self._extract_patient_id)
 
         # One row per patient with a representative label for stratification
@@ -870,105 +934,12 @@ class NestedCVStratifiedByPatient:
             bal_acc_soft = balanced_accuracy_score(y_pat_true, y_pat_soft)
             bal_acc = float(bal_acc_soft)  # use soft as primary
 
-            # We minimize (1 - BalAcc)
+            # minimize (1 - BalAcc)
             inner_scores.append(1.0 - bal_acc)
 
         # ── 4) Return mean (1 - BalAcc) across inner folds ─────────────────────
         return float(np.mean(inner_scores))
 
-
-    # def _objective(self, trial, X_train_outer_fold, y_train_outer_fold):
-    #     """Optuna objective: inner CV to evaluate candidate learning rates.
-    #     Args:
-    #         trial (optuna.Trial): The trial object.
-    #         X_train_outer_fold (np.ndarray): The training set.
-    #         y_train_outer_fold (np.ndarray): The training labels.
-    #     Returns:
-    #         float: The average validation loss.
-    #     """
-    #     candidate_lr = trial.suggest_float("lr", 5e-6, 2e-3, log=True)
-
-    #     df_outer_train_fold = pd.DataFrame({"image_path": X_train_outer_fold, "label": y_train_outer_fold})
-    #     # Ensure patient_id extraction is robust or pre-calculated
-    #     df_outer_train_fold["patient_id"] = df_outer_train_fold["image_path"].apply(self._extract_patient_id)
-        
-    #     df_pat_inner = df_outer_train_fold.groupby("patient_id", as_index=False)["label"].first()
-    #     inner_pat_ids = df_pat_inner["patient_id"].values
-    #     inner_pat_labels = df_pat_inner["label"].values
-
-    #     inner_skf = StratifiedKFold(
-    #         n_splits = self.lr_discovery_folds, #or Get from cfg
-    #         shuffle=True,
-    #         random_state=self.random_seed
-    #     )
-    #     inner_val_losses = []
-
-    #     for inner_train_pat_idx, inner_val_pat_idx in inner_skf.split(inner_pat_ids, inner_pat_labels):
-    #         these_train_pats = inner_pat_ids[inner_train_pat_idx]
-    #         these_val_pats = inner_pat_ids[inner_val_pat_idx]
-
-    #         train_mask_inner = df_outer_train_fold["patient_id"].isin(these_train_pats)
-    #         val_mask_inner = df_outer_train_fold["patient_id"].isin(these_val_pats)
-
-    #         X_train_inner = df_outer_train_fold.loc[train_mask_inner, "image_path"].values
-    #         y_train_inner = df_outer_train_fold.loc[train_mask_inner, "label"].values
-    #         X_val_inner = df_outer_train_fold.loc[val_mask_inner, "image_path"].values
-    #         y_val_inner = df_outer_train_fold.loc[val_mask_inner, "label"].values
-
-    #         # Handle over/undersampling (assuming functions are imported)
-    #         if self.oversample:
-    #             # from utils.data_utils import oversample_minority
-    #             X_train_inner_bal, y_train_inner_bal = oversample_minority(
-    #                 X_train_inner, y_train_inner, random_seed=self.cfg.get_random_seed()
-    #             )
-    #         elif self.undersample:
-    #             # from utils.data_utils import undersample_majority
-    #             X_train_inner_bal, y_train_inner_bal = undersample_majority(
-    #                 X_train_inner, y_train_inner, random_seed=self.cfg.get_random_seed()
-    #             )
-    #         else:
-    #             X_train_inner_bal, y_train_inner_bal = X_train_inner, y_train_inner
-
-    #         # from utils.data_utils import make_loader
-    #         train_loader_inner = make_loader(
-    #             image_paths=np.asarray(X_train_inner_bal, dtype=str),
-    #             labels=np.asarray(y_train_inner_bal, dtype=int),
-    #             transforms=self.current_fold_train_transforms,
-    #             cfg=self.cfg,
-    #             shuffle=True
-    #         )
-            
-    #         val_loader_inner = make_loader(
-    #             image_paths=np.asarray(X_val_inner, dtype=str),
-    #             labels=np.asarray(y_val_inner, dtype=int),
-    #             transforms=self.current_fold_val_transforms,
-    #             cfg=self.cfg,
-    #             shuffle=False
-    #         )
-
-    #         model_inner, device_inner = self._get_model_and_device(learning_rate_for_factory=candidate_lr)
-    #         loss_function_inner = self._get_loss_function(y_train_inner_bal) # Pass y_train_inner_bal for weighting
-    #         optimizer_inner = self._get_optimizer(model_inner, candidate_lr)
-
-    #         inner_num_epochs = self.cfg.training.get("num_inner_epochs_hyp", 3) # Get from cfg
-    #         best_inner_loss = float("inf")
-
-    #         for epoch in range(inner_num_epochs):
-    #             # from utils.training_utils import train_epoch, val_epoch
-    #             train_loss_e, _ = self.train_fn(model_inner, train_loader_inner, optimizer_inner, loss_function_inner, device_inner)
-    #             val_loss_e, *_ = self.val_fn(model_inner, val_loader_inner, loss_function_inner, device_inner)
-
-    #             # update best and report current status
-    #             if val_loss_e < best_inner_loss:
-    #                 best_inner_loss = val_loss_e
-
-    #             # enable pruning
-    #             trial.report(val_loss_e, step=epoch)
-    #             if trial.should_prune():
-    #                 raise TrialPruned()
-
-    #         inner_val_losses.append(best_inner_loss)
-    #     return float(np.mean(inner_val_losses))
 
     def _tune_learning_rate(self, X_train_outer, y_train_outer):
         """
@@ -992,7 +963,7 @@ class NestedCVStratifiedByPatient:
             float: The best learning rate found by Optuna inner CV.
 
         Notes:
-            - The number of learning rate candidates (n_trials) is currently set to 2.
+            - The number of learning rate candidates (n_trials)
             - The pruner will start pruning after 2 startup trials.
             - The objective function is defined in self._objective.
         """
@@ -1007,7 +978,7 @@ class NestedCVStratifiedByPatient:
         # Use a lambda to pass the extra arguments to the objective function.
         study.optimize(
             lambda trial: self._objective(trial, X_train_outer, y_train_outer),
-            n_trials=2,  # Number of LR candidates tested in inner CV.
+            n_trials=3, #cfg.get_n_trial()  # Number of LR candidates tested in inner CV.
         )
         best_lr = study.best_params["lr"]
         print(f"  Best LR from inner CV = {best_lr:.6f}")
@@ -1078,7 +1049,7 @@ class NestedCVStratifiedByPatient:
         - Learning rate scheduling supports cosine or validation-loss-based
           schedulers depending on configuration.
         - Reproducibility depends on `self.random_seed` and the configured seeds
-          within dataloaders/augmentations.
+          within dataloaders/augmentations(always = 42).
         """
         # Patient-wise inner validation split to avoid leakage
         df_outer_train = pd.DataFrame({
@@ -1121,7 +1092,7 @@ class NestedCVStratifiedByPatient:
         train_loader_es = make_loader(X_train_es_bal, y_train_es_bal, self.current_fold_train_transforms, self.cfg, shuffle=True)
         val_loader_es = make_loader(X_val_es, y_val_es, self.current_fold_val_transforms, self.cfg, shuffle=False)
 
-        lr_for_fold = float(opt_cfg["lr"])
+        lr_for_fold = float(opt_cfg["lr"]) # Use the LR from the optimized config
         model, device = self._get_model_and_device(learning_rate_for_factory=lr_for_fold)
         
         print_model_summary(model)
@@ -1176,7 +1147,7 @@ class NestedCVStratifiedByPatient:
         model.load_state_dict(torch.load(str(model_path), map_location=device)) # Load the best model for the fold
         model.eval() # Set the model to evaluation mode
 
-        test_loader = make_loader(X_test_outer, y_test_outer, self.current_fold_val_transforms, self.cfg, shuffle=False)
+        test_loader = make_loader(X_test_outer, y_test_outer, self.current_fold_val_transforms, self.cfg, shuffle=False) #NOTE keep it false for evaluation
 
         print(f"Test set class counts for fold {fold_idx}: {pd.Series(y_test_outer).value_counts().to_dict()}")
         print(f"percentage of classes in test set: {pd.Series(y_test_outer).value_counts() / len(y_test_outer)}")
@@ -1293,33 +1264,32 @@ class NestedCVStratifiedByPatient:
 
             self._num_outer_images = len(X_test_outer)
             # --- Calculate fold-specific normalization statistics ---
-            fold_stats = None
+            # self.fold_normalization_stats = {}
             
-            # MODIFICATION: Always compute stats if ablation is enabled
             if self.cfg.get_use_ablation():
-                print(f"⚠️  Ablation enabled: computing ablation-aware stats for Fold {fold_display_idx}")
-                fold_stats = compute_dataset_mean_std(
+                print(f"  Ablation enabled: computing ablation-aware stats for Fold {fold_display_idx}")
+                self.fold_normalization_stats[fold_idx_actual] = compute_dataset_mean_std(
                     X_train_outer, self.cfg, 
                     is_supported_by_torchvision=self.use_imagenet_norm
                 )
-                print(f"Ablated stats: {fold_stats}")
+                print(f"Ablated stats: {self.fold_normalization_stats[fold_idx_actual]}")
             elif not self.cfg.is_pretrained() or self.compute_custom_normalization:
-                # Original logic for non-pretrained or forced custom norm
                 print(f"--- Calculating normalization stats for Fold {fold_display_idx} Training Data ---")
-                fold_stats = compute_dataset_mean_std(
+                self.fold_normalization_stats[fold_idx_actual] = compute_dataset_mean_std(
                     X_train_outer, self.cfg, 
                     is_supported_by_torchvision=self.use_imagenet_norm
                 )
-                print(f"Fold {fold_display_idx} stats: {fold_stats}")
+                print(f"Fold {fold_display_idx} stats: {self.fold_normalization_stats[fold_idx_actual]}")
             else:
                 print("Using pretrained model; ImageNet normalization will be applied by torchvision transforms.")
 
-            # --- Get fold-specific transforms we do it here ---
+            # --- Get fold-specific transforms ---
             print(f"--- Generating data transforms for Fold {fold_display_idx} ---")
             if self.train_transforms is None or self.val_transforms is None:
                 #if the transformations are not set, generate them
+                fold_stats = self.fold_normalization_stats.get(fold_idx_actual)
                 self.current_fold_train_transforms, self.current_fold_val_transforms, _ = get_transforms(
-                self.cfg, fold_specific_stats=fold_stats  # ← Ablation params embedded
+                self.cfg, fold_specific_stats=fold_stats
                 )
                 print(f"Transforms generated for Fold {fold_display_idx}.")
                 # Save a one-time human-readable description of transform pipelines that will log in mlflow
@@ -1342,7 +1312,7 @@ class NestedCVStratifiedByPatient:
                 # Set the current fold transforms
                 self.current_fold_train_transforms = self.train_transforms
                 self.current_fold_val_transforms = self.val_transforms
-                self.current_fold_test_transforms = self.val_transforms # Assuming test uses the same as val
+                self.current_fold_test_transforms = self.val_transforms
 
             # 1. Tune Learning Rate
             best_lr_for_all_folds = self.best_lr
@@ -1355,8 +1325,7 @@ class NestedCVStratifiedByPatient:
                 best_lr, opt_cfg = self._run_combined_hparam_tuning(
                     X_train_outer, y_train_outer
                 )
-            else:
-                # Usa il valore pre-calcolato o fisso
+            else:#use pre-determined best lr for all folds
                 best_lr = best_lr_for_all_folds # type: ignore
                 print(f"Utilizzando il Learning Rate pre-determinato per il Fold {fold_display_idx}: {best_lr:.6f}")
 
@@ -1373,7 +1342,7 @@ class NestedCVStratifiedByPatient:
             print(f"--- Evaluating Fold {fold_display_idx} on Outer Test Set ---")
             self._evaluate_fold_on_test_set(fold_idx_actual, best_model_path, loss_func_for_eval, X_test_outer, y_test_outer, best_lr)
 
-        self._print_summary() # Ensure this method exists and is correctly implemented
+        self._print_summary()
         # After completing all folds, compute and save cumulative confusion matrix
         self._save_cumulative_confusion_matrix()
         return self.per_fold_metrics, self.fold_results

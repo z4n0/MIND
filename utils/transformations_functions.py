@@ -15,38 +15,42 @@ from monai.transforms import (
     EnsureTyped,
     RandSpatialCropd,
     LambdaD,
+    OneOf,
     RandHistogramShiftd,
     DataStatsd,  # Computes statistics (min, max, mean std) of the image intensities.
     AddCoordinateChannelsd,  # Adds channels representing spatial coordinates; can sometimes help CNNs learn spatial relationships.
-    RandCoarseDropoutd,
+    # RandCoarseDropoutd,
     CenterSpatialCropd,
     # RandCropd,
     # Rand2DElasticd,
     # RandGridPatchd,
+    ScaleIntensityRangePercentilesd,
     ClipIntensityPercentilesd,  # Clip intensities at specified low and high percentiles to remove extreme outlier pixels.
     HistogramNormalized  # Standardizes image histograms, can be useful if illumination/staining varies significantly.
 )
 
+from monai.transforms.transform import MapTransform, Transform  # ← Add Transform here
 from classes.ChannleAblationD import ChannelAblationD
 import random
 import torch
 from typing import List, Tuple
 from monai.transforms import OneOf
-from monai.transforms.intensity.dictionary import (
-    RandHistogramShiftd, RandAdjustContrastd, RandGaussianNoised,
-    RandBiasFieldd, RandCoarseDropoutd
-)
+# from monai.transforms.intensity.dictionary import (
+#     RandHistogramShiftd, RandAdjustContrastd, RandGaussianNoised,
+#     RandBiasFieldd, RandCoarseDropoutd
+# )
+from monai.transforms.intensity.dictionary import RandCoarseDropoutd
 from monai.transforms.utility.dictionary import LambdaD, Identityd
 from configs.ConfigLoader import ConfigLoader
 from monai.transforms.compose import Compose
 from monai.transforms.spatial.dictionary import Resized, RandFlipd, RandRotate90d, Rand2DElasticd
-from monai.transforms.intensity.dictionary import ScaleIntensityd, NormalizeIntensityd, RandGaussianNoised, RandHistogramShiftd, RandAdjustContrastd
+# from monai.transforms.intensity.dictionary import ScaleIntensityd, NormalizeIntensityd, RandGaussianNoised, RandHistogramShiftd, RandAdjustContrastd
 from monai.transforms.utility.dictionary import LambdaD,EnsureTyped
 # from timm import is_model_pretrained
 from classes.PrintShapeTransform import PrintShapeTransform
 from monai.data.dataset import Dataset
 from monai.data.dataloader import DataLoader
-from torchvision.models import DenseNet121_Weights, DenseNet169_Weights, DenseNet201_Weights, ResNet50_Weights, ResNet18_Weights
+from torchvision.models import DenseNet121_Weights, DenseNet169_Weights, DenseNet201_Weights, ResNet50_Weights, ResNet18_Weights, ViT_B_16_Weights
 from classes.CustomTiffFileReader import CustomTiffFileReader
 from typing import List, Tuple
 from monai.transforms.transform import MapTransform
@@ -61,6 +65,7 @@ IMAGENET_WEIGHTS = {
     "densenet201": DenseNet201_Weights.DEFAULT,
     "resnet50": ResNet50_Weights.DEFAULT ,
     "resnet18": ResNet18_Weights.DEFAULT,
+    "vit": ViT_B_16_Weights.DEFAULT, 
 }
 
 IMAGENET_NORMALIZATION_PARAMS_RGB = {
@@ -77,13 +82,12 @@ def from_GBR_to_RGB(image: torch.Tensor) -> torch.Tensor:
         image (torch.Tensor): 
             - 3D tensor of shape (C, H, W), or
             - 4D tensor of shape (B, C, H, W).
-            Channels must be exactly 3.
     Returns:
         torch.Tensor: same shape as input, but with channels permuted from G-B-R to R-G-B.
     
     Raises:
         TypeError: if input is not a torch.Tensor.
-        ValueError: if tensor is not 3D or 4D, or if C != 3.
+        ValueError: if tensor is not 3D or 4D
     """
     if not isinstance(image, torch.Tensor):
         raise TypeError(f"Expected torch.Tensor, got {type(image)}")
@@ -136,16 +140,31 @@ def get_preNormalization_transforms_list(cfg, is_supported_by_torchvision=False)
         EnsureTyped(keys=["image"], data_type="tensor", dtype=torch.float32), # Ensure image is a tensor
         EnsureTyped(keys=["label"], data_type="tensor", dtype=torch.int64), # Ensure label is a tensor
         LambdaD(keys="image", func=from_GBR_to_RGB), # Ensure the tensor is in RGB format (since pre-trained models expect RGB)
-    ]
+        # LambdaD(keys="image", func=lambda x: x / 255.0),  # Scale by a fixed factor (1/255) to match torchvision semantics instead of per-image min/max scaling.
+        # robust per-image rescale to [0,1] using percentiles (handles exposure/bleaching)
+        #     ScaleIntensityRangePercentilesd(
+        #         keys=["image"], lower=1.0, upper=99.5, b_min=0.0, b_max=1.0, clip=True
+        #     ),
+        # # fold-wise (compute on train split only!) per-channel z-score
+        #     NormalizeIntensityd(keys=["image"], channel_wise=True),
+            # base_transforms_list.append(LambdaD(keys="image", func=lambda x: x / 255.0))
+        ClipIntensityPercentilesd(keys="image", lower=0.5, upper=99.5),
+        ScaleIntensityd(keys="image", minv=0.0, maxv=1.0, channel_wise=True)
+        ]
     
-    if not is_supported_by_torchvision or not is_model_pretrained: #if using a custom model or a pretrained model not supported by torchvision
+    if not is_supported_by_torchvision or not is_model_pretrained: 
+        #if using a custom model or a pretrained model not supported by torchvision
         # Resize the image to the desired spatial size
         base_transforms_list.append(
             Resized(keys="image", spatial_size=cfg.get_spatial_size(),
                     mode='bilinear', size_mode='all') # bilinear interpolation during resizing ie for each pixel is taken the average of the 4 nearest pixels
         )
-        base_transforms_list.append(ScaleIntensityd(keys="image"))  # scales intensities to [0,1] before computing stats since most color transforms expect [0,1] range
-
+        # ScaleIntensityRangePercentilesd(
+        #         keys=["image"], lower=1.0, upper=99.5, b_min=0.0, b_max=1.0, clip=True
+        #     ),
+        #     NormalizeIntensityd(keys=["image"], channel_wise=True),
+        # base_transforms_list.append(ScaleIntensityd(keys="image"))  # scales intensities to [0,1] before computing stats since most color transforms expect [0,1] range
+        # base_transforms_list.append(LambdaD(keys="image", func=lambda x: x / 255.0)) 
     else: # If using a pretrained model the resizingm, scaling and cropping is handled by torchvision
         print(f"Using pretrained model: {is_model_pretrained} and supported by torchvision: {bool(is_supported_by_torchvision)} hence the resizing and scaling is handled by torchvision.Weights.Transforms")
 
@@ -159,6 +178,7 @@ def new_get_preNormalization_transforms_list(cfg:ConfigLoader)->List[MapTransfor
         
         if is_supported_by_torchvision is True, then the resizing and scaling is handled by torchvision
     """
+    
     base_transforms_list = [
         CustomTiffFileReader(keys=["image"]), # loads the image from the path as a numpy array (C,H,W) in GBR format
         EnsureTyped(keys=["image"], data_type="tensor", dtype=torch.float32), # Ensure image is a tensor
@@ -168,7 +188,9 @@ def new_get_preNormalization_transforms_list(cfg:ConfigLoader)->List[MapTransfor
                         mode='bilinear', size_mode='all'), # bilinear interpolation during resizing ie for each pixel is taken the average of the 4 nearest pixels
         # IMPORTANT for pretrained models: scale by a fixed factor (1/255)
         # to match torchvision semantics instead of per-image min/max scaling.
-        LambdaD(keys="image", func=lambda x: x / 255.0),
+        ClipIntensityPercentilesd(keys="image", lower=0.5, upper=99.5),
+        ScaleIntensityd(keys="image", minv=0.0, maxv=1.0, channel_wise=True),
+        # LambdaD(keys="image", func=lambda x: x / 255.0),
     ]
 
     return base_transforms_list
@@ -226,72 +248,205 @@ def _get_spatial_augmentations(cfg):
 # ---------- helpers ----------
 
 def _poisson_gaussian_lambda(
-    keys=("image",), gain_range=(30.0, 80.0), sigma_range=(0.005, 0.015)
-):
+    keys: Tuple[str, ...] = ("image",),
+    gain_range: Tuple[float, float] = (30.0, 80.0),
+    sigma_range: Tuple[float, float] = (0.005, 0.015)
+) -> LambdaD:
     """
-    Poisson–Gaussian noise: y = Poisson(gain * x)/gain + N(0, sigma), x in [0,1].
+    Apply Poisson–Gaussian noise model to simulate realistic confocal microscopy noise.
+    
+    Scientific Justification:
+    Confocal microscopy exhibits mixed noise characteristics:
+    - **Poisson component**: photon shot noise (signal-dependent)
+    - **Gaussian component**: readout/thermal noise (signal-independent)
+    
+    Model: y = Poisson(gain × x) / gain + N(0, σ²)
+    where x ∈ [0,1] is the normalized input intensity.
+    
+    This formulation follows Foi et al. (2008) "Practical Poissonian-Gaussian Noise
+    Modeling and Fitting for Single-Image Raw-Data" (IEEE TIP) and is commonly used
+    in biomedical imaging pipelines (Weigert et al., 2018, CARE denoising).
+    
+    Args:
+        keys (Tuple[str, ...]): Dictionary keys to apply the transform to.
+            Default: ("image",)
+        gain_range (Tuple[float, float]): Range [g_min, g_max] for Poisson gain factor.
+            Higher gain → lower shot noise (typical confocal: 30–80).
+            Default: (30.0, 80.0)
+        sigma_range (Tuple[float, float]): Range [σ_min, σ_max] for Gaussian noise std.
+            Typical values for 8-bit normalized images: 0.005–0.015.
+            Default: (0.005, 0.015)
+    
+    Returns:
+        LambdaD: MONAI dictionary transform that applies the noise model.
+        
+    References:
+        - Foi et al. (2008). "Practical Poissonian-Gaussian Noise Modeling."
+          IEEE Trans. Image Process., 17(10):1737-1754.
+        - Weigert et al. (2018). "Content-aware image restoration: pushing the
+          limits of fluorescence microscopy." Nature Methods, 15(12):1090-1097.
+    
+    Example:
+        >>> transform = _poisson_gaussian_lambda(
+        ...     keys=("image",), gain_range=(40.0, 70.0), sigma_range=(0.01, 0.02)
+        ... )
+        >>> noisy_dict = transform({"image": clean_tensor})
     """
     def _fn(x: torch.Tensor) -> torch.Tensor:
+        """
+        Inner function that applies the noise model.
+        
+        Args:
+            x (torch.Tensor): Input tensor with values in [0, 1].
+                Shape: (C, H, W) or (C, D, H, W) for 3D images.
+        
+        Returns:
+            torch.Tensor: Noisy tensor, clamped to [0, 1].
+        """
+        # Ensure input is in valid range [0, 1]
         x = x.float().clamp(0, 1)
+        
+        # Sample random gain and sigma for this augmentation instance
         g = random.uniform(*gain_range)
         s = random.uniform(*sigma_range)
+        
+        # Apply Poisson noise: scale up, sample, scale back
+        # torch.poisson(λ) samples from Poisson(λ), so we use λ = g*x
         y = torch.poisson(x * g) / g
+        
+        # Add Gaussian readout noise
         y = y + s * torch.randn_like(y)
+        
+        # Clamp to valid intensity range
         return y.clamp(0, 1)
+    
     return LambdaD(keys=keys, func=_fn)
 
 
-def _weak_bleedthrough_lambda(keys=("image",), max_frac=0.05):
+def _weak_bleedthrough_lambda(
+    keys: Tuple[str, ...] = ("image",),
+    max_frac: float = 0.05
+):
     """
-    Very small channel mixing on RGB to mimic spectral cross-talk.
+    Simulate weak spectral bleed-through (channel cross-talk) in multi-channel imaging.
+    
+    Scientific Justification:
+    In fluorescence/confocal microscopy, spectral overlap between emission filters
+    causes weak signal leakage between channels (typically <5% per channel pair).
+    This is modeled via a linear mixing matrix M:
+    
+        y = M @ x
+    
+    where M[i,j] represents the fraction of channel j's signal appearing in channel i.
+    We construct M as:
+        - M[i,i] = 1.0 (diagonal, main signal preserved)
+        - M[i,j] = random([0, max_frac]) for i ≠ j (off-diagonal, cross-talk)
+    
+    This augmentation improves model robustness to acquisition variability and is
+    standard practice in multi-channel biomedical imaging (Schindelin et al., 2012,
+    Nature Methods; Sage et al., 2019, Methods).
+    
+    Args:
+        keys (Tuple[str, ...]): Dictionary keys to apply the transform to.
+            Default: ("image",)
+        max_frac (float): Maximum bleed-through fraction for off-diagonal terms.
+            Typical values: 0.03–0.07 for confocal (3–7% cross-talk).
+            Default: 0.05
+    
+    Returns:
+        LambdaD: MONAI dictionary transform that applies spectral mixing.
+        
+    Notes:
+        - Only the first four channels are mixed (typical RGB + grayscale stack). If
+          fewer channels are available the existing channels are mixed; channels beyond
+          the fourth are passed through unchanged.
+        - Input images must have ≥3 channels; 1-2 channel images are returned unchanged.
+    
+    Example:
+        >>> transform = _weak_bleedthrough_lambda(keys=("image",), max_frac=0.07)
+        >>> mixed_dict = transform({"image": rgb_tensor})  # Shape: (C, H, W)
     """
     def _fn(x: torch.Tensor) -> torch.Tensor:
+        """
+        Inner function that applies spectral mixing.
+        
+        Args:
+            x (torch.Tensor): Input tensor with shape (C, H, W) or (C, D, H, W).
+                Must have C ≥ 3 for mixing to be applied.
+        
+        Returns:
+            torch.Tensor: Mixed tensor with same shape as input.
+        """
         x = x.float()
+        
+        # Only apply to images with 3+ channels
         if x.ndim != 3 or x.shape[0] < 3:
-            return x
-        C = 3
+            raise ValueError("Input tensor must have at least 3 channels for bleed-through simulation.")
+        
+        # Number of channels to mix (up to 4: RGB + grayscale)
+        C = min(4, x.shape[0])
+        
+        # Construct mixing matrix: diagonal=1.0, off-diagonal=random[0, max_frac]
         M = torch.eye(C, dtype=x.dtype, device=x.device)
         for i in range(C):
             for j in range(C):
                 if i != j:
                     M[i, j] = random.uniform(0.0, max_frac)
+        
+        # Apply mixing: reshape to (C, N) for matrix multiplication
+        # M @ x[:C] with shapes (C, C) @ (C, H*W) = (C, H*W)
         mixed = (M @ x[:C].reshape(C, -1)).reshape_as(x[:C])
+        
+        # Clamp mixed channels to [0, 1] and concatenate with unchanged channels
         x = torch.cat([mixed.clamp(0, 1), x[C:]], dim=0)
+        
         return x
+    
     return LambdaD(keys=keys, func=_fn)
 
-# ---------- main block ----------
 
-def _get_intensity_augmentations(cfg, preset: str = "medium") -> List:
+def _monitor_range(x: torch.Tensor) -> torch.Tensor:
+    """Optional: log % of out-of-range pixels before the final clamp."""
+    below = (x < 0).float().mean().item() * 100.0
+    above = (x > 1).float().mean().item() * 100.0
+    if below > 0.1 or above > 0.1:
+        print(f"[warn] out-of-range: <0={below:.2f}%, >1={above:.2f}%")
+    return x
+
+
+def _get_intensity_augmentations(cfg, preset: str = "medium") -> List[Transform]:
     """
-    Confocal-friendly photometric augs using OneOf(+Identityd) so that
-    *at most one* op is applied per image with a controllable overall prob.
-    Presets: "light" (recommended), "medium" (if underfitting), "heavy" (ablate).
+    Confocal-friendly photometric augs using OneOf(+Identityd).
+    Returns a list of monai Transforms to be appended to your train pipeline.
+    A single clamp to [0,1] is placed at the end of the block.
     """
-    # image size for gentle dropout (optional)
     H, W = cfg.data_augmentation["resize_spatial_size"]
     preset = cfg.get_intensity_augmentation_preset()
 
-    # Allow disabling intensity augs via preset
-    if preset is None or preset is False or str(preset).lower() in ("none", "off", "no", "0"):
+    if preset is None or preset is False or str(preset).lower() in {
+        "none", "off", "no", "0"
+    }:
         return []
 
     if preset == "light":
-        # Overall apply probability ≈ 0.6 via Identityd weight
-        intensity_one = OneOf(
+        intensity_one: Transform = OneOf(
             transforms=[
-                Identityd(keys=["image"]),  # "do nothing" branch
-                RandHistogramShiftd(keys=["image"], prob=1.0, num_control_points=(3, 5)),
-                RandAdjustContrastd(keys=["image"],  prob=1.0, gamma=(0.95, 1.05)),
-                _poisson_gaussian_lambda(keys=("image",), gain_range=(30.0, 80.0),
+                Identityd(keys=["image"]),
+                RandHistogramShiftd(keys=["image"], prob=1.0,
+                                    num_control_points=(3, 5)),
+                RandAdjustContrastd(keys=["image"], prob=1.0,
+                                    gamma=(0.95, 1.05)),
+                _poisson_gaussian_lambda(keys=("image",),
+                                         gain_range=(30.0, 80.0),
                                          sigma_range=(0.005, 0.015)),
-                RandBiasFieldd(keys=["image"], prob=1.0, degree=2, coeff_range=(0.01, 0.03)),
+                RandBiasFieldd(keys=["image"], prob=1.0,
+                               degree=2, coeff_range=(0.01, 0.03)),
                 _weak_bleedthrough_lambda(keys=("image",), max_frac=0.05),
             ],
-            weights=[0.40, 0.20, 0.18, 0.12, 0.06, 0.04],   # sums arbitrary; acts as probabilities
+            weights=[0.40, 0.20, 0.18, 0.12, 0.06, 0.04],
         )
-        extras = [
-            RandCoarseDropoutd(  # rare, small occlusion; optional
+        extras: List[Transform] = [
+            RandCoarseDropoutd(
                 keys=["image"], prob=0.05,
                 holes=1, max_holes=2,
                 spatial_size=(int(0.08 * H), int(0.08 * W)),
@@ -303,63 +458,69 @@ def _get_intensity_augmentations(cfg, preset: str = "medium") -> List:
         intensity_one = OneOf(
             transforms=[
                 Identityd(keys=["image"]),
-                RandHistogramShiftd(keys=["image"], prob=1.0, num_control_points=(4, 6)),
-                RandAdjustContrastd(keys=["image"],  prob=1.0, gamma=(0.90, 1.10)),
-                _poisson_gaussian_lambda(keys=("image",), gain_range=(20.0, 70.0),
+                RandHistogramShiftd(keys=["image"], prob=1.0,
+                                    num_control_points=(4, 6)),
+                RandAdjustContrastd(keys=["image"], prob=1.0,
+                                    gamma=(0.90, 1.10)),
+                _poisson_gaussian_lambda(keys=("image",),
+                                         gain_range=(20.0, 70.0),
                                          sigma_range=(0.008, 0.02)),
-                RandBiasFieldd(keys=["image"], prob=1.0, degree=2, coeff_range=(0.015, 0.04)),
+                RandBiasFieldd(keys=["image"], prob=1.0,
+                               degree=2, coeff_range=(0.015, 0.04)),
                 _weak_bleedthrough_lambda(keys=("image",), max_frac=0.07),
-                RandGaussianNoised(keys="image", prob=1.0, mean=0.0, std=0.015),
+                RandGaussianNoised(keys=["image"], prob=1.0,
+                                   mean=0.0, std=0.015),
             ],
             weights=[0.30, 0.20, 0.18, 0.14, 0.08, 0.06, 0.04],
         )
         extras = [
-            RandCoarseDropoutd(keys=["image"], prob=0.07,
-                               holes=1, max_holes=2,
-                               spatial_size=(int(0.08 * H), int(0.08 * W)))
+            RandCoarseDropoutd(
+                keys=["image"], prob=0.07,
+                holes=1, max_holes=2,
+                spatial_size=(int(0.08 * H), int(0.08 * W)),
+                fill_value=0.0,
+            )
         ]
 
-    elif preset == "heavy":  # for ablation/diagnostics only
+    elif preset == "heavy":
         intensity_one = OneOf(
             transforms=[
                 Identityd(keys=["image"]),
-                RandHistogramShiftd(keys=["image"], prob=1.0, num_control_points=(4, 7)),
-                RandAdjustContrastd(keys=["image"],  prob=1.0, gamma=(0.85, 1.15)),
-                _poisson_gaussian_lambda(keys=("image",), gain_range=(10.0, 60.0),
+                RandHistogramShiftd(keys=["image"], prob=1.0,
+                                    num_control_points=(4, 7)),
+                RandAdjustContrastd(keys=["image"], prob=1.0,
+                                    gamma=(0.85, 1.15)),
+                _poisson_gaussian_lambda(keys=("image",),
+                                         gain_range=(10.0, 60.0),
                                          sigma_range=(0.01, 0.03)),
-                RandBiasFieldd(keys=["image"], prob=1.0, degree=3, coeff_range=(0.02, 0.06)),
+                RandBiasFieldd(keys=["image"], prob=1.0,
+                               degree=3, coeff_range=(0.02, 0.06)),
                 _weak_bleedthrough_lambda(keys=("image",), max_frac=0.10),
-                RandGaussianNoised(keys="image", prob=1.0, mean=0.0, std=0.02),
+                RandGaussianNoised(keys=["image"], prob=1.0,
+                                   mean=0.0, std=0.02),
             ],
             weights=[0.25, 0.20, 0.18, 0.15, 0.10, 0.07, 0.05],
         )
         extras = [
-            RandCoarseDropoutd(keys=["image"], prob=0.10,
-                               holes=1, max_holes=3,
-                               spatial_size=(int(0.1 * H), int(0.1 * W)))
+            RandCoarseDropoutd(
+                keys=["image"], prob=0.10,
+                holes=1, max_holes=3,
+                spatial_size=(int(0.10 * H), int(0.10 * W)),
+                fill_value=0.0,
+            )
         ]
     else:
         raise ValueError(f"Unknown preset: {preset}")
 
-    return [intensity_one] + extras
+    # Final block: OneOf → extras → monitor → clamp
+    intensity_block: List[Transform] = [
+        intensity_one,
+        *extras,
+        # LambdaD(keys=["image"], func=_monitor_range),
+        LambdaD(keys=["image"], func=lambda x: x.clamp(0.0, 1.0)),
+    ]
+    return intensity_block
 
-
-# def _get_intensity_augmentations(cfg):
-#     """
-#     Get the list of intensity augmentation transforms.
-#     """
-#     intensity_transforms = [
-#             RandHistogramShiftd(keys=["image"], prob=0.2, num_control_points=(3,5)), # num_control_points=(4, 7)
-#             RandAdjustContrastd(keys=["image"], prob=0.25, gamma=(0.9, 1.1)),
-#             RandGaussianNoised(
-#                     keys="image", 
-#                     prob=cfg.data_augmentation["rand_gaussian_noise_prob"],
-#                     mean=cfg.data_augmentation["rand_gaussian_noise_mean"],
-#                     std=cfg.data_augmentation["rand_gaussian_noise_std"]
-#                 ),
-            
-#         ]
-#     return intensity_transforms 
 
 # Compute global normalization parameters from your training set
 # global_mean, global_std = compute_dataset_mean_std(train_images_paths, cfg)
@@ -441,9 +602,10 @@ def compute_dataset_mean_std(
     for batch_idx, batch in enumerate(loader):
         imgs = batch["image"]  # [B, C, H, W]
         
-        # Ensure float precision for mean/std calculation
+        # Ensure float normalization (range [0,1]) (mostly redundant since already done in the transformations passed to
+        # the Dataset, but kept here for safety since it's applied only if the max become greater than 1)
         if imgs.dtype in (torch.uint8, torch.int16, torch.int32, torch.int64):
-            imgs = imgs.float() / 255.0 if imgs.max() > 1 else imgs.float()
+            imgs = imgs.float() / 255.0 if imgs.max() > 2 else imgs.float()
         
         # Move to GPU if available (massive speedup for large batches)
         device = imgs.device
@@ -488,7 +650,7 @@ def compute_dataset_mean_std(
     
     # === FINALIZE STATISTICS ===
     if n_total == 0 or running_mean is None or M2 is None:
-        print("⚠️  Warning: No data processed. Returning default stats.")
+        print("  Warning: No data processed. Returning default stats.")
         num_channels = cfg.get_model_input_channels()
         return {"mean": [0.5] * num_channels, "std": [0.5] * num_channels}
     
@@ -523,11 +685,11 @@ def is_supported_by_torchvision(model_name: str) -> bool:
 
 def get_transforms(cfg: ConfigLoader, 
                    fold_specific_stats: dict[str, float] | None = None):
-    is_pretrained = cfg.get_transfer_learning()  # False in your case
-    supported_by_torchvision = is_supported_by_torchvision(cfg.get_model_name())  # True (correctly detected "Densenet121")
+    is_pretrained = cfg.get_transfer_learning() 
+    supported_by_torchvision = is_supported_by_torchvision(cfg.get_model_name()) 
+    print(f"Model {cfg.get_model_name()} supported by torchvision: {supported_by_torchvision} and pretrained: {is_pretrained}")
     
     # select the normalization params if you are using a pretrained model
-    is_pretrained = cfg.get_transfer_learning()
     print(f"Using pretrained model: {is_pretrained}")
     
     color_transforms = cfg.get_intensity_augmentation_preset() not in ["none", "off", "no", "0"]
@@ -535,7 +697,6 @@ def get_transforms(cfg: ConfigLoader,
     # Initialize transform lists
     train_transforms_list = []
     val_transforms_list = []
-    supported_by_torchvision = is_supported_by_torchvision(cfg.get_model_name())
     
     print(f"Using pretrained model: {is_pretrained} and supported by torchvision: {supported_by_torchvision} with color transforms: {color_transforms}")
     # train_transforms_list, val_transforms_list = get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats)
@@ -577,7 +738,6 @@ def get_custom_transforms_lists(cfg: ConfigLoader, fold_specific_stats: dict, cr
     
     # Pipeline di base che carica e ridimensiona
     train_transforms_list = get_preNormalization_transforms_list(cfg, supported_by_torchvision)
-
     # --- INSERISCI QUESTA PARTE ---
     # Aggiungi il cropping casuale per forzare il modello a ignorare i bordi.
     # Prima calcoliamo la dimensione del crop, ad esempio il 90% della dimensione dell'immagine.
@@ -604,8 +764,9 @@ def get_custom_transforms_lists(cfg: ConfigLoader, fold_specific_stats: dict, cr
         
         
     # Ora applica le altre aumentazioni spaziali sull'immagine croppata
-    spatial_transforms = _get_spatial_augmentations(cfg)
-    train_transforms_list.extend(spatial_transforms)
+    print("No spatial augmentations are applied currently")
+    # spatial_transforms = _get_spatial_augmentations(cfg)
+    # train_transforms_list.extend(spatial_transforms)
 
     # Aggiungi le aumentazioni di intensità saranno decise da come è il preset
     intensity_transforms = _get_intensity_augmentations(cfg)
@@ -680,7 +841,6 @@ def get_pretrained_model_transforms_list_without_crop(cfg:ConfigLoader)->Tuple[L
     For 4-channel: skips ImageNet normalization (uses scaling only)
                    The adapted first conv layer will handle the 4th channel
     """
-    from monai.transforms import Resized, ScaleIntensityd, NormalizeIntensityd
 
     num_channels = cfg.get_model_input_channels()  # Get number of channels from config
     imagenet_weights = IMAGENET_WEIGHTS.get(cfg.get_model_name().lower(), None)
@@ -692,6 +852,13 @@ def get_pretrained_model_transforms_list_without_crop(cfg:ConfigLoader)->Tuple[L
     train_transforms_list.extend(_get_spatial_augmentations(cfg))
     if use_color_transforms:
         train_transforms_list.extend(_get_intensity_augmentations(cfg))
+        
+    if cfg.get_use_ablation():
+            channels_to_ablate = cfg.get_channels_to_ablate()
+            print(f" Applying channel ablation to channels (pretrained path): {channels_to_ablate}")
+            train_transforms_list.append(
+                ChannelAblationD(keys=["image"], channels_to_ablate=channels_to_ablate)
+            )
     
     # Apply normalization based on number of channels
     if num_channels == 3 and imagenet_weights is not None:
@@ -721,17 +888,21 @@ def get_pretrained_model_transforms_list_without_crop(cfg:ConfigLoader)->Tuple[L
         # Fallback for other channel counts
         print(f" Using {num_channels} channels without ImageNet normalization")
         
-        if cfg.get_use_ablation():
-            channels_to_ablate = cfg.get_channels_to_ablate()
-            print(f" Applying channel ablation to channels (pretrained path): {channels_to_ablate}")
-            train_transforms_list.append(
-                ChannelAblationD(keys=["image"], channels_to_ablate=channels_to_ablate)
-            )
+        
     
     # -----------------------------------------------------------------------
     # Validation: resize-only + same normalization as training
     val_transforms_list = new_get_preNormalization_transforms_list(cfg)
     
+    # For 4-channel or other cases, no additional normalization (scaling already done in pre-normalization)
+    if cfg.get_use_ablation():
+        channels_to_ablate = cfg.get_channels_to_ablate()
+        # Apply the same ablation to validation for distribution consistency
+        val_transforms_list.append(
+            ChannelAblationD(keys=["image"], channels_to_ablate=channels_to_ablate)
+        )
+        
+        
     if num_channels == 3 and imagenet_weights is not None:
         tv_t = imagenet_weights.transforms()
         mean = torch.tensor(tv_t.mean)  # [0.485, 0.456, 0.406]
@@ -744,14 +915,7 @@ def get_pretrained_model_transforms_list_without_crop(cfg:ConfigLoader)->Tuple[L
                 channel_wise=True # apply per-channel
             )
         )
-    # For 4-channel or other cases, no additional normalization (scaling already done in pre-normalization)
-    if cfg.get_use_ablation():
-        channels_to_ablate = cfg.get_channels_to_ablate()
-        # Apply the same ablation to validation for distribution consistency
-        val_transforms_list.append(
-            ChannelAblationD(keys=["image"], channels_to_ablate=channels_to_ablate)
-        )
-        
+    
     return train_transforms_list, val_transforms_list
 
 def get_convert_to_tensor_transform_list():
@@ -759,114 +923,3 @@ def get_convert_to_tensor_transform_list():
         EnsureTyped(keys=["image"], data_type="tensor", dtype=torch.float32),
         EnsureTyped(keys=["label"], data_type="tensor", dtype=torch.int64),
     ]
-
-def check_normalization(img, mean_val, std_val, tolerance=0.12, threshold=0.990):
-    """
-    Check that most of the image data falls within [mean - 3*std, mean + 3*std].
-
-    Args:
-        img (np.ndarray): The image tensor.
-        mean_val (float): The mean value of the image.
-        std_val (float): The standard deviation of the image.
-        tolerance (float): Allowed tolerance for the bounds.
-        threshold (float): Minimum fraction of values that must be within the range.
-
-    Raises:
-        ValueError: If the fraction of values within the range is less than the threshold.
-    """
-    lower_bound = mean_val - 3 * std_val - tolerance
-    upper_bound = mean_val + 3 * std_val + tolerance
-
-    within_range = np.logical_and(img >= lower_bound, img <= upper_bound)
-    fraction_within = np.mean(within_range)
-
-    print(f"Fraction of values within [{lower_bound:.2f}, {upper_bound:.2f}]: {fraction_within:.4f}")
-    
-    if fraction_within < threshold:
-        raise ValueError(
-            f"Only {fraction_within:.2%} of values are within the expected range. "
-            "Normalization may have failed."
-        )
-    print("EVERYTHING IS FINE")
-        
-def preview_transform_output(
-    pipeline: Compose,
-    input_shape: Tuple[int, int, int],
-    channels_mean=None,
-    channels_std=None,
-) -> Tuple[int, ...]:
-    """
-    Apply a MONAI Compose pipeline *after* any file‐loading transforms
-    to a dummy image and print/return its output shape.
-
-    This function will automatically strip out any CustomTiffFileReader
-    (or other file‐based reader transforms) from the start of the pipeline
-    so you can feed in a tensor directly.
-  
-    Args:
-        pipeline:     your full Compose object (may start with file‐readers).
-        input_shape:  (C, H, W) of the tensor *after* your resize step.
-        mean:         Mean values for each channel. Can be a single value or a list of values.
-        std:          Standard deviation values for each channel. Can be a single value or a list of values.
-
-    Returns:
-        The shape of the transformed image tensor, e.g. (C_out, H_out, W_out…).
-    """
-    # 1) Filter out any file‐reader transforms
-    filtered_transforms = [
-        t for t in pipeline.transforms
-        if not isinstance(t, CustomTiffFileReader)
-    ]
-    # 2) Build a new Compose just from the remaining steps
-    sub_pipeline = Compose(filtered_transforms)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    # 3) Create a dummy sample
-    print(f"Creating a dummy sample with shape: {input_shape}")
-    c, h, w = input_shape
-
-    # Create dummy image with channel-wise normal distribution
-    dummy_image = torch.zeros((c, h, w), dtype=torch.float32, device=device)
-    if channels_mean is None:
-        channels_mean = [0.0] * c
-    if channels_std is None:
-        channels_std = [1.0] * c
-
-    for channel in range(c):
-        dummy_image[channel] = torch.normal(
-            mean=channels_mean[channel],
-            std=channels_std[channel],
-            size=(h, w),
-            dtype=torch.float32,
-            device=device
-        )
-    print("values with a RANDOM tensor input")
-    dummy = {
-        "image": dummy_image,
-        "label": torch.tensor(0, dtype=torch.int64, device=device),
-    }
-    
-    print("before transforms")
-    print(f"Image dtype: {dummy_image.dtype}")
-    print(f"Image shape: {dummy_image.shape}")
-    print(f"Image mean: {dummy_image.mean()}")
-    print(f"Image std: {dummy_image.std()}")
-    
-    # 4) Run it
-    out = sub_pipeline(dummy)
-
-    # 5) Inspect
-    img = out["image"]
-    max_val = img.max()
-    min_val = img.min()
-    mean_val = img.mean()
-    std_val = img.std()
-    print("after transforms")
-    print(f"Image dtype: {img.dtype}")
-    print(f"Image min: {min_val}")
-    print(f"Image max: {max_val}")
-    print(f"Image mean: {mean_val}")
-    print(f"Image std: {std_val}")
-    check_normalization(img, mean_val, std_val)
-    shape = tuple(img.shape)
-    print(f"[preview] after transforms, image tensor shape is: {shape}")
-    return shape

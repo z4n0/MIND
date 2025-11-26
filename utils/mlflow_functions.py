@@ -9,8 +9,10 @@ from monai.transforms import Compose
 import numpy as np
 from configs.ConfigLoader import ConfigLoader
 import pandas as pd
+import shutil
+import yaml
+from pathlib import Path
 
-#!TODO delete this you already have get_tracking_uri
 def get_mlrun_base_folder(gdrive, kaggle,linux):
     if kaggle:
         print("you are in kaggle so there's a problem")
@@ -35,6 +37,7 @@ def get_experiment_id_byName(experiment_name):
     if experiment is None:
         raise ValueError(f"Experiment '{experiment_name}' not found.")
     return experiment.experiment_id
+
 
 def get_run_name_by_id(run_id, tracking_uri, experiment_id=None):
     """
@@ -273,11 +276,6 @@ def log_kfold_epoch_metrics(per_fold_metrics, prefix="val"):
                 mlflow.log_metric(f"{prefix}_fold_{fold_idx}/{metric_name}", value, step=epoch)
 
 
-
-import os
-import torch
-import mlflow
-
 def load_model_for_run(run_id: str, experiment_id: str, base_folder: str, device: torch.device) -> torch.nn.Module:
     """
     Load a PyTorch model for a given MLflow run.
@@ -399,11 +397,6 @@ def start_mlflow_ui_locally(tracking_uri):
         raise NotImplementedError("MLflow UI launch is only implemented for Linux.")
     
     
-import mlflow, os, numpy as np, torch, shutil, yaml, pandas as pd
-from typing import Any, Dict, List, Optional
-from monai.transforms.compose import Compose
-from torch import nn
-from pathlib import Path
 
 # ---------- utilities already in your project ------------------------------
 from utils.mlflow_functions import (
@@ -511,7 +504,7 @@ def log_run_to_mlflow(
                          If provided, logs ablation-specific metadata for channel importance studies.
     """
     # ------------------------------------------------------------------ URI
-    env_experiment_name = os.getenv("MLFLOW_EXPERIMENT_NAME")
+    env_experiment_name = "NO_AUG"#os.getenv("MLFLOW_EXPERIMENT_NAME") #"PERCENTILE_CLIP_MINMAX_X_channel"#os.getenv("MLFLOW_EXPERIMENT_NAME")
     if not env_experiment_name:
         raise RuntimeError("MLFLOW_EXPERIMENT_NAME env-var missing")
     
@@ -626,18 +619,18 @@ def log_run_to_mlflow(
         metrics = {
             "mean_test_loss": float(per_fold[:, 0].mean()),
             "std_test_loss": float(per_fold[:, 0].std()),
-            "mean_test_balanced_acc": float(per_fold[:, 1].mean()),  # ← Fixed: was index 2
-            "std_test_balanced_acc": float(per_fold[:, 1].std()),    # ← Fixed: was index 2
-            "mean_test_f1": float(per_fold[:, 2].mean()),            # ← Fixed: was index 3
-            "std_test_f1": float(per_fold[:, 2].std()),              # ← Fixed: was index 3
-            "mean_test_auc": float(per_fold[:, 3].mean()),           # ← Fixed: was index 4
-            "std_test_auc": float(per_fold[:, 3].std()),             # ← Fixed: was index 4
-            "mean_test_mcc": float(per_fold[:, 4].mean()),           # ← Fixed: was index 5
-            "std_test_mcc": float(per_fold[:, 4].std()),             # ← Fixed: was index 5
-            "mean_test_precision": float(per_fold[:, 5].mean()),     # ← Fixed: was index 6
-            "std_test_precision": float(per_fold[:, 5].std()),       # ← Fixed: was index 6
-            "mean_test_recall": float(per_fold[:, 6].mean()),        # ← Fixed: was index 7
-            "std_test_recall": float(per_fold[:, 6].std()),          # ← Fixed: was index 7
+            "mean_test_balanced_acc": float(per_fold[:, 1].mean()),  
+            "std_test_balanced_acc": float(per_fold[:, 1].std()),    
+            "mean_test_f1": float(per_fold[:, 2].mean()),            
+            "std_test_f1": float(per_fold[:, 2].std()),             
+            "mean_test_auc": float(per_fold[:, 3].mean()),           
+            "std_test_auc": float(per_fold[:, 3].std()),            
+            "mean_test_mcc": float(per_fold[:, 4].mean()),           
+            "std_test_mcc": float(per_fold[:, 4].std()),                
+            "mean_test_precision": float(per_fold[:, 5].mean()),     
+            "std_test_precision": float(per_fold[:, 5].std()),       
+            "mean_test_recall": float(per_fold[:, 6].mean()),        
+            "std_test_recall": float(per_fold[:, 6].std()),          
             "exec_time_min": execution_time / 60.0,
         }
         metrics = {k: round(v, 3) for k, v in metrics.items()}
@@ -969,7 +962,7 @@ def log_gradcam_to_mlflow(
     if "vit" in model_name.lower() or ssl:
         raise RuntimeError(f"you can't generate gradCAMs for {model_name} because it's not a CNN or you are doing SSL")
     
-    from utils.explainability_functions import generate_and_save_gradcam_batch
+    # from utils.explainability_functions import generate_and_save_gradcam_batch
     import shutil
     from monai.visualize import GradCAM, GradCAMpp
     
@@ -982,7 +975,7 @@ def log_gradcam_to_mlflow(
     model.eval().cpu()
     
     try:
-        gradcampp = GradCAMpp(
+        gradcampp = GradCAM(
             nn_module=model,
             target_layers=[target_layer],
             register_backward=True
@@ -1002,24 +995,6 @@ def log_gradcam_to_mlflow(
     )
     
     #------- saving test images gradcams -------------------------------
-    # try: 
-    #     gradcam_folder = generate_and_save_gradcam_batch(
-    #         model=model,
-    #         loader=test_loader,
-    #         gradcam_obj=gradcampp,
-    #         output_dir=base_dir,
-    #         class_names=class_names,
-    #         run_name=run_name,
-    #         experiment_name=experiment_name
-    #     )
-        
-    #     mlflow.log_artifacts(str(gradcam_folder), artifact_path="test_gradcam_images")
-    # except Exception as e:
-    #     print(f"Error generating GradCAM for test images: {e}")
-    # finally:
-    #     # Clean up the local directory after logging to MLflow
-    #     shutil.rmtree(gradcam_folder, ignore_errors=True)
-        
     try:
         thresholded_gradcam_folder = process_and_save_batch_gradcam_and_Overlay(
             model=model,

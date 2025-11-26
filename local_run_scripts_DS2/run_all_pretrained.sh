@@ -87,10 +87,10 @@ for i in "${!scripts[@]}"; do
     
     # Run the script and capture its exit code
     if bash "$script_path"; then
-        echo "✅ SUCCESS: $script_name completed successfully"
+        echo " SUCCESS: $script_name completed successfully"
         ((successful_runs += 1))
     else
-        echo "❌ FAILED: $script_name failed with exit code $?"
+        echo " FAILED: $script_name failed with exit code $?"
         ((failed_runs += 1))
     fi
     
@@ -113,10 +113,10 @@ echo "=================================================="
 
 # Exit with error code if any script failed
 if [ $failed_runs -gt 0 ]; then
-    echo "⚠️  Some scripts failed. Check the log for details."
+    echo "  Some scripts failed. Check the log for details."
     exit 1
 else
-    echo "✅ All scripts completed successfully!"
+    echo " All scripts completed successfully!"
     exit 0
 fi
 

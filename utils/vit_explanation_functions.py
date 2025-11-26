@@ -5,42 +5,65 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
-
-# ---------------------------------
-# 1) Normalization Helpers
+from typing import List
 
 # ---------------------------------
 # 2) Attention Rollout
 # ---------------------------------
-def compute_rollout(attentions):
+def compute_attention_rollout_matrix(all_layers_attention: List[torch.Tensor], head_fusion: str = 'mean'):
     """
-    Computes the aggregated (rolled out) attention across layers.
+    Computes Attention Rollout to visualize information flow through the Transformer layers.
+    
+    This method tracks how attention propagates from the input to the final layer,
+    explicitly accounting for residual (skip) connections.
 
     Args:
-        attentions (List[torch.Tensor]): each shape [B, num_heads, tokens, tokens].
+        all_layers_attention (List[torch.Tensor]): List of attention tensors for each layer.
+                                                   Each tensor has shape [Batch, Num_Heads, Tokens, Tokens].
+        head_fusion (str): Strategy to aggregate attention heads ('mean', 'max'). Default: 'mean'.
+
     Returns:
-        torch.Tensor: shape [B, tokens, tokens].
+        The aggregated attention map (Rollout) with shape [Batch, Tokens, Tokens].
     """
-    rollout = None
-    for attn in attentions:
-        # Average over heads => shape [B, tokens, tokens]
-        attn_heads_fused = attn.mean(dim=1)
-        B, N, _ = attn_heads_fused.shape
+    rollout_matrix = None
 
-        # Add identity matrix to account for residual
-        I = torch.eye(N, device=attn_heads_fused.device).unsqueeze(0).expand(B, -1, -1)
-        attn_heads_fused = attn_heads_fused + I
-
-        # Row-normalize
-        sums = attn_heads_fused.sum(dim=-1, keepdim=True)
-        attn_heads_fused = attn_heads_fused / (sums + 1e-7)
-
-        # Multiply across layers
-        if rollout is None:
-            rollout = attn_heads_fused
+    # Iterate through layers from the first (closest to input) to the last
+    for layer_idx, layer_attn in enumerate(all_layers_attention):
+        
+        # 1. Fusion of Attention Heads
+        # We usually average the heads to get a holistic view of the layer's attention.
+        # Input: [B, Heads, N, N] -> Output: [B, N, N]
+        if head_fusion == 'mean':
+            attn_fused = layer_attn.mean(dim=1)
+        elif head_fusion == 'max':
+            attn_fused = layer_attn.max(dim=1)[0]
         else:
-            rollout = torch.matmul(attn_heads_fused, rollout)
-    return rollout  # shape [B, tokens, tokens]
+             attn_fused = layer_attn.mean(dim=1) 
+
+        batch_size, num_tokens, _ = attn_fused.shape
+
+        # 2. Handling Residual Connections
+        # In a Transformer, the output is defined as y = Attention(x) + x.
+        # To model the information flow that "skips" the attention mechanism (the '+ x' part),
+        # we add an Identity matrix. This represents implicit self-attention.
+        identity_matrix = torch.eye(num_tokens, device=attn_fused.device).unsqueeze(0).expand(batch_size, -1, -1)
+        attn_fused_with_residual = attn_fused + identity_matrix
+
+        # 3. Normalization
+        # After adding the identity matrix, values no longer sum to 1.
+        # We re-normalize to maintain a valid probability distribution.
+        row_sums = attn_fused_with_residual.sum(dim=-1, keepdim=True)
+        attn_normalized = attn_fused_with_residual / (row_sums + 1e-7) # 1e-7 for numerical stability
+
+        # 4. Matrix Multiplication (The "Rollout")
+        # We multiply the current layer's attention matrix with the accumulated rollout matrix.
+        # Mathematically: Rollout_L = Attention_L * Rollout_(L-1)
+        if rollout_matrix is None:
+            rollout_matrix = attn_normalized
+        else:
+            rollout_matrix = torch.matmul(attn_normalized, rollout_matrix)
+
+    return rollout_matrix
 
 def normalize_image(img: np.ndarray, per_channel: bool = True) -> np.ndarray:
     """
@@ -146,127 +169,172 @@ def visualize_image(ax, img_4ch_or_3ch, overlay_alpha=0.4, normalize=True):
         ax.axis('off')
 
 
-# ---------------------------------
-# 4) Main Function: Save Attention Overlays
-# ---------------------------------
 def save_attention_overlays_side_by_side(
-    test_loader,
+    data_loader,
     model,
-    output_path,
+    output_directory,
     device,
-    overlay_alpha=0.5
+    heatmap_alpha=0.5
 ):
     """
-    Generates side-by-side figures: left = original image, right = image + attention overlay.
-    Handles both 3ch and 4ch input images:
-      - 3ch assumed order (G,B,R) -> reorder to (R,G,B).
-      - 4ch assumed order (G,B,Gray(2),R(3)) -> base (R,G,B) plus channel2 (Gray).
-        Then we overlay the final attention map in 'jet' colormap on top.
+    Generates side-by-side comparisons: 
+    1. The original microscopy image (reconstructed to RGB).
+    2. The same image with the Vision Transformer's attention map overlaid.
+
+    This function handles the specific channel ordering of confocal microscopes:
+    - 3 Channels: Assumes (Green, Blue, Red) -> Converts to (Red, Green, Blue).
+    - 4 Channels: Assumes (Green, Blue, Gray-Structure, Red) -> Uses RGB + Gray.
 
     Args:
-        test_loader (DataLoader): yields dict with 'image' and 'label'
-        model (torch.nn.Module): trained ViT with blocks storing attn in 'att_mat'
-        output_path (str): folder for output
-        device (torch.device): 'cuda' or 'cpu'
-        overlay_alpha (float): alpha for the attention heatmap
+        data_loader (DataLoader): Yields batches with 'image' and 'label'.
+        model (torch.nn.Module): The trained ViT model. Must store attention in 'blk.attn.att_mat'.
+        output_directory (str): Where to save the resulting PNGs.
+        device (torch.device): 'cuda' or 'cpu'.
+        heatmap_alpha (float): Transparency of the attention heatmap (0.0 to 1.0).
     """
-    os.makedirs(output_path, exist_ok=True)
+    # Create output folder if it doesn't exist
+    os.makedirs(output_directory, exist_ok=True)
+    
+    # Set model to evaluation mode (disables dropout, etc.)
     model.eval()
 
+    print(f"Starting visualization. Saving to: {output_directory}")
+
     with torch.no_grad():
-        for batch_idx, batch in enumerate(test_loader):
-            images_batch = batch["image"].to(device)  # [B, C, H, W]
-            labels_batch = batch["label"].to(device)
+        for batch_index, batch_data in enumerate(data_loader):
+            # Move data to GPU/CPU
+            # Shape: [Batch_Size, Channels, Height, Width]
+            input_tensor = batch_data["image"].to(device)
+            labels_tensor = batch_data["label"].to(device)
 
-            # Forward pass: populate attention
-            outputs, _ = model(images_batch)
-            _, predicted = torch.max(outputs, dim=1)
+            # --- 1. Forward Pass ---
+            # We need the forward pass to populate the attention matrices inside the model blocks
+            model_outputs, _ = model(input_tensor)
+            _, predicted_labels = torch.max(model_outputs, dim=1)
 
-            # Gather attentions
-            attentions = [blk.attn.att_mat for blk in model.blocks]
-            rollout = compute_rollout(attentions)  # [B, tokens, tokens]
+            # --- 2. Extract Attention & Compute Rollout ---
+            # Retrieve raw attention matrices from each Transformer block
+            # Note: This requires your ViT blocks to save 'att_mat' during forward()
+            layer_attentions = [block.attn.att_mat for block in model.blocks]
+            
+            # Aggregate attention across layers using the Rollout method
+            # Result Shape: [Batch_Size, Total_Tokens, Total_Tokens]
+            attention_rollout = compute_attention_rollout_matrix(layer_attentions)
 
-            images_np = images_batch.cpu().numpy()  # [B, C, H, W]
-            predicted_np = predicted.cpu().numpy()
-            rollout_np = rollout.cpu().numpy()       # [B, tokens, tokens]
+            # --- 3. Prepare Data for Visualization (CPU conversion) ---
+            batch_images_np = input_tensor.cpu().numpy()
+            predicted_np = predicted_labels.cpu().numpy()
+            rollout_np = attention_rollout.cpu().numpy()
 
-            for i in range(images_np.shape[0]):
-                # Convert [C,H,W] -> [H,W,C] if needed
-                img_cxhxw = images_np[i]  # shape [C,H,W]
-                if img_cxhxw.ndim == 3 and img_cxhxw.shape[0] in (3,4):
-                    img_hwc = np.transpose(img_cxhxw, (1,2,0))  # [H,W,C]
+            # Iterate through each image in the current batch
+            for item_idx in range(batch_images_np.shape[0]):
+                
+                # Extract single image: [Channels, Height, Width]
+                image_chw = batch_images_np[item_idx]
+                
+                # Transpose to [Height, Width, Channels] for Matplotlib
+                if image_chw.ndim == 3 and image_chw.shape[0] in (3, 4):
+                    image_hwc = np.transpose(image_chw, (1, 2, 0))
                 else:
-                    # single channel or something unexpected
-                    img_hwc = img_cxhxw
+                    image_hwc = image_chw # Fallback for grayscale or errors
 
-                # ---------- Prepare Base Image (Left Panel) ----------
-                base_rgb = None
-                overlay_gray = None
-                title_left = "Original"
+                # --- 4. Channel Management (Microscopy Specifics) ---
+                display_image_rgb = None
+                structure_channel_gray = None
+                plot_title = "Original"
 
-                if img_hwc.ndim == 3 and img_hwc.shape[-1] == 3:
-                    # reorder from (G,B,R) => (R,G,B) if that matches your convention
-                    base_rgb = img_hwc[..., [2,0,1]].astype(np.float32)
-                    base_rgb = normalize_image(base_rgb, per_channel=True)
+                # Case A: 3-Channel Images
+                # saves as (Green, Blue, Red). We want RGB for display.
+                if image_hwc.ndim == 3 and image_hwc.shape[-1] == 3:
+                    # Permute: Idx 2 (Red) -> 0, Idx 0 (Green) -> 1, Idx 1 (Blue) -> 2
+                    display_image_rgb = image_hwc[..., [2, 0, 1]].astype(np.float32)
+                    display_image_rgb = normalize_image(display_image_rgb, per_channel=True)
 
-                elif img_hwc.ndim == 3 and img_hwc.shape[-1] == 4:
-                    # interpret channels: G(0),B(1),Gray(2),R(3)
-                    base_rgb = img_hwc[..., [3,0,1]].astype(np.float32)
-                    overlay_gray = img_hwc[..., 2].astype(np.float32)
-                    base_rgb = normalize_image(base_rgb, per_channel=True)
-                    overlay_gray = normalize_image(overlay_gray, per_channel=False)
-                    title_left = "Original (RGB + Gray)"
+                # Case B: 4-Channel Images (with structural/brightfield channel)
+                # Assumed Input: Green(0), Blue(1), Gray/Structure(2), Red(3)
+                elif image_hwc.ndim == 3 and image_hwc.shape[-1] == 4:
+                    # RGB part: Red(3), Green(0), Blue(1)
+                    display_image_rgb = image_hwc[..., [3, 0, 1]].astype(np.float32)
+                    # Structural part: Gray(2)
+                    structure_channel_gray = image_hwc[..., 2].astype(np.float32)
+                    
+                    display_image_rgb = normalize_image(display_image_rgb, per_channel=True)
+                    structure_channel_gray = normalize_image(structure_channel_gray, per_channel=False)
+                    plot_title = "Original (RGB + Morphology)"
 
+                # Case C: Fallback (Grayscale or unknown)
                 else:
-                    # fallback single channel
-                    base_rgb = normalize_image(img_hwc, per_channel=False)
-                    title_left = "Original (Grayscale)"
+                    display_image_rgb = normalize_image(image_hwc, per_channel=False)
+                    plot_title = "Original (Grayscale)"
 
-                # ---------- Prepare the Right Panel with Overlay ----------
-                # We copy the same base image for overlay
-                base_for_overlay = base_rgb.copy() if isinstance(base_rgb, np.ndarray) else base_rgb
-                gray_for_overlay = overlay_gray.copy() if isinstance(overlay_gray, np.ndarray) else None
+                # Create copies to ensure we don't modify the original arrays during plotting
+                img_for_overlay = display_image_rgb.copy()
+                gray_for_overlay = structure_channel_gray.copy() if structure_channel_gray is not None else None
 
-                # Compute upsampled attention
-                rollout_sample = rollout_np[i]    # [tokens, tokens]
-                cls_attn = rollout_sample[0, 1:]  # skip CLS token in col 0
-                grid_size = int(math.sqrt(cls_attn.shape[0]))
-                attn_map = cls_attn.reshape(grid_size, grid_size)
+                # --- 5. Process Attention Map ---
+                # Get rollout for this specific image: [Total_Tokens, Total_Tokens]
+                single_img_rollout = rollout_np[item_idx]
+                
+                # We focus on the attention flowing FROM the CLS token (index 0) TO all image patches (indices 1:)
+                # This tells us which parts of the image the model used to classify.
+                cls_token_attention = single_img_rollout[0, 1:] 
+                
+                # Calculate grid size (e.g., sqrt(196) = 14)
+                grid_side_len = int(math.sqrt(cls_token_attention.shape[0]))
+                
+                # Reshape flattened patches back to 2D grid: [14, 14]
+                attention_grid = cls_token_attention.reshape(grid_side_len, grid_side_len)
 
-                H, W = img_hwc.shape[0], img_hwc.shape[1]
-                attn_map_t = torch.from_numpy(attn_map).unsqueeze(0).unsqueeze(0).float()  # [1,1,g,g]
-                attn_map_up = F.interpolate(attn_map_t, size=(H, W), mode='bilinear', align_corners=False)
-                attn_map_up_np = attn_map_up.squeeze().cpu().numpy()
-                # normalize for visualization
-                attn_map_up_np = normalize_image(attn_map_up_np, per_channel=False)
+                # Upsample the coarse grid to match original image size (e.g., 224x224)
+                img_height, img_width = image_hwc.shape[0], image_hwc.shape[1]
+                
+                # Convert to tensor for interpolation: [Batch=1, Channel=1, H, W]
+                attn_tensor = torch.from_numpy(attention_grid).unsqueeze(0).unsqueeze(0).float()
+                
+                # Bilinear interpolation creates a smooth heatmap
+                upsampled_attn = F.interpolate(
+                    attn_tensor, 
+                    size=(img_height, img_width), 
+                    mode='bilinear', 
+                    align_corners=False
+                )
+                
+                # Back to numpy for plotting
+                heatmap_np = upsampled_attn.squeeze().cpu().numpy()
+                heatmap_np = normalize_image(heatmap_np, per_channel=False)
 
-                # ---------- Plotting ----------
-                fig, (ax_left, ax_right) = plt.subplots(1, 2, figsize=(12,6))
+                # --- 6. Plotting ---
+                fig, (ax_original, ax_overlay) = plt.subplots(1, 2, figsize=(12, 6))
 
-                # Left panel: just the original
-                ax_left.set_title(title_left, fontsize=10)
-                ax_left.axis("off")
-                ax_left.imshow(base_rgb)  # base image
+                # Left Panel: Original Image
+                ax_original.set_title(plot_title, fontsize=10)
+                ax_original.axis("off")
+                ax_original.imshow(display_image_rgb)
                 if gray_for_overlay is not None:
-                    ax_left.imshow(gray_for_overlay, cmap='gray', alpha=0.3)
+                    # Overlay structural details in grayscale (useful for skin boundaries)
+                    ax_original.imshow(gray_for_overlay, cmap='gray', alpha=0.3)
 
-                # Right panel: original + attention
-                ax_right.set_title("With Attention Overlay", fontsize=10)
-                ax_right.axis("off")
-                ax_right.imshow(base_for_overlay)
+                # Right Panel: Image + Attention Heatmap
+                ax_overlay.set_title("Prediction Heatmap", fontsize=10)
+                ax_overlay.axis("off")
+                # 1. Base image
+                ax_overlay.imshow(img_for_overlay)
+                # 2. Structural gray (optional)
                 if gray_for_overlay is not None:
-                    ax_right.imshow(gray_for_overlay, cmap='gray', alpha=0.3)
-                ax_right.imshow(attn_map_up_np, cmap='jet', alpha=overlay_alpha)
+                    ax_overlay.imshow(gray_for_overlay, cmap='gray', alpha=0.3)
+                # 3. Attention Heatmap (Jet colormap is standard for intensity)
+                ax_overlay.imshow(heatmap_np, cmap='jet', alpha=heatmap_alpha)
 
-                # Title
-                pred_label = int(predicted_np[i])
+                # Overall Title
+                pred_class_idx = int(predicted_np[item_idx])
                 fig.suptitle(
-                    f"Batch {batch_idx}, Sample {i} | Predicted: {pred_label}",
+                    f"Batch {batch_index}, Sample {item_idx} | Predicted Class: {pred_class_idx}",
                     fontsize=11
                 )
 
-                # Save
-                outname = f"overlay_side_by_side_batch{batch_idx}_sample{i}.png"
-                outpath = os.path.join(output_path, outname)
-                plt.savefig(outpath, bbox_inches="tight", dpi=100)
-                plt.close(fig)
+                # --- 7. Saving ---
+                file_name = f"overlay_b{batch_index}_s{item_idx}_pred{pred_class_idx}.png"
+                full_path = os.path.join(output_directory, file_name)
+                
+                plt.savefig(full_path, bbox_inches="tight", dpi=100)
+                plt.close(fig) # Close figure to free memory

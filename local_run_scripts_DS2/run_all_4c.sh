@@ -111,6 +111,6 @@ if [ $failed_runs -gt 0 ]; then
     echo "⚠️  Some scripts failed. Check the log for details."
     exit 1
 else
-    echo "�� All scripts completed successfully!"
+    echo " All scripts completed successfully!"
     exit 0
 fi

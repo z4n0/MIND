@@ -20,6 +20,7 @@ if [ ! -f "$VENV_PATH" ]; then
 fi
 source "$VENV_PATH"
 
+# NORMALIZATION_TYPE="CLIP_AND_SCALE_X_CHANNEL"  # options: "CLIP_AND_SCALE", "TORCHVISION_PRETRAINED", "MIN_MAX"
 echo "Logging to:   $final_log"
 echo "Running on:   $(hostname)"
 python -c "import torch, sys; print(f'Torch: {torch.__version__}, CUDA: {torch.version.cuda}, GPU Available: {torch.cuda.is_available()}'); sys.exit(0 if torch.cuda.is_available() else 1)"
@@ -85,10 +86,10 @@ run_script_group() {
         
         # Run the script and capture its exit code
         if bash "$script_path"; then
-            echo "✅ SUCCESS: $script_name completed successfully"
+            echo "SUCCESS: $script_name completed successfully"
             ((successful_runs += 1))
         else
-            echo "❌ FAILED: $script_name failed with exit code $?"
+            echo " FAILED: $script_name failed with exit code $?"
             ((failed_runs += 1))
         fi
         
@@ -121,8 +122,9 @@ overall_total=0
 # Group 1: 3-channel experiments
 SCRIPTS_DIR_3C="local_run_scripts_DS1/3c"
 scripts_3c=(
+    # "run_local_unet_classifier_3c.sh"
     # "run_local_densenet121_3c.sh"
-    # "run_local_densenet169_3c.sh"
+    "run_local_densenet169_3c.sh"
     # "run_local_resnet18_3c.sh"
     # "run_local_vit_3c.sh"
 )
@@ -134,8 +136,9 @@ overall_total=$((overall_total + ${group3C_total:-0}))
 # Group 2: 4-channel experiments
 SCRIPTS_DIR_4C="local_run_scripts_DS1/4c"
 scripts_4c=(
+    # "run_local_unet_classifier_4c.sh"
     # "run_local_densenet121_4c.sh"
-    # "run_local_densenet169_4c.sh"
+    "run_local_densenet169_4c.sh"
     # "run_local_resnet18_4c.sh"
     # "run_local_vit_4c.sh"
 )
@@ -147,10 +150,10 @@ overall_total=$((overall_total + ${group4C_total:-0}))
 # Group 3: Pretrained experiments
 SCRIPTS_DIR_PRETRAINED="local_run_scripts_DS1/pretrained"
 scripts_pretrained=(
-    "run_local_vit_pretrained_3c.sh" 
-    "run_local_resnet18_pretrained.sh"
-    "run_local_densenet121_pretrained.sh"
-    "run_local_densenet169_pretrained.sh"
+    # "run_local_vit_pretrained_3c.sh" 
+    # "run_local_resnet18_pretrained.sh"
+    # "run_local_densenet121_pretrained.sh"
+    # "run_local_densenet169_pretrained.sh"
     # run_local_vit_small_patch16_224_pretrained.sh
     # run_local_deit_small_patch16_224_pretrained.sh
     # run_local_deit_base_patch16_224_pretrained.sh

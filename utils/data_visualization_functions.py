@@ -1,3 +1,10 @@
+
+from __future__ import annotations
+
+import math
+from typing import List, Optional, Tuple, Dict
+import numpy as np
+import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.pyplot as plt 
 from utils.data_extraction_functions import extract_labels_meaning
@@ -1315,16 +1322,28 @@ def _load_paths_as_chw_float32(paths: List[str]) -> List[np.ndarray]:
         raise ValueError("No valid images loaded.")
     return arrays
 
-def _prepare_style():
-    okabe = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#F0E442", "#56B4E9", "#E69F00", "#999999"]
-    sm = None
+def _okabe_ito_palette() -> List[str]:
+    """Return the Okabe–Ito colorblind-friendly palette."""
+    return [
+        "#0072B2",  # blue
+        "#D55E00",  # vermillion
+        "#009E73",  # bluish green
+        "#CC79A7",  # reddish purple
+        "#F0E442",  # yellow
+        "#56B4E9",  # sky blue
+        "#E69F00",  # orange
+        "#000000",  # black
+    ]
+
+
+def _prepare_style_safe():
+    """Use user's style manager if available; else fallback palette."""
     try:
-        from style.style_manager import StyleManager
-        sm = StyleManager(); sm.activate()
-        okabe = sm.palette
+        sm, okabe = _prepare_style()  # type: ignore[name-defined]
+        return sm, okabe
     except Exception:
-        pass
-    return sm, okabe
+        return None, _okabe_ito_palette()
+
 
 def plot_intensity_ecdf(
     img_paths: List[str],
@@ -1339,38 +1358,67 @@ def plot_intensity_ecdf(
     log_x: bool = False,
     ecdf_points: int = 512,
     sample_limit_per_channel: int = 500_000,
+    # Improvements / options
+    exclude_background: bool = True,
+    background_threshold: float = 1e-6,
+    pixels_per_image_cap: int = 50_000,
+    show_bands: bool = True,
+    bands_alpha: float = 0.05,
+    random_state: int = 42,
 ) -> None:
     """
-    ECDF comparison of pixel intensities per channel for two classes (0 vs 1).
-    - Supports 3c [G,B,R] and 4c [G,B,Gray,R].
-    - Uses robust per-channel x-limits via percentiles (optional).
-    - log_x plots if all values > 0 (typical for fluorescence).
+    Plot per-channel ECDFs for two classes (0 vs 1), with the percentage
+    of pixels <= threshold annotated in the top-left. Background pixels
+    can be excluded from ECDFs while still being quantified.
 
     Parameters
     ----------
     img_paths : list[str]
-        TIFF paths (C,H,W or H,W,C; 3 or 4 channels).
+        Paths to TIFF images. Each image is (C,H,W) or (H,W,C) with
+        3 channels [G,B,R] or 4 channels [G,B,Gray,R]. Loading is
+        delegated to `_load_paths_as_chw_float32()` in your codebase.
     labels : list[int]
-        0/1 class labels aligned with img_paths.
+        Class labels (0/1) aligned with `img_paths`.
     class1_name, class0_name : str
         Display names for classes 1 and 0.
-    output_path : str|None
-        If set, saves figure at 300 DPI (thesis style).
-    robust_zoom : bool
-        Use [lower_percentile, upper_percentile] for x-limits per channel.
+    output_path : str | None, default: "images/channels_intensity_ecdf.png"
+        If provided, save the figure at 300 DPI (transparent background).
+    robust_zoom : bool, default: True
+        Use robust percentiles for x-limits after background removal.
     lower_percentile, upper_percentile : float
-        Percentiles for robust x-limits.
-    log_x : bool
-        Log scale on x if data are strictly positive.
-    ecdf_points : int
-        Number of x grid points for ECDF lines.
-    sample_limit_per_channel : int
-        Max pooled samples per channel for percentile estimation.
+        Percentiles used when `robust_zoom=True`.
+    log_x : bool, default: False
+        Plot x-axis on a log scale (requires strictly positive data).
+    ecdf_points : int, default: 512
+        Number of x grid points for ECDF curves.
+    sample_limit_per_channel : int, default: 500_000
+        Global cap of pooled samples per class/channel (memory safety).
+    exclude_background : bool, default: True
+        If True, drop values <= `background_threshold` from ECDFs.
+    background_threshold : float, default: 0.0
+        Threshold defining background/zeros (for the percentage metric).
+    pixels_per_image_cap : int, default: 50_000
+        Per-image cap to reduce dominance of very large glands/images.
+    show_bands : bool, default: True
+        If True, draw DKW confidence bands around each ECDF.
+    bands_alpha : float, default: 0.05
+        (1 - alpha) confidence for DKW bands.
+    random_state : int, default: 42
+        Seed for reproducible pixel sub-sampling.
+
+    Notes
+    -----
+    - The top-left annotation reports the fraction of *all* pixels
+      (before masking) that are <= `background_threshold` in each class.
+    - ECDFs themselves are drawn on the remaining (positive) pixels if
+      `exclude_background=True`.
     """
     if len(img_paths) != len(labels):
         raise ValueError("img_paths and labels must match in length.")
-    arrays = _load_paths_as_chw_float32(img_paths)
-    y = np.asarray(labels).astype(int)
+
+    # User-provided loader must be available in the environment.
+    arrays = _load_paths_as_chw_float32(img_paths)  # type: ignore[name-defined]
+    y = np.asarray(labels, dtype=int)
     if (0 not in y) or (1 not in y):
         raise ValueError("Both classes 0 and 1 must be present.")
 
@@ -1380,92 +1428,186 @@ def plot_intensity_ecdf(
     if any(a.shape[0] != n_channels for a in arrays):
         raise ValueError("All images must have the same number of channels.")
 
-    channel_names = ["Green", "Blue", "Red"] if n_channels == 3 else ["Green", "Blue", "Gray", "Red"]
+    channel_names = (
+        ["Green", "Blue", "Red"]
+        if n_channels == 3
+        else ["Green", "Blue", "Gray", "Red"]
+    )
 
-    sm, okabe = _prepare_style()
-    classes_colors_dict = {
-        class0_name: okabe[0],
-        class1_name: okabe[1],
-    }
+    sm, okabe = _prepare_style_safe()
     color0, color1 = okabe[0], okabe[1]
 
-    # Pool values per class/channel (with memory safety via sampling)
-    rng = np.random.default_rng(42)
-    pooled0 = [None] * n_channels
-    pooled1 = [None] * n_channels
+    # ------------------------------ helpers ------------------------------
+    def _ecdf(values: np.ndarray, grid: np.ndarray) -> np.ndarray:
+        """ECDF F(t) = P(X <= t) computed on a fixed grid."""
+        idx = np.searchsorted(values, grid, side="right")
+        return idx / max(1, values.size)
+
+    def _dkw_eps(n: int, alpha: float) -> float:
+        """DKW band half-width: sup|F_n - F| <= eps with prob >= 1-alpha."""
+        if n <= 0:
+            return float("nan")
+        return math.sqrt(math.log(2.0 / alpha) / (2.0 * n))
+
+    # --------------------- pooling with balanced caps --------------------
+    rng = np.random.default_rng(random_state)
+    pooled0: List[np.ndarray] = [None] * n_channels  # type: ignore
+    pooled1: List[np.ndarray] = [None] * n_channels  # type: ignore
+
+    # Store FRACTIONS (percentages) <= threshold for annotation
+    below_thr_fracs: List[Tuple[float, float]] = []
+
     for c in range(n_channels):
         vals0, vals1 = [], []
-        remain0 = remain1 = sample_limit_per_channel
+        remain0 = sample_limit_per_channel
+        remain1 = sample_limit_per_channel
+
+        # counts/totals to compute percentages
+        count0 = count1 = 0
+        total0 = total1 = 0
+
         for arr, lab in zip(arrays, y):
             ch = arr[c].ravel()
+
+            # Count <= threshold BEFORE masking; track totals
+            if lab == 0:
+                total0 += ch.size
+                count0 += int(np.count_nonzero(ch <= background_threshold))
+            else:
+                total1 += ch.size
+                count1 += int(np.count_nonzero(ch <= background_threshold))
+
+            # Remove background for ECDFs if requested
+            if exclude_background:
+                ch = ch[ch > background_threshold]
+
+            if ch.size == 0:
+                continue
+
+            # Per-image cap, then respect global remain cap
+            cap = min(pixels_per_image_cap, ch.size)
             if lab == 0 and remain0 > 0:
-                take = min(remain0, ch.size)
-                if take < ch.size:
-                    idx = rng.choice(ch.size, size=take, replace=False)
-                    vals0.append(ch[idx])
-                else:
-                    vals0.append(ch)
+                take = min(cap, remain0)
+                idx = rng.choice(ch.size, size=take, replace=False)
+                vals0.append(ch[idx])
                 remain0 -= take
             elif lab == 1 and remain1 > 0:
-                take = min(remain1, ch.size)
-                if take < ch.size:
-                    idx = rng.choice(ch.size, size=take, replace=False)
-                    vals1.append(ch[idx])
-                else:
-                    vals1.append(ch)
+                take = min(cap, remain1)
+                idx = rng.choice(ch.size, size=take, replace=False)
+                vals1.append(ch[idx])
                 remain1 -= take
-        pooled0[c] = np.concatenate(vals0) if vals0 else np.array([0.0], dtype=np.float32)
-        pooled1[c] = np.concatenate(vals1) if vals1 else np.array([0.0], dtype=np.float32)
 
-    # Determine per-channel x-limits (robust or full)
+        # Store percentages for annotation
+        pct0 = count0 / max(1, total0)
+        pct1 = count1 / max(1, total1)
+        below_thr_fracs.append((pct0, pct1))
+
+        pooled0[c] = (
+            np.concatenate(vals0).astype(np.float32)
+            if vals0
+            else np.array([], dtype=np.float32)
+        )
+        pooled1[c] = (
+            np.concatenate(vals1).astype(np.float32)
+            if vals1
+            else np.array([], dtype=np.float32)
+        )
+
+    # -------------------------- x-limits per ch --------------------------
     xmins = np.zeros(n_channels, dtype=float)
     xmaxs = np.zeros(n_channels, dtype=float)
+
     for c in range(n_channels):
         v = np.concatenate([pooled0[c], pooled1[c]])
+        if v.size == 0:
+            xmins[c], xmaxs[c] = 0.0, 1.0
+            continue
+
         if robust_zoom:
-            lo = np.percentile(v, lower_percentile)
-            hi = np.percentile(v, upper_percentile)
+            lo = float(np.percentile(v, lower_percentile))
+            hi = float(np.percentile(v, upper_percentile))
         else:
             lo, hi = float(np.min(v)), float(np.max(v))
+
         if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
             lo, hi = float(np.min(v)), float(np.max(v))
             if hi <= lo:
                 hi = lo + 1e-6
+
         xmins[c], xmaxs[c] = lo, hi
 
-    # Build x-grid and ECDFs
-    fig, axes = plt.subplots(1, n_channels, figsize=(5.6 * n_channels, 3.8))
+    # ------------------------------- plot --------------------------------
+    fig, axes = plt.subplots(1, n_channels, figsize=(5.7 * n_channels, 4.0))
     axes = axes if isinstance(axes, np.ndarray) else np.array([axes])
 
     for c, ax in enumerate(axes):
         lo, hi = xmins[c], xmaxs[c]
+        v0 = np.sort(pooled0[c])
+        v1 = np.sort(pooled1[c])
+
+        if v0.size == 0 and v1.size == 0:
+            ax.set_visible(False)
+            continue
+
         if log_x:
+            # Guard against zeros after background removal
             eps = 1e-12
             lo = max(lo, eps)
             x = np.logspace(np.log10(lo), np.log10(hi), ecdf_points)
+            ax.set_xscale("log")
         else:
             x = np.linspace(lo, hi, ecdf_points)
 
-        # ECDF function: F(t) = (number <= t) / N
-        v0 = np.sort(pooled0[c])
-        v1 = np.sort(pooled1[c])
-        def ecdf(values: np.ndarray, grid: np.ndarray) -> np.ndarray:
-            # rightmost indices where values <= grid
-            idx = np.searchsorted(values, grid, side="right")
-            return idx / max(1, values.size)
+        F0 = _ecdf(v0, x) if v0.size else np.zeros_like(x)
+        F1 = _ecdf(v1, x) if v1.size else np.zeros_like(x)
 
-        F0 = ecdf(v0, x)
-        F1 = ecdf(v1, x)
+        # DKW confidence bands (optional)
+        if show_bands:
+            eps0 = _dkw_eps(v0.size, bands_alpha)
+            eps1 = _dkw_eps(v1.size, bands_alpha)
+            if np.isfinite(eps0):
+                ax.fill_between(
+                    x,
+                    np.clip(F0 - eps0, 0, 1),
+                    np.clip(F0 + eps0, 0, 1),
+                    alpha=0.12,
+                    color=color0,
+                    linewidth=0,
+                )
+            if np.isfinite(eps1):
+                ax.fill_between(
+                    x,
+                    np.clip(F1 - eps1, 0, 1),
+                    np.clip(F1 + eps1, 0, 1),
+                    alpha=0.12,
+                    color=color1,
+                    linewidth=0,
+                )
 
         ax.plot(x, F0, color=color0, lw=2, label=class0_name)
         ax.plot(x, F1, color=color1, lw=2, label=class1_name)
+
+        # ---- top-left annotation: percentage ≤ threshold ----
+        p0, p1 = below_thr_fracs[c]
+        ax.text(
+            0.02,
+            0.98,
+            (
+                f"≤ thr ({background_threshold:g}): "
+                f"{class0_name}={p0:.1%} | {class1_name}={p1:.1%}"
+            ),
+            transform=ax.transAxes,
+            fontsize=10,
+            ha="left",
+            va="top",
+            bbox=dict(boxstyle="round,pad=0.2",
+                      facecolor="white", alpha=0.6),
+        )
+
         ax.set_title(f"{channel_names[c]} ECDF", fontsize=14)
         ax.set_xlabel("Pixel value", fontsize=12)
         ax.set_ylabel("Cumulative probability", fontsize=12)
         ax.grid(True, axis="both", alpha=0.3, linestyle="--")
-        if log_x:
-            ax.set_xscale("log")
-        # minimal spines
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         if c == 0:
@@ -1474,11 +1616,14 @@ def plot_intensity_ecdf(
     plt.tight_layout()
     if output_path:
         import os
+
         out_dir = os.path.dirname(output_path)
         if out_dir:
             os.makedirs(out_dir, exist_ok=True)
         if sm is not None:
             sm.savefig(output_path)
         else:
-            plt.savefig(output_path, dpi=300, bbox_inches="tight", transparent=True)
+            plt.savefig(
+                output_path, dpi=300, bbox_inches="tight", transparent=True
+            )
     plt.show()

@@ -5,6 +5,40 @@ import os
 from .data_extraction_functions import extract_labels_meaning
 from .data_visualization_functions import min_max_normalization
 
+def format_label_text(label_idx, class_names):
+    """
+    Return a string representation like '1 (MSA)' if a mapping is available.
+    """
+    if label_idx is None:
+        return "N/A"
+    idx = int(label_idx)
+    label_name = None
+    if class_names is not None:
+        try:
+            if isinstance(class_names, dict):
+                label_name = class_names.get(idx, class_names.get(str(idx)))
+            else:
+                label_name = class_names[idx]
+        except (IndexError, KeyError, TypeError):
+            label_name = None
+    return f"{idx} ({label_name})" if label_name is not None else str(idx)
+
+def _extract_logits(model_output):
+    """
+    Handle different model output formats and return a tensor of logits.
+    """
+    if isinstance(model_output, torch.Tensor):
+        return model_output
+    if isinstance(model_output, (list, tuple)):
+        return model_output[0]
+    if isinstance(model_output, dict):
+        for key in ("logits", "output", "out"):
+            if key in model_output:
+                return model_output[key]
+        first_key = next(iter(model_output))
+        return model_output[first_key]
+    raise TypeError(f"Unsupported model output type: {type(model_output)}")
+
 def threshold_heatmap(heatmap, threshold=0.5, normalize=True):
     """
     Apply thresholding to a heatmap to emphasize important regions.
@@ -51,11 +85,11 @@ def get_overlay_heatmap(image, heatmap, alpha=0.5, cmap="jet"):
 
     # Reorder channels based on the input format.
     # For 3-channel input: (G, B, R) => (R, G, B)
-    # For 4-channel input: (G, B, Gray, R) => (R, G, B)
+    # For 4-channel input: (G, B, Red, Gray) => (R, G, B)
     if image_np.shape[-1] == 3:
         image_np = image_np[..., [2, 0, 1]]
     elif image_np.shape[-1] == 4:
-        image_np = image_np[..., [3, 0, 1]]
+        image_np = image_np[..., [2, 0, 1]]
     
     # Create an RGBA heatmap.
     cmap_fn = plt.get_cmap(cmap)
@@ -91,7 +125,7 @@ def generate_and_save_gradcam_batch(
     
     For each image:
       - Converts the tensor to a NumPy array in (H, W, C) order.
-      - Reorders channels: if 3-channel (from G, B, R) to (R, G, B); if 4-channel (from G, B, Gray, R) to (R, G, B).
+      - Reorders channels: if 3-channel (from G, B, R) to (R, G, B); if 4-channel (from G, B, Red, Gray) to (R, G, B).
       - Applies min-max normalization.
       - Overlays the GradCAM heatmap.
     
@@ -125,10 +159,18 @@ def generate_and_save_gradcam_batch(
         for i in range(images.shape[0]):
             image_tensor = images[i].unsqueeze(0)
             single_cam_tensor = gradcam_obj(x=image_tensor)
+
+            with torch.no_grad():
+                logits = _extract_logits(model(image_tensor))
+            pred_idx = torch.argmax(logits, dim=1).item()
+            label_val = labels[i].item()
+            pred_color = "lime" if pred_idx == label_val else "red"
+            true_label_text = format_label_text(label_val, class_names)
+            pred_label_text = format_label_text(pred_idx, class_names)
             
             # Get the image and heatmap from tensors.
             single_image = image_tensor[0].cpu().numpy()   # shape: (C, H, W)
-            single_cam = single_cam_tensor[0].cpu().numpy()  # assumed shape: (1, H, W)
+            single_cam = single_cam_tensor.squeeze().cpu().numpy()
 
             # Convert image to (H, W, C)
             single_image = np.transpose(single_image, (1, 2, 0))
@@ -137,30 +179,39 @@ def generate_and_save_gradcam_batch(
                 # For 3-channel images: (G, B, R) -> (R, G, B)
                 display_image = single_image[..., [2, 0, 1]]
             elif single_image.shape[-1] == 4:
-                # For 4-channel images: (G, B, Gray, R) -> (R, G, B)
-                display_image = single_image[..., [3, 0, 1]]
+                # For 4-channel images: (G, B, Red, Gray) -> (R, G, B)
+                display_image = single_image[..., [2, 0, 1]]
             else:
                 display_image = single_image
 
             # Normalize display image and heatmap.
             single_image_norm = min_max_normalization(display_image, channel_wise=True)
             cam_normalized = min_max_normalization(single_cam)
-            
-            # Map the label.
-            label_val = labels[i].item()
-            if class_names is not None:
-                try:
-                    image_label = class_names[label_val]
-                except Exception as e:
-                    print("Error mapping label using class_names:", e)
-                    image_label = label_val
-            else:
-                image_label = label_val
 
             # Create visualization with 2 panels: original and overlay.
             fig, axarr = plt.subplots(1, 2, figsize=(10, 4))
             axarr[0].imshow(single_image_norm, cmap='gray' if single_image_norm.shape[-1]==1 else None)
-            axarr[0].set_title(f"Original Image (Label: {image_label})")
+            axarr[0].set_title("Original Image")
+            axarr[0].text(
+                0.01,
+                0.99,
+                f"True: {true_label_text}",
+                transform=axarr[0].transAxes,
+                fontsize=11,
+                color="white",
+                va="top",
+                bbox=dict(facecolor="black", alpha=0.5, edgecolor="none", pad=3),
+            )
+            axarr[0].text(
+                0.01,
+                0.86,
+                f"Pred: {pred_label_text}",
+                transform=axarr[0].transAxes,
+                fontsize=11,
+                color=pred_color,
+                va="top",
+                bbox=dict(facecolor="black", alpha=0.5, edgecolor="none", pad=3),
+            )
             axarr[0].axis('off')
 
             axarr[1].imshow(single_image_norm, cmap='gray' if single_image_norm.shape[-1]==1 else None)
@@ -265,11 +316,11 @@ def visualize_gradcam_for_single_image(model, test_loader, gradcam_obj, min_max_
         # There is no extra overlay.
         display_image = composite_rgb
     elif input_image_np.shape[-1] == 4:
-        # For 4-channel images, assume order (Green, Blue, Gray, Red).
-        # Build base RGB from channels: Red from index 3, Green from index 0, Blue from index 1.
-        composite_rgb = input_image_np[..., [3, 0, 1]]
-        # The extra channel (gray) is taken from index 2.
-        overlay_channel = input_image_np[..., 2]
+        # For 4-channel images, assume order (Green, Blue, Red, Gray).
+        # Build base RGB from channels: Red from index 2, Green from index 0, Blue from index 1.
+        composite_rgb = input_image_np[..., [2, 0, 1]]
+        # The extra channel (gray) is taken from index 3.
+        overlay_channel = input_image_np[..., 3]
         display_image = composite_rgb
     else:
         display_image = input_image_np
@@ -333,8 +384,8 @@ def process_and_save_batch_gradcam_and_Overlay(
     
     Assumptions:
       - 3-channel images are in order (Green, Blue, Red), reordering to (Red, Green, Blue).
-      - 4-channel images are in order (Green, Blue, Gray, Red); we build base RGB from [3,0,1] 
-        and treat channel 2 as the gray (DAPI) overlay.
+      - 4-channel images are in order (Green, Blue, Red, Gray); we build base RGB from [2,0,1] 
+        and treat channel 3 as the gray (DAPI) overlay.
 
     Args:
         model (torch.nn.Module): The model.
@@ -376,15 +427,12 @@ def process_and_save_batch_gradcam_and_Overlay(
             single_label = labels[i].unsqueeze(0)
             label_val = single_label.item()
 
-            # Map the label to a string if class_names is given.
-            if class_names is not None:
-                try:
-                    image_label = class_names[label_val]
-                except Exception as e:
-                    print("Error mapping label using class_names:", e)
-                    image_label = label_val
-            else:
-                image_label = label_val
+            with torch.no_grad():
+                logits = _extract_logits(model(single_image))
+            pred_idx = torch.argmax(logits, dim=1).item()
+            pred_color = "lime" if pred_idx == label_val else "red"
+            true_label_text = format_label_text(label_val, class_names)
+            pred_label_text = format_label_text(pred_idx, class_names)
 
             # Generate GradCAM for this image.
             cam_result = gradcam_obj(x=single_image, class_idx=label_val)
@@ -403,11 +451,11 @@ def process_and_save_batch_gradcam_and_Overlay(
                 base_rgb = input_image_np[..., [2, 0, 1]]
                 composite = base_rgb
             elif input_image_np.shape[-1] == 4:
-                # (Green, Blue, Gray, Red)
-                # base_rgb from channels [3, 0, 1] => (Red, Green, Blue)
-                base_rgb = input_image_np[..., [3, 0, 1]]
-                # overlay is channel index 2 => Gray
-                overlay = input_image_np[..., 2]
+                # (Green, Blue, Red, Gray)
+                # base_rgb from channels [2, 0, 1] => (Red, Green, Blue)
+                base_rgb = input_image_np[..., [2, 0, 1]]
+                # overlay is channel index 3 => Gray
+                overlay = input_image_np[..., 3]
                 composite = base_rgb
             else:
                 # fallback if unexpected channels
@@ -439,11 +487,31 @@ def process_and_save_batch_gradcam_and_Overlay(
             axarr[0].imshow(composite)
             if overlay is not None:
                 axarr[0].imshow(overlay, cmap='gray', alpha=overlay_alpha_DAPI)
-            axarr[0].set_title(f"Original (Label: {image_label})", fontsize=14)
+            axarr[0].set_title("Original Image", fontsize=14)
+            axarr[0].text(
+                0.01,
+                0.99,
+                f"True: {true_label_text}",
+                transform=axarr[0].transAxes,
+                fontsize=12,
+                color="white",
+                va="top",
+                bbox=dict(facecolor="black", alpha=0.5, edgecolor="none", pad=3),
+            )
+            axarr[0].text(
+                0.01,
+                0.86,
+                f"Pred: {pred_label_text}",
+                transform=axarr[0].transAxes,
+                fontsize=12,
+                color=pred_color,
+                va="top",
+                bbox=dict(facecolor="black", alpha=0.5, edgecolor="none", pad=3),
+            )
             axarr[0].axis('off')
 
             # Panel 2: same composite, plus GradCAM overlay
-            # We assume GradCAM is in [0,1], so we can alpha-blend it
+            # assume GradCAM is in [0,1], so we can alpha-blend it
             cam_normalized = min_max_normalization(cam_tensor)
             axarr[1].imshow(composite)
             if overlay is not None:
@@ -459,11 +527,6 @@ def process_and_save_batch_gradcam_and_Overlay(
                 axarr[2].imshow(overlay, cmap='gray', alpha=overlay_alpha_DAPI)
             # We'll convert thresholded heatmap to RGBA via get_overlay_heatmap, or just do:
             # thresholded => 1 where > threshold => 0 otherwise
-            from torch import tensor
-            # We'll transform the composite image to (C, H, W) for the overlay function
-            # if you want the get_overlay_heatmap approach
-            # or we can do a direct show 
-            # For brevity, we'll just do a direct show:
             axarr[2].imshow(cam_thresholded, cmap='jet', alpha=0.6)
             axarr[2].set_title(f"Thresholded GradCAM (t={threshold})", fontsize=14)
             axarr[2].axis('off')
@@ -479,4 +542,3 @@ def process_and_save_batch_gradcam_and_Overlay(
             print(f"Saved {gradcam_variant.upper()} overlay with DAPI-like channel to: {save_path}")
 
     return output_dir
-

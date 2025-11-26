@@ -1100,11 +1100,13 @@ class MLPClassifierHead(nn.Module):
     
 class LinearProbeHead(nn.Module):
     """
-    A simple linear classifier head for linear probing.
-    Only a single fully-connected layer, no activation/dropout.
+    A simple classifier head for linear probing.
+    Optionally applies dropout before the final linear layer when
+    `dropout_p > 0`.
     """
-    def __init__(self, input_dim: int, num_classes: int) -> None:
+    def __init__(self, input_dim: int, num_classes: int, dropout_p: float = 0.0) -> None:
         super().__init__()
+        self.dropout = nn.Dropout(dropout_p) if dropout_p and dropout_p > 0.0 else nn.Identity()
         self.fc = nn.Linear(input_dim, num_classes)
         
     @property
@@ -1122,6 +1124,7 @@ class LinearProbeHead(nn.Module):
         Returns:
             logits tensor of shape (batch_size, num_classes)
         """
+        x = self.dropout(x)
         return self.fc(x)
     
 def remove_projection_head(encoder: nn.Module) -> nn.Module:

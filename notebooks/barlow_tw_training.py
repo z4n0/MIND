@@ -6,12 +6,9 @@ from torch.optim.lr_scheduler import LambdaLR, CosineAnnealingLR, SequentialLR
 import torchvision
 import torch
 import torch.nn as nn
-# Lightly imports (make sure these are installed and correct)
 from lightly.data import LightlyDataset
 from lightly.transforms.byol_transform import BYOLTransform, BYOLView1Transform, BYOLView2Transform
 import pytorch_lightning as pl
-# Assuming BarlowTwinsProjectionHead and BarlowTwinsLoss are defined correctly elsewhere
-# from your_module import BarlowTwinsProjectionHead, BarlowTwinsLoss
 from utils.setup_functions import get_tif_image_paths_from_folder
 import numpy as np
 LEARNING_RATE = 3e-4 # Initial learning rate (peak after warmup)
@@ -69,7 +66,6 @@ class BarlowTwins(pl.LightningModule):
         # Store steps_per_epoch, calculated in setup
         self.steps_per_epoch = 0
 
-    # --- REVISED setup method ---
     def setup(self, stage=None):
         """Calculate steps_per_epoch after dataloader is available."""
         if stage == 'fit' or stage is None:
@@ -117,7 +113,7 @@ class BarlowTwins(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         """ Barlow Twins requires two augmented views (x0, x1). """
-        # Adapt based on actual batch structure from LightlyDataset
+        
         if isinstance(batch, (list, tuple)) and len(batch) == 3:
              (x0, x1), _, _ = batch # common case: (views), labels, fnames
         elif isinstance(batch, (list, tuple)) and len(batch) == 2 and isinstance(batch[0], (list, tuple)):

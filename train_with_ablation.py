@@ -15,7 +15,6 @@ Scientific rationale:
 Usage:
     python train_with_ablation.py --yaml configs/4c/densenet121.yaml
 """
-
 # ──────────────────────── std libs ─────────────────────────────────────────
 import time
 import argparse, os, sys, pathlib, random, re, glob
@@ -28,10 +27,9 @@ from monai.utils.misc import set_determinism
 import shutil
 import warnings
 
-# Suppress specific UserWarnings from PyTorch AMP
-warnings.filterwarnings("ignore", message=".*`torch.cuda.amp.autocast(args...)` is deprecated.*", category=UserWarning)
-warnings.filterwarnings("ignore", message=".*`torch.cuda.amp.GradScaler(args...)` is deprecated.*", category=UserWarning)
-
+# # Suppress specific UserWarnings from PyTorch AMP
+# warnings.filterwarnings("ignore", message=".*`torch.cuda.amp.autocast(args...)` is deprecated.*", category=UserWarning)
+# warnings.filterwarnings("ignore", message=".*`torch.cuda.amp.GradScaler(args...)` is deprecated.*", category=UserWarning)
 # ──────────────────────── PYTHONPATH ───────────────────────────────────────
 PROJ_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJ_ROOT))
@@ -131,13 +129,9 @@ def main():
     pat_df      = df.groupby("patient_id").first().reset_index()
     print(f"Total unique patients for CV stratification: {len(pat_df)}")
     unique_pats = pat_df["patient_id"].values
-    
     pat_labels  = pat_df["label"].values
     
-    # ---------- Ablation study loop ----------------------------------------
-    # Scientific approach: systematically ablate each channel independently
-    # to measure its contribution to classification performance
-    
+    # ---------- Ablation study loop ----------------------------------------    
     job_id = os.environ.get("SLURM_JOB_ID") or os.environ.get("SLURM_JOBID") or str(os.getpid())
     run_tag = f"{Path(args.yaml).stem}_{cfg.get_model_input_channels()}c_ablation"
     BASE_RUN_DIR = (PROJ_ROOT / "runs" / f"{run_tag}_{job_id}").resolve()
@@ -152,7 +146,7 @@ def main():
     print(f"Base output directory: {BASE_RUN_DIR}")
     print(f"{'='*80}\n")
 
-    for channel_idx in range(3,num_channels):
+    for channel_idx in range(0,num_channels):
         ablation_start_time = time.time()
         
         print(f"\n{'='*80}")
@@ -165,7 +159,7 @@ def main():
         RUN_DIR.mkdir(parents=True, exist_ok=True)
         
         # Configure ablation for current channel
-        cfg.set_channels_to_ablate([channel_idx])  # ← Use loop variable
+        cfg.set_channels_to_ablate([channel_idx]) 
         
         # CRITICAL: Recreate transforms for each ablation configuration
         # This ensures the ChannelAblationD transform uses the updated config
@@ -179,10 +173,10 @@ def main():
                 f"to be in ablated channels list, got {ablated_channels}"
             )
         
-        print(f"⚠️  Channel {channel_idx} will be ZEROED during training")
-        print(f"   → Fold-specific statistics will be recomputed with ablation applied")
+        print(f" Channel {channel_idx} will be ZEROED during training")
+        # print(f"   → Fold-specific statistics will be recomputed with ablation applied")
         
-        train_transforms, val_transforms, test_transforms = tf.get_transforms(cfg)
+        # train_transforms, val_transforms, test_transforms = tf.get_transforms(cfg)
 
         # Recreate model for each ablation run to ensure clean state
         print(f"Initializing fresh model for ablation iteration {channel_idx}")
@@ -232,6 +226,21 @@ def main():
         os.environ["MLFLOW_TRACKING_URI"] = MLFLOW_URI
 
         best_idx = best_fold_idx(test_results)
+        # ---------- transforms -------------------------------------------------
+        train_transforms, val_transforms, test_transforms = tf.get_transforms(cfg)
+        best_fold_normalization_stats = experiment.get_fold_normalization_statistics(best_idx)
+        if best_fold_normalization_stats is None:
+            print(f"  No custom normalization stats for fold {best_idx} (using ImageNet defaults)")
+            # For pretrained models with ImageNet normalization, val_transforms are already correct
+            val_transforms_corrected = val_transforms
+            test_transforms_corrected = test_transforms
+        else:
+            print(f"✓ Recreating transforms with fold {best_idx} statistics:")        
+            # Recreate transforms with actual fold-specific statistics
+            _, val_transforms_corrected, test_transforms_corrected = tf.get_transforms(
+                cfg,
+                fold_specific_stats=best_fold_normalization_stats  
+            )
         best_model_path = RUN_DIR / f"best_model_fold_{best_idx}.pth"
         best_model, _ = experiment._get_model_and_device()
         best_model.load_state_dict(torch.load(str(best_model_path), map_location=device))
@@ -245,14 +254,14 @@ def main():
         te_imgs = best_fold_test_df['image_path'].values
         te_y = best_fold_test_df['label'].values
 
-        # Log to MLflow with ablation metadata
+        # Log to MLflow
         log_run_to_mlflow(
             cfg=cfg,
             model=best_model,
             class_names=class_names,
             fold_results=test_results,
             per_fold_metrics=train_metrics,
-            test_transforms=val_transforms,
+            test_transforms=val_transforms_corrected,
             test_images_paths_np=te_imgs,
             test_true_labels_np=te_y,
             yaml_path=str(PROJ_ROOT / args.yaml),
@@ -265,7 +274,7 @@ def main():
             output_dir=str(RUN_DIR),
             test_pat_ids_per_fold=experiment.test_pat_ids_per_fold,
             best_fold_idx=best_idx,
-            # Add ablation-specific metadata
+            # ablation-specific metadata
             ablation_config={
                 "ablated_channel": channel_idx,
                 "total_channels": num_channels,
@@ -273,7 +282,7 @@ def main():
             }
         )
         
-        print(f"\n✓ Completed ablation for channel {channel_idx}")
+        print(f"\n Completed ablation for channel {channel_idx}")
         print(f"  Results saved to: {RUN_DIR}")
         print(f"  Time elapsed: {ablation_time:.2f}s\n")
     
@@ -315,7 +324,7 @@ def main():
             
             avg_f1 = np.mean(f1_vals)
             std_f1 = np.std(f1_vals)
-            
+    
             avg_auc = np.mean(auc_vals)
             std_auc = np.std(auc_vals)
             
@@ -340,11 +349,9 @@ def main():
         f.write("- Channels with larger performance drops when ablated are more critical\n")
         f.write("- Compare balanced accuracy across ablations to identify discriminative channels\n")
         f.write("- High std values indicate unstable performance across folds\n")
-    
     print(f"\nSummary report saved to: {summary_path}")
     
     # ---------- cleanup ----------------------------------------------------
-    # Note: Keep run directories for ablation studies to enable post-hoc analysis
     if os.environ.get("KEEP_RUN_DIR", "1").lower() not in ("1", "true", "yes"):
         print("\n Warning: KEEP_RUN_DIR=0 detected, but preserving ablation results.")
         print(" Set KEEP_RUN_DIR=0 only if you've logged everything to MLflow.")

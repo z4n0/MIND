@@ -22,9 +22,8 @@ import shutil
 import warnings
 
 # Suppress specific UserWarnings from PyTorch AMP
-warnings.filterwarnings("ignore", message=".*`torch.cuda.amp.autocast(args...)` is deprecated.*", category=UserWarning)
-warnings.filterwarnings("ignore", message=".*`torch.cuda.amp.GradScaler(args...)` is deprecated.*", category=UserWarning)
-
+# warnings.filterwarnings("ignore", message=".*`torch.cuda.amp.autocast(args...)` is deprecated.*", category=UserWarning)
+# warnings.filterwarnings("ignore", message=".*`torch.cuda.amp.GradScaler(args...)` is deprecated.*", category=UserWarning)
 # ──────────────────────── PYTHONPATH ───────────────────────────────────────
 PROJ_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJ_ROOT))
@@ -39,7 +38,6 @@ import utils.transformations_functions as tf
 
 # ───────────────────── CLI helpers ─────────────────────────────────────────
 from utils.training_helpers import *
-
 # ───────────────────── main ────────────────────────────────────────────────
 def main():
     args = parse()
@@ -47,7 +45,8 @@ def main():
     
     # ---------- env vars ---------------------------------------------------
     MLFLOW_URI = os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns")
-    
+    EXPERIMENT_NAME = os.environ.get("MLFLOW_EXPERIMENT_NAME", "default_experiment") 
+           
     # ---------- reproducibility -------------------------------------------
     SEED = 42
     set_global_seed(SEED)
@@ -71,7 +70,6 @@ def main():
     # cfg.set_num_folds(7)
     # cfg.set_model_library("monai")  # or "torchvision"
     # cfg.set_transfer_learning(True)
-    
     print(f"Torch version: {torch.__version__}")
     print(f"Using configuration: {args.yaml}")
     
@@ -119,9 +117,6 @@ def main():
     unique_pats = pat_df["patient_id"].values
     pat_labels  = pat_df["label"].values
 
-    # ---------- transforms -------------------------------------------------
-    train_transforms, val_transforms, test_transforms = tf.get_transforms(cfg)
-
     # ---------- model ------------------------------------------------------
     model_manager = ModelManager(cfg, library=cfg.get_model_library())
     model, device = model_manager.setup_model(len(class_names), pretrained_weights)
@@ -165,6 +160,23 @@ def main():
     os.environ["MLFLOW_TRACKING_URI"] = MLFLOW_URI
 
     best_idx = best_fold_idx(test_results)
+    # ---------- transforms -------------------------------------------------
+    train_transforms, val_transforms, test_transforms = tf.get_transforms(cfg)
+    best_fold_normalization_stats = experiment.get_fold_normalization_statistics(best_idx)
+    if best_fold_normalization_stats is None:
+        print(f"  No custom normalization stats for fold {best_idx} (using ImageNet defaults)")
+        # For pretrained models with ImageNet normalization, val_transforms are already correct
+        val_transforms_corrected = val_transforms
+        test_transforms_corrected = test_transforms
+    else:
+        print(f" Recreating transforms with fold {best_idx} statistics:")        
+        # Recreate transforms with actual fold-specific statistics
+        _, val_transforms_corrected, test_transforms_corrected = tf.get_transforms(
+            cfg,
+            fold_specific_stats=best_fold_normalization_stats  
+        )
+    
+    
     best_model_path = RUN_DIR / f"best_model_fold_{best_idx}.pth"
     best_model, _ = experiment._get_model_and_device()
     best_model.load_state_dict(torch.load(str(best_model_path), map_location=device))
@@ -178,6 +190,7 @@ def main():
     best_fold_test_df = df[df['patient_id'].isin(best_fold_test_pats)]
     te_imgs = best_fold_test_df['image_path'].values
     te_y = best_fold_test_df['label'].values
+    
 
     log_run_to_mlflow(
         cfg=cfg,
@@ -185,7 +198,7 @@ def main():
         class_names=class_names,
         fold_results=test_results,
         per_fold_metrics=train_metrics,
-        test_transforms=val_transforms,
+        test_transforms=val_transforms_corrected,
         test_images_paths_np=te_imgs,
         test_true_labels_np=te_y,
         yaml_path=str(PROJ_ROOT / args.yaml),

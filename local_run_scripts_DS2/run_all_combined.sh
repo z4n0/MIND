@@ -121,10 +121,10 @@ overall_total=0
 # Group 1: 3-channel experiments
 SCRIPTS_DIR_3C="local_run_scripts_DS2/3c"
 scripts_3c=(
-    # "run_local_densenet121_3c.sh"
-    # "run_local_resnet18_3c.sh"
-    # "run_local_densenet169_3c.sh"
-    # "run_local_resnet50_3c.sh"
+    "run_local_densenet121_3c.sh"
+    "run_local_resnet18_3c.sh"
+    "run_local_densenet169_3c.sh"
+    "run_local_resnet50_3c.sh"
     "run_local_vit_3c.sh"
 )
 run_script_group "group3C" "$SCRIPTS_DIR_3C" "DS2_3c" "${scripts_3c[@]}"
@@ -135,9 +135,9 @@ overall_total=$((overall_total + ${group3C_total:-0}))
 # Group 2: 4-channel experiments
 SCRIPTS_DIR_4C="local_run_scripts_DS2/4c"
 scripts_4c=(
-    # "run_local_densenet121_4c.sh"
-    # "run_local_densenet169_4c.sh"
-    # "run_local_resnet18_4c.sh"
+    "run_local_densenet121_4c.sh"
+    "run_local_densenet169_4c.sh"
+    "run_local_resnet18_4c.sh"
     # # "run_local_resnet50_4c.sh"
     # # "run_local_efficientnet_4c.sh"
     # "run_local_vit_4c.sh"
@@ -180,9 +180,9 @@ echo "=================================================="
 
 # Exit with error code if any script failed
 if [ $overall_failed -gt 0 ]; then
-    echo "⚠️  Some scripts failed. Check the log for details."
+    echo "  Some scripts failed. Check the log for details."
     exit 1
 else
-    echo "✅ All scripts completed successfully!"
+    echo " All scripts completed successfully!"
     exit 0
 fi

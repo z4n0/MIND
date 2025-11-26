@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from configs.ConfigLoader import ConfigLoader # Ensure you import the correct class or type
+from configs.ConfigLoader import ConfigLoader
 from utils.micronet_pretrained_models import get_nasa_pretrained_model
 # from torchvision.models import resnet50, resnet101, resnet152, ResNet50_Weights
 import torchvision.models as models
@@ -36,7 +36,7 @@ class ModelManager:
             }
         }
         manager = ModelManager(cfg)
-        model, device = manager.setup_model(num_classes=2, pretrained_weights='imagenet')
+        model, device = manager.setup_model(num_classes=2, pretrained_weights='micronet')
     """
     def __init__(self, cfg: ConfigLoader, library="torchvision"):
         self.cfg = cfg
@@ -63,7 +63,7 @@ class ModelManager:
         Args:
             num_classes (int): Number of output classes for the model. Default is 2.
             pretrained_weights (str): Which pretrained weights to use NOTE this is usless if it's not "micronet" or "microscopynet"
-                Options: 'imagenet', 'micronet', 'microscopynet', or None. Default is 'imagenet'.
+            Options: 'imagenet', 'micronet', 'microscopynet', or None. Default is 'imagenet'.
 
         Returns:
             tuple: (model, device)
@@ -128,11 +128,7 @@ class ModelManager:
         self.model = self.model.to(self.device)
         return self.model, self.device
 
-## interface for model factories
-# ------------------------------
-# class BaseModelFactory:
-#     def create_model(self, model_name, pretrained_weights, num_classes):
-#         raise NotImplementedError("Subclasses must implement create_model()")
+
 # ------------------------------
 # ModelFactory: Encapsulates how to build each model
 # ------------------------------
@@ -141,9 +137,14 @@ import torchvision.models as models
 from utils.reproducibility_functions import set_global_seed
 
 class TorchvisionModelFactory():
-    def __init__(self, cfg):
+    def __init__(self, cfg: ConfigLoader):
         self.cfg = cfg
         self.pretrained = cfg.get_transfer_learning() # e.g. True or False
+        # Optional dropout probability for the classifier head (from YAML: model.dropout_prob)
+        try:
+            self.head_dropout = float(self.cfg.model.get("dropout_prob", 0.0)) if isinstance(self.cfg.model, dict) else 0.0
+        except Exception:
+            self.head_dropout = 0.0
         # Dictionary mapping model names to their respective builder methods
         # Each builder method takes pretrained_weights and num_classes as arguments
         # and returns a configured model instance
@@ -200,7 +201,7 @@ class TorchvisionModelFactory():
         weights = models.DenseNet121_Weights.DEFAULT if self.pretrained else None
         model = models.densenet121(weights=weights)
         in_features = model.classifier.in_features
-        model.classifier = LinearProbeHead(in_features, num_classes)  # type: ignore
+        model.classifier = LinearProbeHead(in_features, num_classes, dropout_p=self.head_dropout)  # type: ignore
         return model
 
     def build_densenet169(self, pretrained_weights, num_classes):
@@ -218,7 +219,7 @@ class TorchvisionModelFactory():
         weights = models.DenseNet169_Weights.DEFAULT if self.pretrained else None
         model = models.densenet169(weights=weights)
         in_features = model.classifier.in_features
-        model.classifier = LinearProbeHead(in_features, num_classes)  # type: ignore
+        model.classifier = LinearProbeHead(in_features, num_classes, dropout_p=self.head_dropout)  # type: ignore
         return model
 
     def build_densenet201(self, pretrained_weights, num_classes):
@@ -236,7 +237,7 @@ class TorchvisionModelFactory():
         weights = models.DenseNet201_Weights.DEFAULT if self.pretrained else None
         model = models.densenet201(weights=weights)
         in_features = model.classifier.in_features
-        model.classifier = LinearProbeHead(in_features, num_classes)  # type: ignore
+        model.classifier = LinearProbeHead(in_features, num_classes, dropout_p=self.head_dropout)  # type: ignore
         return model
 
     def build_resnet18(self, pretrained_weights, num_classes):
@@ -254,7 +255,7 @@ class TorchvisionModelFactory():
         weights = models.ResNet18_Weights.DEFAULT if self.pretrained else None
         model = models.resnet18(weights=weights)
         in_features = model.fc.in_features
-        model.fc = LinearProbeHead(in_features, num_classes)  # type: ignore
+        model.fc = LinearProbeHead(in_features, num_classes, dropout_p=self.head_dropout)  # type: ignore
         return model
 
     def build_resnet50(self, pretrained_weights, num_classes):
@@ -272,7 +273,7 @@ class TorchvisionModelFactory():
         weights = models.ResNet50_Weights.DEFAULT if self.pretrained else None
         model = models.resnet50(weights=weights)
         in_features = model.fc.in_features
-        model.fc = LinearProbeHead(in_features, num_classes)  # type: ignore
+        model.fc = LinearProbeHead(in_features, num_classes, dropout_p=self.head_dropout)  # type: ignore
         return model
 
     def build_resnet101(self, pretrained_weights, num_classes):
@@ -290,7 +291,7 @@ class TorchvisionModelFactory():
         weights = models.ResNet101_Weights.DEFAULT if self.pretrained else None
         model = models.resnet101(weights=weights)
         in_features = model.fc.in_features
-        model.fc = LinearProbeHead(in_features, num_classes)  # type: ignore
+        model.fc = LinearProbeHead(in_features, num_classes, dropout_p=self.head_dropout)  # type: ignore
         return model
 
     def build_resnet152(self, pretrained_weights, num_classes):
@@ -308,7 +309,7 @@ class TorchvisionModelFactory():
         weights = models.ResNet152_Weights.DEFAULT if self.pretrained else None
         model = models.resnet152(weights=weights)
         in_features = model.fc.in_features
-        model.fc = LinearProbeHead(in_features, num_classes)  # type: ignore
+        model.fc = LinearProbeHead(in_features, num_classes, dropout_p=self.head_dropout)  # type: ignore
         return model
 
 class MonaiModelFactory():
@@ -323,17 +324,19 @@ class MonaiModelFactory():
         self.pretrained = cfg.get_transfer_learning() # e.g. True or False
         self.input_channels = cfg.get_model_input_channels() # e.g. 1 for grayscale, 3 for RGB
         
-        # Added Resnet18 and Resnet34
+       
         self.builders = {
             "Densenet169": self.build_densenet169,
             "Densenet121": self.build_densenet121,
             "Densenet201": self.build_densenet201,
-            "Resnet18": self.build_resnet18,      # Added
-            "Resnet34": self.build_resnet34,      # Added
+            "Resnet18": self.build_resnet18,     
+            "Resnet34": self.build_resnet34,      
             "Resnet50": self.build_resnet50,
             "Resnet101": self.build_resnet101,
             "Resnet152": self.build_resnet152,
             "ViT": self.build_vit,
+            # UNet-based classifier (MONAI BasicUNet + GAP + Linear head)
+            "UNetClassifier": self.build_unet_classifier,
             # SEResNet ----------------------------------------------------
             "seresnet50": self._build_seresnet50,
             "seresnet101": self._build_seresnet101,
@@ -370,8 +373,37 @@ class MonaiModelFactory():
                 model.conv1 = new_conv
         return model
 
-    def create_model(self, model_name, pretrained_weights=None, num_classes=None): # Added defaults
-        
+    def build_unet_classifier(self, num_classes):
+        """
+        Build a fast UNet-based classifier using MONAI's BasicUNet as a feature
+        extractor, followed by global average pooling and a linear head.
+
+        Config (optional in cfg.model):
+          - dropout_prob: float (default 0.0)
+          - unet_feature_channels: int (default 64)
+        """
+        from utils.unet_classifier import UNetClassifier
+
+        model_cfg = getattr(self.cfg, "model", {}) or {}
+        feat_ch = int(model_cfg.get("unet_feature_channels", 64))
+        try:
+            head_dropout = float(model_cfg.get("dropout_prob", 0.0))
+        except Exception:
+            head_dropout = 0.0
+
+        print(
+            f"Building MONAI UNetClassifier with {self.input_channels}-channel input, "
+            f"feat_channels={feat_ch}, dropout={head_dropout}, num_classes={num_classes}"
+        )
+        model = UNetClassifier(
+            in_channels=self.input_channels,
+            num_classes=num_classes,
+            feat_channels=feat_ch,
+            dropout_p=head_dropout,
+        )
+        return model
+
+    def create_model(self, model_name, pretrained_weights=None, num_classes=None):
         builder = self.builders.get(model_name)
         is_resnet = "resnet" in model_name.lower()
         if pretrained_weights is not None and is_resnet: 
@@ -385,10 +417,6 @@ class MonaiModelFactory():
         # Make sure num_classes is provided if needed by the builder
         if num_classes is None and "ViT" not in model_name : # ViT might get classes differently, adapt if needed
              raise ValueError(f"num_classes must be provided for model {model_name}")
-        # Note: pretrained_weights argument is passed but not used yet for MONAI loading here.
-        # Actual MONAI pretrained loading (like MedicalNet) has specific requirements
-        # (e.g., spatial_dims=3, in_channels=1) and uses a boolean flag usually.
-        # Loading custom weights from a path would require extra logic here.
         return builder(num_classes)
 
     def build_densenet169(self, num_classes):
@@ -427,7 +455,7 @@ class MonaiModelFactory():
         #      print(" -> Warning: Could not find model.class_layers.out to replace the final layer.")
         return model
 
-    # --- NEW ResNet Builders ---
+    # --- ResNet Builders ---
     def build_resnet18(self, num_classes):
         print(f"Building MONAI ResNet18 with {self.input_channels}-channel input...")
         model = ResNet(
@@ -435,13 +463,11 @@ class MonaiModelFactory():
             layers=[2, 2, 2, 2],        # Standard configuration for ResNet18
             block_inplanes = get_inplanes(), # Standard channel dimensions [64, 128, 256, 512]
             spatial_dims=2,
-            n_input_channels=self.input_channels,         # Your required input channels
+            n_input_channels=self.input_channels,         # required input channels
             num_classes=num_classes,
             feed_forward=True           # Ensure final FC layer is present
         )
         # print(f" -> ResNet18 configured with {num_classes} output classes.")
-        # Note: MONAI ResNet's final layer is 'fc'. It's already configured by num_classes.
-        # No replacement needed like in DenseNet unless you have specific needs.
         return model
 
     def build_resnet34(self, num_classes):
@@ -451,7 +477,7 @@ class MonaiModelFactory():
             layers=[3, 4, 6, 3],        # Standard configuration for ResNet34
             block_inplanes=get_inplanes(), # Standard channel dimensions [64, 128, 256, 512]
             spatial_dims=2,
-            n_input_channels=self.input_channels,         # Your required input channels
+            n_input_channels=self.input_channels,         # required input channels
             num_classes=num_classes,
             feed_forward=True           # Ensure final FC layer is present
         )
@@ -480,7 +506,7 @@ class MonaiModelFactory():
             layers=[3, 4, 23, 3],       # Configuration for ResNet101
             block_inplanes=get_inplanes(), # Standard channel dimensions
             spatial_dims=2,
-            n_input_channels=self.input_channels,         # Your required input channels
+            n_input_channels=self.input_channels,         # required input channels
             num_classes=num_classes,
             feed_forward=True
         )
@@ -494,7 +520,7 @@ class MonaiModelFactory():
             layers=[3, 8, 36, 3],       # Configuration for ResNet152
             block_inplanes=get_inplanes(), # Standard channel dimensions
             spatial_dims=2,
-            n_input_channels=self.input_channels,         # Your required input channels
+            n_input_channels=self.input_channels,         #required input channels
             num_classes=num_classes,
             feed_forward=True
         )
@@ -502,7 +528,6 @@ class MonaiModelFactory():
         return model
     
     # SEResNet -----------------------------------------------------------
-
     def _build_seresnet50(self, num_classes: int) -> nn.Module:
         model = SEResNet50(
             spatial_dims=2,
@@ -567,11 +592,7 @@ class MonaiModelFactory():
         print(f" -> ViT configured with {num_classes} output classes.")
         return model
 
-    
-
-
-# TIMM Model Factory -----------------------------------------------------
-# timm stands for torch image models
+# TIMM(torch image models) Model Factory -----------------------------------------------------
 class TimmModelFactory:
     """
     Factory for creating timm classification backbones that natively support
@@ -674,11 +695,11 @@ class TimmModelFactory:
                     break
         
         if first_conv is None:
-            print("⚠️  Could not find first conv layer with 3 input channels to adapt.")
-            print("   The model may already support 4 channels or may fail during forward pass.")
+            print(" Could not find first conv layer with 3 input channels to adapt.")
+            print("  The model may already support 4 channels or may fail during forward pass.")
             return model
             
-        print(f"📌 Adapting first layer '{first_conv_name}' from 3 to 4 channels using '{strategy}' strategy")
+        print(f" Adapting first layer '{first_conv_name}' from 3 to 4 channels using '{strategy}' strategy")
         
         # Get original weights and parameters
         old_weight = first_conv.weight.data  # Shape: (out_channels, 3, kH, kW)
@@ -706,13 +727,13 @@ class TimmModelFactory:
                 avg_weight = old_weight.mean(dim=1, keepdim=True)  # Average across input channels
                 new_conv.weight[:, :3, :, :] = old_weight  # Copy RGB weights
                 new_conv.weight[:, 3:4, :, :] = avg_weight  # Use average for 4th channel
-                print(f"   ✓ Copied RGB pretrained weights + averaged for channel 4")
+                print(f" Copied RGB pretrained weights + averaged for channel 4")
                 
             elif strategy == "random_init":
                 # Keep RGB pretrained, initialize 4th channel randomly
                 new_conv.weight[:, :3, :, :] = old_weight  # Copy RGB weights
                 nn.init.kaiming_normal_(new_conv.weight[:, 3:4, :, :], mode='fan_out', nonlinearity='relu')
-                print(f"   ✓ Copied RGB pretrained weights + random init for channel 4")
+                print(f" Copied RGB pretrained weights + random init for channel 4")
                 
             elif strategy == "zero_init":
                 # Keep RGB pretrained, initialize 4th channel to zeros
@@ -762,7 +783,7 @@ class TimmModelFactory:
 
         # Handle 4-channel input with pretrained weights
         if self.input_channels == 4 and use_pretrained:
-            print(f"🔧 Creating model with 3 channels first (for pretrained weights), then adapting to 4 channels")
+            print(f" Creating model with 3 channels first (for pretrained weights), then adapting to 4 channels")
             try:
                 # Prepare model creation kwargs
                 model_kwargs = {
@@ -821,11 +842,11 @@ class TimmModelFactory:
                 )
                 raise ValueError(msg) from exc
 
-        # Optional: linear-probe warmup support—freeze backbone if requested
+        # linear-probe warmup support—freeze backbone if requested
         linear_probe = bool(self.model_cfg.get("linear_probe_warmup", False))
         if linear_probe:
             for name, param in model.named_parameters():
-                # Heuristic: keep only final classifier trainable
+                # keep only final classifier trainable
                 if "fc" in name or "classifier" in name or "head" in name:
                     param.requires_grad = True
                 else:

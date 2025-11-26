@@ -1,7 +1,0 @@
-[2025-11-06 20:18:32 +0100] [392378] [INFO] Starting gunicorn 23.0.0
-[2025-11-06 20:18:32 +0100] [392378] [INFO] Listening at: http://127.0.0.1:5000 (392378)
-[2025-11-06 20:18:32 +0100] [392378] [INFO] Using worker: sync
-[2025-11-06 20:18:32 +0100] [392379] [INFO] Booting worker with pid: 392379
-[2025-11-06 20:18:32 +0100] [392380] [INFO] Booting worker with pid: 392380
-[2025-11-06 20:18:33 +0100] [392381] [INFO] Booting worker with pid: 392381
-[2025-11-06 20:18:33 +0100] [392382] [INFO] Booting worker with pid: 392382

@@ -9,12 +9,11 @@ Env-vars (export in run_train.slurm)
 Run:
     python train_vit.py --yaml configs/vit.yaml
 """
-
 # ──────────────────────── std libs ─────────────────────────────────────────
 import time
 import argparse, os, sys, pathlib, random, re, glob
 import numpy as np, pandas as pd, torch, torch.nn as nn
-from sklearn.model_selection import train_test_split
+# from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score, balanced_accuracy_score, roc_auc_score, recall_score, precision_score, matthews_corrcoef
 from pathlib import Path
 import torch.backends.cudnn as cudnn
@@ -224,11 +223,6 @@ def main():
     unique_pats = pat_df["patient_id"].values
     pat_labels = pat_df["label"].values
 
-    # ---------- transforms -------------------------------------------------
-    train_transforms, val_transforms, test_transforms = tf.get_transforms(
-        cfg
-    )
-
     # ---------- device setup -----------------------------------------------
     model_manager = ModelManager(cfg, library=cfg.get_model_library())
     model, device = model_manager.setup_model(len(class_names))
@@ -256,7 +250,7 @@ def main():
         output_dir=str(RUN_DIR),
         train_fn=train_epoch_vit,
         val_fn=val_epoch_vit,
-        pretrained_weights=None # ViT from MONAI is not pretrained
+        pretrained_weights=None #ViT from MONAI is not pretrained
     )
 
     train_metrics, test_results = experiment.run_experiment()
@@ -275,6 +269,22 @@ def main():
     # 1. Find the best model from the cross-validation run
     best_idx = best_fold_idx(test_results)
     best_model_path = RUN_DIR / f"best_model_fold_{best_idx}.pth"
+    
+    # ---------- transforms -------------------------------------------------
+    train_transforms, val_transforms, test_transforms = tf.get_transforms(cfg)
+    best_fold_normalization_stats = experiment.get_fold_normalization_statistics(best_idx)
+    if best_fold_normalization_stats is None:
+        print(f"  No custom normalization stats for fold {best_idx} (using ImageNet defaults)")
+        # For pretrained models with ImageNet normalization, val_transforms are already correct
+        val_transforms_corrected = val_transforms
+        test_transforms_corrected = test_transforms
+    else:
+        print(f" Recreating transforms with fold {best_idx} statistics:")        
+        # Recreate transforms with actual fold-specific statistics
+        _, val_transforms_corrected, test_transforms_corrected = tf.get_transforms(
+            cfg,
+            fold_specific_stats=best_fold_normalization_stats  
+        )
 
     if best_model_path.exists():
         print(f"Loading best model from fold {best_idx} for MLflow logging...")
@@ -304,7 +314,7 @@ def main():
             class_names=class_names,
             fold_results=test_results,
             per_fold_metrics=train_metrics,
-            test_transforms=val_transforms, # Using val_transforms as a proxy
+            test_transforms=test_transforms_corrected,
             test_images_paths_np=te_imgs,
             test_true_labels_np=te_y,
             yaml_path=str(PROJ_ROOT / args.yaml),

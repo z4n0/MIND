@@ -1,0 +1,36 @@
+_base_: base.yaml
+
+# Overrides for trying a quick UNet-based classifier (4-channel input)
+
+data_loading:
+  # UNet is heavier than plain CNNs; lower batch size if needed
+  batch_size: 12
+  num_workers: 4
+
+model:
+  model_name: "UNetClassifier"
+  library: "monai"
+  spatial_dims: 2
+  in_channels: 4
+  out_channels: 2  # num classes (train.py uses dataset.class_names to set actual output dim)
+  dropout_prob: 0.1
+  # UNet-specific tweak: features used for classification head
+  unet_feature_channels: 64
+
+training:
+  transfer_learning: false
+  num_epochs: 200
+  early_stopping_patience: 35
+
+optimizer:
+  learning_rate: 1e-4
+  optimizer_name: "AdamW"
+  weight_decay: 2e-5
+
+scheduler:
+  scheduler_name: "ReduceLROnPlateau"
+  factor: 0.5
+  scheduler_patience: 10
+  threshold: 1e-4
+  min_lr: 1e-8
+

@@ -23,7 +23,6 @@ class CustomTiffFileReader(MapTransform):
 
     Note:
         The images are loaded with channels in the order GBR or GBGrR.
-        
     """
 
     def __call__(self, data: dict) -> dict:
