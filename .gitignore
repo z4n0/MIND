@@ -40,6 +40,5 @@ notebooks/last_analysis.ipynb
 style/*
 notebooks/mlflow_data_analysis.ipynb
 notebooks/image_data_analysis.ipynb
-
 txt_files/*
 train_pretrained.pynotebooks/image_data_analysis.ipynb

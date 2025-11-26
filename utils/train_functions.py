@@ -188,33 +188,26 @@ def val_epoch(model, loader, loss_function, device):
             images_batch = batch["image"].to(device)
             true_labels_batch = batch["label"].to(device).long() # Ensure labels are LongTensor
 
-            # --- REMOVED AMP CONTEXT ---
             # Perform forward pass and loss calculation in default precision (likely float32)
             outputs = model(images_batch)
 
             # Ensure outputs are float32 before loss calculation if model might be in another default dtype
-            # Usually unnecessary if model is standard nn.Module, but safe to include.
             loss = loss_function(outputs, true_labels_batch)
             # --- DEBUG: Check for NaN/Inf in Loss (Still useful) ---
             if torch.isnan(loss).any() or torch.isinf(loss).any():
                 print(f"!!! NaN/Inf found in loss WITHOUT AMP at val batch index {i} !!!")
                 print(f"    Loss value: {loss.item()}")
-                # Optional: Add more debugging like printing outputs or inputs
-                # raise ValueError(f"NaN loss detected at val batch {i}") # Uncomment to stop execution
+                raise ValueError(f"NaN loss detected at val batch {i}") 
             # --- END DEBUG ---
 
             # Accumulate loss (check if loss is valid first if needed)
-            if not (torch.isnan(loss).any() or torch.isinf(loss).any()):
-                 epoch_loss += loss.item()
-                 num_valid_val_batches += 1 # Increment valid batch counter
-            else:
-                 # Decide how to handle NaN loss - skip batch, count as high loss?
-                 # Skipping is simple, but might skew average if it happens often.
-                 print(f"Warning: NaN/Inf loss encountered at val batch {i}, skipping batch for avg loss calculation.")
-
+            #remove this check since it's already done above
+            
+            epoch_loss += loss.item()
+            num_valid_val_batches += 1 # Increment valid batch counter
 
             # Calculate predictions and store for metrics
-            probs = torch.softmax(outputs, dim=1) # Still useful for potential AUC
+            probs = torch.softmax(outputs, dim=1) 
             _, predicted = torch.max(outputs, dim=1) # Get predicted class indices
 
             correct += (predicted == true_labels_batch).sum().item()
@@ -223,7 +216,7 @@ def val_epoch(model, loader, loss_function, device):
             all_predictions.extend(predicted.cpu().numpy())
             all_labels.extend(true_labels_batch.cpu().numpy())
 
-            # Storing probabilities for ROC AUC (logic remains the same)
+            # Storing probabilities for ROC AUC
             n_classes = outputs.shape[1]
             if n_classes == 2:
                 all_probs.extend(probs[:, 1].cpu().numpy())
@@ -238,12 +231,6 @@ def val_epoch(model, loader, loss_function, device):
          print("Warning: Validation loader was empty.")
          val_loss = 0.0 # Or handle as appropriate
     else:
-        # Calculate average loss ONLY over batches that didn't result in NaN/Inf
-        # Note: A better approach might be needed if NaNs are frequent
-        # num_valid_batches = sum(1 for batch_loss in # Pseudocode - need actual tracking if skipping NaNs
-        #                          [loss_function(model(b["image"].to(device)).float(), b["label"].to(device).long()).item()
-        #                           for b in loader if not torch.isnan(loss_function(model(b["image"].to(device)).float(), b["label"].to(device).long())).any()]
-        #                        )
         if num_valid_val_batches > 0: # Use the new counter
              val_loss = epoch_loss / num_valid_val_batches
         else:
@@ -271,8 +258,11 @@ def val_epoch(model, loader, loss_function, device):
             if len(unique_labels) == 2:
                 avg_mode = 'binary'
             else:
-                avg_mode = 'weighted' # Or 'macro' depending on preference
+                avg_mode = 'weighted' # Or 'macro' to use for more than 2 classes predictions
 
+            # these metrics are put to 0 because they are not used for validation hence calculating them would
+            # a waste of time, put to zero to avoid errors where they are called since it expects a value
+            
             # Use zero_division=0 to prevent errors and return 0 if a class has no predictions/labels
             precision = 0#precision_score(all_labels, all_predictions, average=avg_mode, zero_division=0)
             recall = 0 #recall_score(all_labels, all_predictions, average=avg_mode, zero_division=0)
@@ -518,94 +508,60 @@ def print_layers(model):
 
 
 # oversampling and undersampling functions
-import numpy as np
 from sklearn.utils import resample
-
-import numpy as np
-from sklearn.utils import resample  # Questa è la funzione chiave per il ricampionamento
 
 def oversample_minority(train_x, train_y, random_seed=42):
     """
-    Esegue l'oversampling di ogni classe in modo che tutte le classi abbiano 
-    lo stesso numero di campioni della classe maggioritaria.
-    Questa funzione funziona sia per dataset binari che multi-classe.
-    
+    Oversamples all classes to match the majority class count.
+    Works for both binary and multi-class datasets.
+
     Args:
-        train_x: Array dei path delle immagini
-        train_y: Array delle etichette (label)
-        random_seed: Seed per la riproducibilità
-        
+        train_x: List/Array of image paths
+        train_y: List/Array of labels
+        random_seed: Seed for reproducibility
+
     Returns:
-        balanced_x: Array delle feature bilanciato
-        balanced_y: Array delle etichette bilanciato
+        balanced_x, balanced_y: Balanced features and labels
     """
     
-    train_x = np.array(train_x) # [image1_path, image2_path, image3_path, ..., imageN_path]
-    train_y = np.array(train_y) # [0, 0, 0, ..., 1, 1, 1, ..., 2, 2, 2, ...]
+    train_x = np.array(train_x)
+    train_y = np.array(train_y)
     
-    # Analizza l'array delle etichette (train_y)
-    # unique_classes: conterrà un array delle classi uniche (es. [0, 1] per PD/MSA)
-    # class_counts: conterrà il numero di campioni per ciascuna classe (es. [300, 150])
+    # Identify unique classes and their frequencies
     unique_classes, class_counts = np.unique(train_y, return_counts=True)
     
-    # Trova il numero massimo di campioni tra tutte le classi.
-    # Questo sarà il nostro "obiettivo" (target_count).
-    # Esempio: se le counts sono [300, 150], target_count sarà 300.
+    # Set target count to the size of the majority class
     target_count = np.max(class_counts)
     
-    # Inizializza due liste vuote che useremo per accumulare
-    # i nuovi dati bilanciati per ciascuna classe.
     oversampled_x_list = []
     oversampled_y_list = []
     
     for cls in unique_classes:
-        # Trova tutti gli indici (posizioni) nell'array train_y
-        # che corrispondono alla classe corrente (cls).
-        # Esempio: se cls=1, trova tutti gli indici dove train_y è 1.
+        # Get indices for the current class
         cls_indices = np.where(train_y == cls)[0]
         
-        # --- Qui avviene la magia ---
-        # Usa la funzione 'resample' di scikit-learn.
+        # Resample with replacement to match target_count (Upsampling)
         cls_oversampled_x = resample(
-            train_x[cls_indices],   # 1. Prendi i campioni (X) solo di QUESTA classe
-            replace=True,           # 2. 'replace=True' è FONDAMENTALE. 
-                                    #    Significa: "pesca un campione, usalo, e RIMETTILO NEL MUCCHIO".
-                                    #    Questo permette di pescare lo stesso campione più volte.
-                                    #    È così che avviene la duplicazione (oversampling).
-            n_samples=target_count, # 3. Chiedi di "pescare" un numero di campioni pari a target_count.
-                                    #    - Se la classe è minoritaria (150 campioni, target 300),
-                                    #      pescherà 300 volte, duplicando campioni.
-                                    #    - Se la classe è maggioritaria (300 campioni, target 300),
-                                    #      pescherà 300 volte. (Bootstrap sampling)
+            train_x[cls_indices],
+            replace=True,           # Allows duplication of samples
+            n_samples=target_count, # Matches majority class size
             random_state=random_seed 
         )
         
-        # Crea un array di etichette (Y) per i campioni appena creati.
-        # Sarà un array riempito con il valore della classe corrente (es. [1, 1, 1, ..., 1])
-        # e lungo esattamente 'target_count'.
+        # Create corresponding labels
         cls_oversampled_y = np.full(target_count, cls)
         
-        # Aggiungi i dati e le etichette (ora bilanciati per questa classe)
-        # alle nostre liste contenitore.
         oversampled_x_list.append(cls_oversampled_x)
         oversampled_y_list.append(cls_oversampled_y)
     
-    # --- 3. Unione e Mescolamento ---
-    # Alla fine del ciclo, le liste contengono gli array di ciascuna classe.
-    # 'np.concatenate' li unisce tutti in un unico, grande array.
-    # Ora abbiamo un dataset dove ogni classe ha 'target_count' campioni.
+    # Combine all balanced classes
     balanced_x = np.concatenate(oversampled_x_list)
     balanced_y = np.concatenate(oversampled_y_list)
     
+    # Shuffle X and Y in unison to mix classes
     np.random.seed(random_seed)
-    
-    # Crea un array di indici (da 0 a N-1) e mescolali casualmente.
-    # Esempio: se N=4, crea [0, 1, 2, 3] e lo mescola in [2, 0, 3, 1].
     shuffle_indices = np.random.permutation(len(balanced_x))
     
-    # Applica il mescolamento: riordina sia 'x' che 'y' usando
-    # *esattamente* la stessa sequenza di indici casuali.
-    # Questo mantiene la corrispondenza corretta tra campione (x) ed etichetta (y).
     balanced_x = balanced_x[shuffle_indices]
     balanced_y = balanced_y[shuffle_indices]
 

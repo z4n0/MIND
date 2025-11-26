@@ -1,4 +1,4 @@
-import numpy as np
+# import numpy as np
 from monai.transforms import (
     Compose,
     # LoadImaged,
@@ -17,16 +17,16 @@ from monai.transforms import (
     LambdaD,
     OneOf,
     RandHistogramShiftd,
-    DataStatsd,  # Computes statistics (min, max, mean std) of the image intensities.
-    AddCoordinateChannelsd,  # Adds channels representing spatial coordinates; can sometimes help CNNs learn spatial relationships.
+    # DataStatsd,  # Computes statistics (min, max, mean std) of the image intensities.
+    # AddCoordinateChannelsd, 
     # RandCoarseDropoutd,
-    CenterSpatialCropd,
+    # CenterSpatialCropd,
     # RandCropd,
     # Rand2DElasticd,
     # RandGridPatchd,
-    ScaleIntensityRangePercentilesd,
+    # ScaleIntensityRangePercentilesd,
     ClipIntensityPercentilesd,  # Clip intensities at specified low and high percentiles to remove extreme outlier pixels.
-    HistogramNormalized  # Standardizes image histograms, can be useful if illumination/staining varies significantly.
+    # HistogramNormalized  # Standardizes image histograms, can be useful if illumination/staining varies significantly.
 )
 
 from monai.transforms.transform import MapTransform, Transform  # ← Add Transform here
@@ -55,7 +55,7 @@ from classes.CustomTiffFileReader import CustomTiffFileReader
 from typing import List, Tuple
 from monai.transforms.transform import MapTransform
 import random 
-from monai.utils.misc import set_determinism
+# from monai.utils.misc import set_determinism
 from utils.reproducibility_functions import set_global_seed
 set_global_seed(42)
 
@@ -140,16 +140,17 @@ def get_preNormalization_transforms_list(cfg, is_supported_by_torchvision=False)
         EnsureTyped(keys=["image"], data_type="tensor", dtype=torch.float32), # Ensure image is a tensor
         EnsureTyped(keys=["label"], data_type="tensor", dtype=torch.int64), # Ensure label is a tensor
         LambdaD(keys="image", func=from_GBR_to_RGB), # Ensure the tensor is in RGB format (since pre-trained models expect RGB)
-        # LambdaD(keys="image", func=lambda x: x / 255.0),  # Scale by a fixed factor (1/255) to match torchvision semantics instead of per-image min/max scaling.
         # robust per-image rescale to [0,1] using percentiles (handles exposure/bleaching)
         #     ScaleIntensityRangePercentilesd(
         #         keys=["image"], lower=1.0, upper=99.5, b_min=0.0, b_max=1.0, clip=True
         #     ),
         # # fold-wise (compute on train split only!) per-channel z-score
-        #     NormalizeIntensityd(keys=["image"], channel_wise=True),
-            # base_transforms_list.append(LambdaD(keys="image", func=lambda x: x / 255.0))
-        ClipIntensityPercentilesd(keys="image", lower=0.5, upper=99.5),
-        ScaleIntensityd(keys="image", minv=0.0, maxv=1.0, channel_wise=True)
+        # NormalizeIntensityd(keys=["image"], channel_wise=True),
+        # base_transforms_list.append(LambdaD(keys="image", func=lambda x: x / 255.0))
+        # ClipIntensityPercentilesd(keys="image", lower=0.5, upper=99.5),
+        # ScaleIntensityd(keys="image", minv=0.0, maxv=1.0, channel_wise=True)
+        # LambdaD(keys="image", func=lambda x: x / 255.0),
+          # scales intensities to [0,1] before computing stats since most color transforms expect [0,1] range
         ]
     
     if not is_supported_by_torchvision or not is_model_pretrained: 
@@ -163,14 +164,14 @@ def get_preNormalization_transforms_list(cfg, is_supported_by_torchvision=False)
         #         keys=["image"], lower=1.0, upper=99.5, b_min=0.0, b_max=1.0, clip=True
         #     ),
         #     NormalizeIntensityd(keys=["image"], channel_wise=True),
-        # base_transforms_list.append(ScaleIntensityd(keys="image"))  # scales intensities to [0,1] before computing stats since most color transforms expect [0,1] range
+        base_transforms_list.append(ScaleIntensityd(keys="image"))  # scales intensities to [0,1] before computing stats since most color transforms expect [0,1] range
         # base_transforms_list.append(LambdaD(keys="image", func=lambda x: x / 255.0)) 
     else: # If using a pretrained model the resizingm, scaling and cropping is handled by torchvision
         print(f"Using pretrained model: {is_model_pretrained} and supported by torchvision: {bool(is_supported_by_torchvision)} hence the resizing and scaling is handled by torchvision.Weights.Transforms")
 
     return base_transforms_list
 
-def new_get_preNormalization_transforms_list(cfg:ConfigLoader)->List[MapTransform]:
+def get_preNormalization_transforms_list_pretrained_tv(cfg:ConfigLoader)->List[MapTransform]:
     """
         Get the list of transforms to be applied before normalization.
         Only Loading, Resizing, Scaling transformations have to be here
@@ -188,8 +189,9 @@ def new_get_preNormalization_transforms_list(cfg:ConfigLoader)->List[MapTransfor
                         mode='bilinear', size_mode='all'), # bilinear interpolation during resizing ie for each pixel is taken the average of the 4 nearest pixels
         # IMPORTANT for pretrained models: scale by a fixed factor (1/255)
         # to match torchvision semantics instead of per-image min/max scaling.
-        ClipIntensityPercentilesd(keys="image", lower=0.5, upper=99.5),
-        ScaleIntensityd(keys="image", minv=0.0, maxv=1.0, channel_wise=True),
+        # ClipIntensityPercentilesd(keys="image", lower=0.5, upper=99.5),
+        # ScaleIntensityd(keys="image", minv=0.0, maxv=1.0, channel_wise=True),
+        ScaleIntensityd(keys="image"),  # perform min max scaling scales intensities to [0,1] before computing stats since most color transforms expect [0,1] range
         # LambdaD(keys="image", func=lambda x: x / 255.0),
     ]
 
@@ -263,10 +265,6 @@ def _poisson_gaussian_lambda(
     Model: y = Poisson(gain × x) / gain + N(0, σ²)
     where x ∈ [0,1] is the normalized input intensity.
     
-    This formulation follows Foi et al. (2008) "Practical Poissonian-Gaussian Noise
-    Modeling and Fitting for Single-Image Raw-Data" (IEEE TIP) and is commonly used
-    in biomedical imaging pipelines (Weigert et al., 2018, CARE denoising).
-    
     Args:
         keys (Tuple[str, ...]): Dictionary keys to apply the transform to.
             Default: ("image",)
@@ -279,12 +277,6 @@ def _poisson_gaussian_lambda(
     
     Returns:
         LambdaD: MONAI dictionary transform that applies the noise model.
-        
-    References:
-        - Foi et al. (2008). "Practical Poissonian-Gaussian Noise Modeling."
-          IEEE Trans. Image Process., 17(10):1737-1754.
-        - Weigert et al. (2018). "Content-aware image restoration: pushing the
-          limits of fluorescence microscopy." Nature Methods, 15(12):1090-1097.
     
     Example:
         >>> transform = _poisson_gaussian_lambda(
@@ -358,8 +350,7 @@ def _weak_bleedthrough_lambda(
         
     Notes:
         - Only the first four channels are mixed (typical RGB + grayscale stack). If
-          fewer channels are available the existing channels are mixed; channels beyond
-          the fourth are passed through unchanged.
+          fewer channels are available the existing channels are mixed
         - Input images must have ≥3 channels; 1-2 channel images are returned unchanged.
     
     Example:
@@ -414,13 +405,19 @@ def _monitor_range(x: torch.Tensor) -> torch.Tensor:
     return x
 
 
-def _get_intensity_augmentations(cfg, preset: str = "medium") -> List[Transform]:
+def _get_intensity_augmentations(cfg:ConfigLoader) -> List[Transform]:
     """
     Confocal-friendly photometric augs using OneOf(+Identityd).
     Returns a list of monai Transforms to be appended to your train pipeline.
     A single clamp to [0,1] is placed at the end of the block.
+    
+    Args:
+        cfg: Configuration object with data augmentation containing the preset value
+        it always uses the preset from cfg
+        .
+
     """
-    H, W = cfg.data_augmentation["resize_spatial_size"]
+    H, W = cfg.get_spatial_size()
     preset = cfg.get_intensity_augmentation_preset()
 
     if preset is None or preset is False or str(preset).lower() in {
@@ -512,7 +509,7 @@ def _get_intensity_augmentations(cfg, preset: str = "medium") -> List[Transform]
     else:
         raise ValueError(f"Unknown preset: {preset}")
 
-    # Final block: OneOf → extras → monitor → clamp
+    # Final block: OneOf → extras → clamp
     intensity_block: List[Transform] = [
         intensity_one,
         *extras,
@@ -522,7 +519,7 @@ def _get_intensity_augmentations(cfg, preset: str = "medium") -> List[Transform]
     return intensity_block
 
 
-# Compute global normalization parameters from your training set
+# Compute global normalization parameters from training set
 # global_mean, global_std = compute_dataset_mean_std(train_images_paths, cfg)
 def compute_dataset_mean_std(
     image_paths: list[str], 
@@ -533,15 +530,14 @@ def compute_dataset_mean_std(
     Computes per-channel mean and standard deviation using VECTORIZED Welford's
     algorithm for numerical stability and performance.
     
-    Scientific Justification:
-    - Welford's algorithm (1962) provides numerically stable variance computation
+    - Welford's algorithm  provides numerically stable variance computation
     - Single-pass design minimizes memory footprint (critical for large datasets)
     - Vectorized operations leverage GPU/SIMD for 10,000× speedup vs naive loops
     
     **CRITICAL for Ablation Studies:**
     If cfg.get_use_ablation() is True, this function applies ChannelAblationD
     BEFORE computing statistics, ensuring normalization parameters reflect the
-    actual ablated distribution (Zeiler & Fergus, ECCV 2014).
+    actual ablated distribution
     
     Args:
         image_paths: List of file paths to training images
@@ -552,9 +548,6 @@ def compute_dataset_mean_std(
         dict: {"mean": [μ₀, μ₁, ...], "std": [σ₀, σ₁, ...]} per-channel stats
               For ablated channels, mean ≈ 0.0 and std ≈ 1e-6
               
-    References:
-        Welford, B.P. (1962). "Note on a method for calculating corrected sums
-        of squares and products". Technometrics, 4(3):419-420.
     """
     from classes.ChannleAblationD import ChannelAblationD
     
@@ -620,10 +613,6 @@ def compute_dataset_mean_std(
             running_mean = torch.zeros(C, dtype=torch.float64, device=device)
             M2 = torch.zeros(C, dtype=torch.float64, device=device)
         
-        # === VECTORIZED WELFORD UPDATE ===
-        # Reference: Chan et al. (1983) parallel variance algorithms
-        # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
-        
         # Compute batch statistics
         batch_mean = imgs_reshaped.double().mean(dim=1)  # [C]
         batch_var = imgs_reshaped.double().var(dim=1, unbiased=False)  # [C]
@@ -664,13 +653,13 @@ def compute_dataset_mean_std(
     # === VALIDATION LOGGING ===
     if cfg.get_use_ablation():
         channels_to_ablate = cfg.get_channels_to_ablate()
-        print(f"   [stats] ✓ Computed statistics with ablation (n={n_total:,} pixels):")
+        print(f"   [stats]  Computed statistics with ablation (n={n_total:,} pixels):")
         for ch_idx in range(len(final_mean)):
             status = "ABLATED" if ch_idx in channels_to_ablate else "active"
             print(f"      Channel {ch_idx} ({status}): "
                   f"mean={final_mean[ch_idx]:.6f}, std={final_std[ch_idx]:.6f}")
     else:
-        print(f"   [stats] ✓ Computed statistics (n={n_total:,} pixels):")
+        print(f"   [stats]  Computed statistics (n={n_total:,} pixels):")
         for ch_idx in range(len(final_mean)):
             print(f"      Channel {ch_idx}: "
                   f"mean={final_mean[ch_idx]:.6f}, std={final_std[ch_idx]:.6f}")
@@ -683,8 +672,8 @@ def is_supported_by_torchvision(model_name: str) -> bool:
     """
     return IMAGENET_WEIGHTS.get(model_name.lower()) is not None  # ← .lower() handles ALL cases
 
-def get_transforms(cfg: ConfigLoader, 
-                   fold_specific_stats: dict[str, float] | None = None):
+def get_transforms(cfg: ConfigLoader, fold_specific_stats: dict[str, float] | None = None):
+    
     is_pretrained = cfg.get_transfer_learning() 
     supported_by_torchvision = is_supported_by_torchvision(cfg.get_model_name()) 
     print(f"Model {cfg.get_model_name()} supported by torchvision: {supported_by_torchvision} and pretrained: {is_pretrained}")
@@ -700,7 +689,7 @@ def get_transforms(cfg: ConfigLoader,
     
     print(f"Using pretrained model: {is_pretrained} and supported by torchvision: {supported_by_torchvision} with color transforms: {color_transforms}")
     # train_transforms_list, val_transforms_list = get_custom_transforms_lists(cfg, color_transforms, fold_specific_stats)
-    if not supported_by_torchvision or not is_pretrained:  # ← THIS condition triggers
+    if not supported_by_torchvision or not is_pretrained:  
         print("the model is not supported by torchvision or is not pretrained")
         train_transforms_list, val_transforms_list = get_custom_transforms_lists(cfg, fold_specific_stats)
     elif supported_by_torchvision and is_pretrained: # If you are using a pretrained model(even if it's micronet), use the torchvision transforms
@@ -764,9 +753,9 @@ def get_custom_transforms_lists(cfg: ConfigLoader, fold_specific_stats: dict, cr
         
         
     # Ora applica le altre aumentazioni spaziali sull'immagine croppata
-    print("No spatial augmentations are applied currently")
-    # spatial_transforms = _get_spatial_augmentations(cfg)
-    # train_transforms_list.extend(spatial_transforms)
+    # print("No spatial augmentations are applied currently")
+    spatial_transforms = _get_spatial_augmentations(cfg)
+    train_transforms_list.extend(spatial_transforms)
 
     # Aggiungi le aumentazioni di intensità saranno decise da come è il preset
     intensity_transforms = _get_intensity_augmentations(cfg)
@@ -775,12 +764,12 @@ def get_custom_transforms_lists(cfg: ConfigLoader, fold_specific_stats: dict, cr
     # Optional ablation of channels - MUST be applied BEFORE normalization
     if cfg.get_use_ablation():
         channels_to_ablate = cfg.get_channels_to_ablate()
-        print(f"⚠️  Applying channel ablation to channels: {channels_to_ablate}")
+        print(f"  Applying channel ablation to channels: {channels_to_ablate}")
         train_transforms_list.append(
             ChannelAblationD(keys=["image"], channels_to_ablate=channels_to_ablate)
         )
 
-    # Applica la normalizzazione
+    # apply normalization
     if fold_specific_stats:
         print(f"Applying fold-specific normalization with mean: {fold_specific_stats['mean']}, std: {fold_specific_stats['std']}")
         train_transforms_list.append(
@@ -805,7 +794,7 @@ def get_custom_transforms_lists(cfg: ConfigLoader, fold_specific_stats: dict, cr
     
     if cfg.get_use_ablation():
         channels_to_ablate = cfg.get_channels_to_ablate()
-        print(f"⚠️  Applying channel ablation to validation set (channels: {channels_to_ablate})")
+        print(f"  Applying channel ablation to validation set (channels: {channels_to_ablate})")
         val_transforms_list.append(
             ChannelAblationD(keys=["image"], channels_to_ablate=channels_to_ablate)
         )
@@ -834,7 +823,7 @@ def get_custom_transforms_lists(cfg: ConfigLoader, fold_specific_stats: dict, cr
 
 def get_pretrained_model_transforms_list_without_crop(cfg:ConfigLoader)->Tuple[List[MapTransform], List[MapTransform]]:
     """
-    Get the transforms for pretrained models without crop.
+    emulates torchvision pretrained model transforms without center crop.
     Handles both 3-channel and 4-channel inputs.
     
     For 3-channel: applies standard ImageNet normalization
@@ -845,13 +834,13 @@ def get_pretrained_model_transforms_list_without_crop(cfg:ConfigLoader)->Tuple[L
     num_channels = cfg.get_model_input_channels()  # Get number of channels from config
     imagenet_weights = IMAGENET_WEIGHTS.get(cfg.get_model_name().lower(), None)
     
-    use_color_transforms = cfg.get_intensity_augmentation_preset() not in ["none", "off", "no", "0"]
+    # use_color_transforms = cfg.get_intensity_augmentation_preset() not in ["none", "off", "no", "0"]
 
     # Force pre-normalization to include resize and scale (no center crop)
-    train_transforms_list = new_get_preNormalization_transforms_list(cfg)
+    train_transforms_list = get_preNormalization_transforms_list_pretrained_tv(cfg)
     train_transforms_list.extend(_get_spatial_augmentations(cfg))
-    if use_color_transforms:
-        train_transforms_list.extend(_get_intensity_augmentations(cfg))
+    # if use_color_transforms:
+    train_transforms_list.extend(_get_intensity_augmentations(cfg))
         
     if cfg.get_use_ablation():
             channels_to_ablate = cfg.get_channels_to_ablate()
@@ -872,27 +861,25 @@ def get_pretrained_model_transforms_list_without_crop(cfg:ConfigLoader)->Tuple[L
         train_transforms_list.append(
             NormalizeIntensityd(
                 keys=["image"], 
-                subtrahend=mean,  # μ vector
-                divisor=std,      # σ vector
+                subtrahend=mean,  # mean vector
+                divisor=std,      # std vector
                 channel_wise=True # apply per-channel
             )
         )
-        print(f"✓ Using ImageNet normalization for 3-channel input")
+        print(f" Using ImageNet normalization for 3-channel input")
     elif num_channels == 4:
         # For 4-channel: skip ImageNet normalization
         # The channel adaptation layer will learn to handle the 4th channel
         # ScaleIntensityd was already applied in new_get_preNormalization_transforms_list
-        print(f"✓ Using 4-channel input: Skipping ImageNet normalization (using [0,1] scaling only)")
-        print(f"  → The adapted first conv layer will handle channel-specific normalization")
+        print(f" Using 4-channel input: Skipping ImageNet normalization (using [0,1] scaling only) skipping normalization")
+        # print(f" The adapted first conv layer will handle channel-specific normalization")
     else:
         # Fallback for other channel counts
         print(f" Using {num_channels} channels without ImageNet normalization")
         
-        
-    
-    # -----------------------------------------------------------------------
+    # -------------------VAL TRANSFORMS ----------------------------------------------------
     # Validation: resize-only + same normalization as training
-    val_transforms_list = new_get_preNormalization_transforms_list(cfg)
+    val_transforms_list = get_preNormalization_transforms_list_pretrained_tv(cfg)
     
     # For 4-channel or other cases, no additional normalization (scaling already done in pre-normalization)
     if cfg.get_use_ablation():
@@ -902,7 +889,7 @@ def get_pretrained_model_transforms_list_without_crop(cfg:ConfigLoader)->Tuple[L
             ChannelAblationD(keys=["image"], channels_to_ablate=channels_to_ablate)
         )
         
-        
+    # apply imagenet Normalization 
     if num_channels == 3 and imagenet_weights is not None:
         tv_t = imagenet_weights.transforms()
         mean = torch.tensor(tv_t.mean)  # [0.485, 0.456, 0.406]
@@ -910,13 +897,14 @@ def get_pretrained_model_transforms_list_without_crop(cfg:ConfigLoader)->Tuple[L
         val_transforms_list.append(
             NormalizeIntensityd(
                 keys=["image"], 
-                subtrahend=mean,  # μ vector
-                divisor=std,      # σ vector
+                subtrahend=mean,  # mean vector
+                divisor=std,      # std vector
                 channel_wise=True # apply per-channel
             )
         )
     
     return train_transforms_list, val_transforms_list
+
 
 def get_convert_to_tensor_transform_list():
     return [
