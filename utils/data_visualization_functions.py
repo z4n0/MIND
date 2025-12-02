@@ -1153,6 +1153,55 @@ def generate_cv_results_figure(fold_results, prefix='test'):
     plt.tight_layout()
     return fig
 
+
+def generate_patient_cv_boxplots(fold_results):
+    """
+    Generate boxplots across folds for patient-level metrics (balanced accuracy and MCC).
+    Returns None if no patient-level metrics are found.
+    """
+    metric_labels = {
+        "patient_major_bal_acc": "Patient Balanced Acc (majority vote)",
+        "patient_soft_bal_acc": "Patient Balanced Acc (soft vote)",
+        "patient_major_mcc": "Patient MCC (majority vote)",
+        "patient_soft_mcc": "Patient MCC (soft vote)",
+    }
+
+    available = {
+        key: label
+        for key, label in metric_labels.items()
+        if any((key in fr) and (fr.get(key) is not None) for fr in fold_results)
+    }
+    if not available:
+        print("No patient-level metrics found in fold_results.")
+        return None
+
+    n_metrics = len(available)
+    n_cols = min(2, n_metrics)
+    n_rows = (n_metrics + n_cols - 1) // n_cols
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(7 * n_cols, 5 * n_rows))
+    if n_metrics == 1:
+        axes = [axes]
+    else:
+        axes = axes.ravel()
+
+    for idx, (metric_key, title) in enumerate(available.items()):
+        values = [
+            fr[metric_key]
+            for fr in fold_results
+            if (metric_key in fr) and (fr.get(metric_key) is not None)
+        ]
+        axes[idx].boxplot(values)
+        axes[idx].set_title(title)
+        axes[idx].set_ylabel(metric_key.replace('_', ' ').title())
+        axes[idx].grid(True)
+
+    for ax in axes[len(available):]:
+        fig.delaxes(ax)
+
+    plt.tight_layout()
+    return fig
+
 def plot_confusion_matrix(cm, class_names, title='Confusion Matrix', figsize=(8,6)):
     """
     Visualize confusion matrix without immediately displaying it.

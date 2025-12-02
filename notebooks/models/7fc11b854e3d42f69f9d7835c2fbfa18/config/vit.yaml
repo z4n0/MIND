@@ -1,0 +1,51 @@
+_base_: base.yaml
+
+# Data Splitting
+data_splitting:
+  random_seed: 42
+  val_set_size: 0.15
+  test_set_size: 0.1
+
+# Data Loading
+data_loading:
+  batch_size: 32  # ViT can be memory-intensive, start with a smaller batch size
+  num_workers: 4
+
+data_augmentation:
+  crop_size: [448, 448] # This overrides the crop_size from base.yaml to match img_size
+  use_color_transforms: true
+
+model:
+  model_name: "ViT"
+  library: "monai"
+  spatial_dims: 2
+  in_channels: 3 # Or 3, depending on the dataset
+  out_channels: 2 # Depends on the number of classes
+  # --- ViT Specific Parameters ---
+  img_size: [512,512] # Should match the input size from transforms and be divisible by patch_size
+  patch_size: [16,16]
+  hidden_size: 128     # Embedding dimension (e.g., ViT-Base)
+  mlp_dim: 256        # Dimension of the MLP layer (e.g., ViT-Base)
+  num_layers: 4      # Number of transformer blocks (e.g., ViT-Base)
+  num_heads: 4        # Number of attention heads (e.g., ViT-Base)
+
+
+# Training
+training:
+  num_epochs: 450
+  early_stopping_patience: 50
+  # mixup_alpha: 0
+  oversample: false
+  undersample: false
+  weighted_loss: false
+  fine_tuning: false
+  transfer_learning: false
+  freezed_layerIndex: null
+  discover_lr: false
+
+# Optimizer
+optimizer:
+  learning_rate: 1e-4
+  optimizer_name: "AdamW"
+  weight_decay: 1e-5
+  patience: 25 # For ReduceLROnPlateau scheduler

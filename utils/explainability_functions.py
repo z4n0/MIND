@@ -369,7 +369,8 @@ def process_and_save_batch_gradcam_and_Overlay(
     threshold=0.5,
     run_name=None,
     experiment_name=None,
-    overlay_alpha_DAPI=0.2    # The alpha for your extra (gray) channel
+    overlay_alpha_DAPI=0.2,   # The alpha for your extra (gray) channel
+    input_channel_order="RGB" # New parameter to specify input channel semantics
 ):
     """
     Processes a DataLoader, generates GradCAM visualizations for each image, 
@@ -382,11 +383,6 @@ def process_and_save_batch_gradcam_and_Overlay(
     This ensures your images look exactly the same as in `show_misclassified_images` 
     for the base color channels and DAPI (gray) overlay.
     
-    Assumptions:
-      - 3-channel images are in order (Green, Blue, Red), reordering to (Red, Green, Blue).
-      - 4-channel images are in order (Green, Blue, Red, Gray); we build base RGB from [2,0,1] 
-        and treat channel 3 as the gray (DAPI) overlay.
-
     Args:
         model (torch.nn.Module): The model.
         test_loader (DataLoader): DataLoader for the test set.
@@ -399,6 +395,11 @@ def process_and_save_batch_gradcam_and_Overlay(
         experiment_name (str, optional): Experiment name if run_name is None.
         overlay_alpha_DAPI (float): Transparency for the extra (gray) channel overlay 
                                     (like in `show_misclassified_images`).
+        input_channel_order (str): Expected channel order of the input images.
+            - "RGB" (default): Assumes input is (Red, Green, Blue) or (Red, Green, Blue, Gray).
+              This is correct if `from_GBR_to_RGB` was applied in the DataLoader.
+            - "GBR": Assumes input is (Green, Blue, Red) or (Green, Blue, Gray, Red).
+              This is correct for raw confocal data without permutation.
     """
     import os
     import numpy as np
@@ -443,23 +444,42 @@ def process_and_save_batch_gradcam_and_Overlay(
             input_image_np = single_image.squeeze(0).cpu().numpy()
             input_image_np = np.transpose(input_image_np, (1, 2, 0))  # now (H, W, C)
 
-            # EXACT logic from `show_misclassified_images`:
-            # reorder channels and extract a possible gray overlay.
+            # Logic to extract RGB composite and optional Overlay based on input order
             overlay = None
-            if input_image_np.shape[-1] == 3:
-                # (Green, Blue, Red) → (Red, Green, Blue)
-                base_rgb = input_image_np[..., [2, 0, 1]]
-                composite = base_rgb
-            elif input_image_np.shape[-1] == 4:
-                # (Green, Blue, Red, Gray)
-                # base_rgb from channels [2, 0, 1] => (Red, Green, Blue)
-                base_rgb = input_image_np[..., [2, 0, 1]]
-                # overlay is channel index 3 => Gray
-                overlay = input_image_np[..., 3]
-                composite = base_rgb
+            
+            if input_channel_order == "RGB":
+                # Case 1: Input is already processed into RGB (or RGBGr)
+                # Expected 3-ch: (Red, Green, Blue)
+                # Expected 4-ch: (Red, Green, Blue, Gray)
+                if input_image_np.shape[-1] == 3:
+                    base_rgb = input_image_np
+                    composite = base_rgb
+                elif input_image_np.shape[-1] == 4:
+                    base_rgb = input_image_np[..., :3] # First 3 are R, G, B
+                    overlay = input_image_np[..., 3]   # 4th is Gray
+                    composite = base_rgb
+                else:
+                    composite = input_image_np
+
+            elif input_channel_order == "GBR":
+                # Case 2: Input is raw confocal data
+                # Expected 3-ch: (Green, Blue, Red)
+                # Expected 4-ch: (Green, Blue, Gray, Red)
+                if input_image_np.shape[-1] == 3:
+                    # (Green, Blue, Red) → (Red, Green, Blue)
+                    base_rgb = input_image_np[..., [2, 0, 1]]
+                    composite = base_rgb
+                elif input_image_np.shape[-1] == 4:
+                    # (Green, Blue, Gray, Red)
+                    # base_rgb from channels [3, 0, 1] => (Red, Green, Blue)
+                    base_rgb = input_image_np[..., [3, 0, 1]]
+                    # overlay is channel index 2 => Gray
+                    overlay = input_image_np[..., 2]
+                    composite = base_rgb
+                else:
+                    composite = input_image_np
             else:
-                # fallback if unexpected channels
-                composite = input_image_np
+                raise ValueError(f"Unknown input_channel_order '{input_channel_order}'. Use 'RGB' or 'GBR'.")
 
             # Normalize/scale for display, 
             # applying the same approach as you do in `show_misclassified_images`.

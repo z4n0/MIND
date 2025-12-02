@@ -107,12 +107,8 @@ def overlay_rgb_and_gray(base_rgb, gray_channel, alpha=0.4):
 def visualize_image(ax, img_4ch_or_3ch, overlay_alpha=0.4, normalize=True):
     """
     Displays either a 3-channel or 4-channel NumPy image (channels-first or channels-last).
-    For 4-channel images with shape [H,W,4] or [4,H,W], we interpret them as:
-        G(0), B(1), Gray(2), R(3) 
-    and reorder to: 
-        base RGB = (R,G,B), overlay Gray = channel 2.
-
-    For 3-channel images, we just reorder [2, 1, 0] -> (R,G,B).
+    After `from_GBR_to_RGB` in the preprocessing pipeline, tensors are already
+    in (R, G, B) for 3 channels and (R, G, B, Gray) for 4 channels.
     If shape is [C,H,W], we transpose to [H,W,C].
     Finally, we min-max normalize if `normalize=True`.
     """
@@ -140,10 +136,8 @@ def visualize_image(ax, img_4ch_or_3ch, overlay_alpha=0.4, normalize=True):
     # If 3 or 4 channels in last dimension
     num_ch = arr.shape[-1]
     if num_ch == 3:
-        # reorder from (G,B,R) -> (R,G,B), if that's your convention
-        # But if your data is ALREADY (R,G,B), then skip the reorder
-        # For demonstration, let's do a reorder from (G,B,R) => (R,G,B)
-        arr_rgb = arr[..., [2, 0, 1]]
+        # Already in (R, G, B) after preprocessing
+        arr_rgb = arr.astype(np.float32)
         if normalize:
             arr_rgb = normalize_image(arr_rgb, per_channel=True)
         ax.imshow(arr_rgb)
@@ -151,9 +145,9 @@ def visualize_image(ax, img_4ch_or_3ch, overlay_alpha=0.4, normalize=True):
         ax.axis('off')
 
     elif num_ch == 4:
-        # interpret: G(0), B(1), Gray(2), R(3) -> base=(R,G,B), overlay=Gray(2)
-        base_rgb = arr[..., [3, 0, 1]]  # shape [H,W,3]
-        overlay = arr[..., 2]          # shape [H,W]
+        # After preprocessing: (R, G, B, Gray) -> base=(R,G,B), overlay=Gray
+        base_rgb = arr[..., [0, 1, 2]]  # shape [H,W,3]
+        overlay = arr[..., 3]          # shape [H,W]
 
         if normalize:
             base_rgb = normalize_image(base_rgb, per_channel=True)
@@ -174,16 +168,20 @@ def save_attention_overlays_side_by_side(
     model,
     output_directory,
     device,
-    heatmap_alpha=0.5
+    heatmap_alpha=0.5,
+    input_order: str = "rgb",
 ):
     """
-    Generates side-by-side comparisons: 
-    1. The original microscopy image (reconstructed to RGB).
-    2. The same image with the Vision Transformer's attention map overlaid.
+    Generates side-by-side comparisons:
+      1) The original microscopy image (RGB or RGB + gray overlay)
+      2) The same image with the ViT attention heatmap overlaid.
 
-    This function handles the specific channel ordering of confocal microscopes:
-    - 3 Channels: Assumes (Green, Blue, Red) -> Converts to (Red, Green, Blue).
-    - 4 Channels: Assumes (Green, Blue, Gray-Structure, Red) -> Uses RGB + Gray.
+    Assumes inputs are already converted by `from_GBR_to_RGB`, i.e.:
+      - 3ch: (R, G, B)
+      - 4ch: (R, G, B, Gray)
+    If your loader still delivers raw microscopy ordering, you can pass:
+      - `input_order="gbr"`       for (G, B, Gray, R) → (R, G, B, Gray)
+      - `input_order="gbr_graylast"` for (G, B, R, Gray) → (R, G, B, Gray)
 
     Args:
         data_loader (DataLoader): Yields batches with 'image' and 'label'.
@@ -231,7 +229,21 @@ def save_attention_overlays_side_by_side(
                 
                 # Extract single image: [Channels, Height, Width]
                 image_chw = batch_images_np[item_idx]
-                
+
+                # If the loader still provides GBR/GBRG, reorder to RGB/(RGB+Gray)
+                if input_order.lower().startswith("gbr"):
+                    if image_chw.ndim == 3 and image_chw.shape[0] == 3:
+                        # (G,B,R) -> (R,G,B)
+                        image_chw = image_chw[[2, 0, 1], ...]
+                    elif image_chw.ndim == 3 and image_chw.shape[0] == 4:
+                        # Decide mapping based on where Gray sits in the raw file
+                        if "last" in input_order.lower():
+                            # (G,B,R,Gray) -> (R,G,B,Gray)
+                            image_chw = image_chw[[2, 0, 1, 3], ...]
+                        else:
+                            # (G,B,Gray,R) -> (R,G,B,Gray)
+                            image_chw = image_chw[[3, 0, 1, 2], ...]
+
                 # Transpose to [Height, Width, Channels] for Matplotlib
                 if image_chw.ndim == 3 and image_chw.shape[0] in (3, 4):
                     image_hwc = np.transpose(image_chw, (1, 2, 0))
@@ -250,13 +262,12 @@ def save_attention_overlays_side_by_side(
                     display_image_rgb = image_hwc[..., [2, 0, 1]].astype(np.float32)
                     display_image_rgb = normalize_image(display_image_rgb, per_channel=True)
 
-                # Case B: 4-Channel Images (with structural/brightfield channel)
-                # Assumed Input: Green(0), Blue(1), Gray/Structure(2), Red(3)
+                # Case B: 4-Channel Images (RGB + gray overlay)
                 elif image_hwc.ndim == 3 and image_hwc.shape[-1] == 4:
-                    # RGB part: Red(3), Green(0), Blue(1)
-                    display_image_rgb = image_hwc[..., [3, 0, 1]].astype(np.float32)
-                    # Structural part: Gray(2)
-                    structure_channel_gray = image_hwc[..., 2].astype(np.float32)
+                    # RGB part: channels 0,1,2
+                    display_image_rgb = image_hwc[..., [0, 1, 2]].astype(np.float32)
+                    # Structural part: Gray overlay in channel 3
+                    structure_channel_gray = image_hwc[..., 3].astype(np.float32)
                     
                     display_image_rgb = normalize_image(display_image_rgb, per_channel=True)
                     structure_channel_gray = normalize_image(structure_channel_gray, per_channel=False)

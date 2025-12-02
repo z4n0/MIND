@@ -1,16 +1,6 @@
 dataset:
   class_names: ["MSA-P", "PD"] #["MSA-P", "PD"] #["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
 
-ablation:
-  use_ablation: false
-  # Choose ONE of these (after RGB permutation):
-  # channels_index_to_ablate: [0]     # Ablate Red (R)
-  # channels_index_to_ablate: [1]     # Ablate Green (G) ← Your intended target
-  # channels_index_to_ablate: [2]     # Ablate Blue (B)
-  # channels_index_to_ablate: [3]     # Ablate Gray-Red (Gr)
-  # For your current experiments (ablate Green):
-  channels_index_to_ablate: [1]  # ← Change this from [0] to [1]
-
 # config.yaml
 data_splitting:
   random_seed: 42
@@ -48,8 +38,8 @@ model:
   library: "torchvision"
   
 training:
-  num_epochs: 5
-  early_stopping_patience: 1
+  num_epochs: 210
+  early_stopping_patience: 35
   mixup_alpha: 0
   oversample: true
   undersample: false

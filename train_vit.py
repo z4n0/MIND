@@ -302,9 +302,6 @@ def main():
         te_imgs = test_df_for_best_fold['image_path'].values
         te_y = test_df_for_best_fold['label'].values
         
-        # Note: We need the transforms for the specific fold, but get_current_fold_transforms
-        # only holds the last fold's transforms. For logging, using the general val_transforms
-        # is a reasonable approximation if normalization is consistent (e.g., ImageNet stats).
         _, val_transforms, _ = tf.get_transforms(cfg)
 
         log_run_to_mlflow(

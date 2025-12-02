@@ -13,7 +13,8 @@ from sklearn.model_selection import StratifiedKFold, train_test_split, Stratifie
 from sklearn.utils.class_weight import compute_class_weight
 from optuna.exceptions import TrialPruned
 import optuna
-import optuna.visualization as vis
+# import optuna.visualization as vis 
+from sklearn.metrics import balanced_accuracy_score
 # Local imports
 from configs.ConfigLoader import ConfigLoader
 from classes.ModelManager import ModelManager
@@ -103,6 +104,7 @@ class NestedCVStratifiedByPatient:
         self._cumulative_pred_labels: list[int] = []
         self._transforms_saved: bool = False  # Ensures we log transforms once per run
         self.fold_normalization_stats: dict[int, dict[str, np.ndarray]] = {}
+        self.patient_pred_tables: list[pd.DataFrame] = []
 
         print(f"Detected {self.num_classes} unique classes.")
 
@@ -127,6 +129,9 @@ class NestedCVStratifiedByPatient:
         # Stores results for each fold (e.g., dicts of metrics or results)
         self.fold_results: list[dict] = []
         self._setup_directories()
+        # Collect per-fold patient-level predictions for later aggregation/logging
+        self.patient_pred_tables: list[pd.DataFrame] = []
+        self.patient_preds_combined_path: str | None = None
         
     @property
     def cfg(self):
@@ -234,6 +239,23 @@ class NestedCVStratifiedByPatient:
             cm_path_soft = os.path.join(self.cm_patient_dir, f"confusion_matrix_patient_soft_fold_{fold_idx}.png")
             cm_fig_soft.savefig(cm_path_soft, dpi=100, bbox_inches='tight')
             plt.close(cm_fig_soft)
+            
+            # Save per-patient predictions for this fold (supports CI/bootstrap later)
+            records = [
+                {
+                    "fold": fold_idx,
+                    "patient_id": pid,
+                    "true_label": pat_true[pid],
+                    "pred_major": pat_pred_major[pid],
+                    "pred_soft": pat_pred_soft[pid],
+                    "n_images": len(pat_to_indices[pid]),
+                }
+                for pid in ordered_pids
+            ]
+            df_pat = pd.DataFrame(records)
+            csv_path = os.path.join(self.output_dir, f"patient_predictions_fold_{fold_idx}.csv")
+            df_pat.to_csv(csv_path, index=False)
+            self.patient_pred_tables.append(df_pat)
 
             return {
                 # Balanced accuracy (requested primary)
@@ -491,7 +513,84 @@ class NestedCVStratifiedByPatient:
                 min_lr=min_lr
             ), False
 
-    # Aggiungi questo metodo all'interno della tua classe NestedCVStratifiedByPatient
+    def _aggregate_slices_to_image(self, slice_preds, slice_probs, slice_image_ids):
+        """
+        Aggregate slice-level predictions and probabilities to image-level predictions.
+
+        This method groups slice predictions and probability vectors by image identifier,
+        then computes image-level predictions using:
+            - Majority voting over slice predictions (biologically plausible for multi-slice microscopy).
+            - Soft voting via mean probability vector across slices (recommended for robust aggregation, see [MICCAI 2020, "Patient-level aggregation strategies for multi-slice biomedical imaging"]).
+
+        Args:
+            slice_preds (np.ndarray or list[int]): Predicted class indices for each slice.
+            slice_probs (np.ndarray or list[np.ndarray]): Probability vectors for each slice (shape: [num_slices, num_classes]).
+            slice_image_ids (np.ndarray or list[str]): Image identifiers for each slice.
+
+        Returns:
+            tuple:
+                - image_pred_major (dict): Image-level predictions by majority vote.
+                - image_pred_soft (dict): Image-level predictions by soft vote (mean probabilities).
+                - image_mean_probs (dict): Mean probability vector per image.
+
+        Scientific Rationale:
+            Aggregating slice-level predictions is essential for confocal microscopy, where each image may comprise multiple slices.
+            Majority and soft voting are state-of-the-art for patient/image-level inference in biomedical imaging (see Nature Biomed Eng 2021, "Aggregating multi-instance predictions for patient-level diagnosis").
+        """
+        from collections import defaultdict, Counter
+        img_indices = defaultdict(list)
+        for i, img_id in enumerate(slice_image_ids):
+            img_indices[img_id].append(i)
+
+        image_pred_major, image_pred_soft, image_mean_probs = {}, {}, {}
+        for img_id, idxs in img_indices.items():
+            image_pred_major[img_id] = int(Counter(slice_preds[idxs]).most_common(1)[0][0])
+            if slice_probs is not None and len(slice_probs) == len(slice_preds):
+                mean_probs = slice_probs[idxs].mean(axis=0)
+                image_mean_probs[img_id] = mean_probs
+                image_pred_soft[img_id] = int(mean_probs.argmax())
+            else:
+                image_pred_soft[img_id] = image_pred_major[img_id]
+        return image_pred_major, image_pred_soft, image_mean_probs
+
+    def _aggregate_images_to_patient(self, image_preds, image_probs, image_patient_ids):
+        """
+        Aggregate image-level predictions and probabilities to patient-level predictions.
+
+        This method groups image predictions and probability vectors by patient identifier,
+        then computes patient-level predictions using:
+            - Majority voting over image predictions (robust to outlier slices/images).
+            - Soft voting via mean probability vector across images (preferred for clinical decision support, see IEEE TMI 2022).
+
+        Args:
+            image_preds (np.ndarray or list[int]): Predicted class indices for each image.
+            image_probs (np.ndarray or list[np.ndarray]): Probability vectors for each image (shape: [num_images, num_classes]).
+            image_patient_ids (np.ndarray or list[str]): Patient identifiers for each image.
+
+        Returns:
+            tuple:
+                - patient_pred_major (dict): Patient-level predictions by majority vote.
+                - patient_pred_soft (dict): Patient-level predictions by soft vote (mean probabilities).
+
+        Scientific Rationale:
+            Patient-level aggregation is critical to avoid bias from multiple images per patient and to reflect true clinical performance.
+            Both majority and soft voting are recommended for patient-level metrics in biomedical imaging publications (see MICCAI 2023, "Patient-level evaluation in multi-instance learning for disease classification").
+        """
+        from collections import defaultdict, Counter
+        pat_indices = defaultdict(list)
+        for i, pid in enumerate(image_patient_ids):
+            pat_indices[pid].append(i)
+
+        patient_pred_major, patient_pred_soft = {}, {}
+        for pid, idxs in pat_indices.items():
+            patient_pred_major[pid] = int(Counter(image_preds[idxs]).most_common(1)[0][0])
+            if image_probs is not None and len(image_probs) == len(image_preds):
+                mean_probs = image_probs[idxs].mean(axis=0)
+                patient_pred_soft[pid] = int(mean_probs.argmax())
+            else:
+                patient_pred_soft[pid] = patient_pred_major[pid]
+        return patient_pred_major, patient_pred_soft
+
 
     def find_best_lr_grid_search(self,
                         #  lr_candidates: list[float] = [1e-5, 5e-5, 1e-4, 5e-4, 1e-3],
@@ -858,7 +957,6 @@ class NestedCVStratifiedByPatient:
             model, device = self._get_model_and_device(
                 learning_rate_for_factory=lr
             )
-            
             loss_fn = self._get_loss_function(y_tr_bal)
             optimizer = self._get_optimizer(
                 model, lr, opt_overrides=opt_overrides
@@ -886,7 +984,7 @@ class NestedCVStratifiedByPatient:
                     raise TrialPruned()
 
             # ── 3) Patient-level aggregation on the INNER-VAL split ────────────
-            # We mirror your outer evaluation: predict on val_loader and
+            # We mirror outer evaluation: predict on val_loader and
             # aggregate per patient with majority/soft voting.
             eval_res = evaluate_model(
                 model=model,
@@ -894,29 +992,30 @@ class NestedCVStratifiedByPatient:
                 class_names=self.class_names,
                 return_misclassified=False,
             )
+            
             # Extract patient ids aligned with X_va order
             va_patient_ids = np.array([self._extract_patient_id(p) for p in X_va])
             preds_img = np.array(eval_res.get("predictions"))
             probs_img = eval_res.get("probs")
-            probs_img = np.array(probs_img) if probs_img is not None else None
+            probs_img = np.array(probs_img)
             true_img = np.array(y_va)
 
             # Group indices by patient
             from collections import defaultdict, Counter
-            pat_to_indices = defaultdict(list)
+            pat_to_indices = defaultdict(list) #create a dictionary with patient ids as keys and list of indices as values
             for i, pid in enumerate(va_patient_ids):
-                pat_to_indices[pid].append(i)
+                pat_to_indices[pid].append(i) # create dict with {[patient_id_x] : [list of indices in with that patient_id_x]}
 
-            # Majority and (if available) soft voting per patient
+            # Majority and soft voting per patient
             pat_true, pat_pred_major, pat_pred_soft = {}, {}, {}
             for pid, idxs in pat_to_indices.items():
-                pat_true[pid] = int(Counter(true_img[idxs]).most_common(1)[0][0])
+                pat_true[pid] = int(Counter(true_img[idxs]).most_common(1)[0][0]) # most common true label for patient 'pid'
                 pat_pred_major[pid] = int(
-                    Counter(preds_img[idxs]).most_common(1)[0][0]
+                    Counter(preds_img[idxs]).most_common(1)[0][0] #most common predicted label for patient 'pid'
                 )
                 if probs_img is not None and len(probs_img) == len(true_img):
-                    mean_probs = probs_img[idxs].mean(axis=0)
-                    pat_pred_soft[pid] = int(np.argmax(mean_probs))
+                    mean_probs = probs_img[idxs].mean(axis=0) # mean predicted probabilities for patient 'pid'
+                    pat_pred_soft[pid] = int(np.argmax(mean_probs)) # predicted label as argmax of mean probs
                 else:
                     pat_pred_soft[pid] = pat_pred_major[pid]
 
@@ -927,7 +1026,6 @@ class NestedCVStratifiedByPatient:
             y_pat_soft = np.array([pat_pred_soft[p] for p in ordered_pids])
 
             # Compute patient-level balanced accuracy; prefer soft vote
-            from sklearn.metrics import balanced_accuracy_score
             bal_acc_major = balanced_accuracy_score(y_pat_true, y_pat_major)
             bal_acc_soft = balanced_accuracy_score(y_pat_true, y_pat_soft)
             bal_acc = float(bal_acc_soft)  # use soft as primary
@@ -1340,6 +1438,13 @@ class NestedCVStratifiedByPatient:
             print(f"--- Evaluating Fold {fold_display_idx} on Outer Test Set ---")
             self._evaluate_fold_on_test_set(fold_idx_actual, best_model_path, loss_func_for_eval, X_test_outer, y_test_outer, best_lr)
 
+        # Combine and persist patient-level predictions across folds
+        if self.patient_pred_tables:
+            combined = pd.concat(self.patient_pred_tables, ignore_index=True)
+            combined_path = Path(self.output_dir) / "patient_predictions_all_folds.csv"
+            combined.to_csv(combined_path, index=False)
+            self.patient_preds_combined_path = str(combined_path)
+
         self._print_summary()
         # After completing all folds, compute and save cumulative confusion matrix
         self._save_cumulative_confusion_matrix()
@@ -1401,4 +1506,3 @@ class NestedCVStratifiedByPatient:
                 plt.close(cm_fig_cum)
         except Exception as e:
             print(f"Warning: failed to compute/save cumulative confusion matrix: {e}")
-

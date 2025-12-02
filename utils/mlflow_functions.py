@@ -7,11 +7,27 @@ from typing import Dict, List, Optional, Union, Any
 import torch.nn as nn
 from monai.transforms import Compose
 import numpy as np
+from sklearn.metrics import balanced_accuracy_score
 from configs.ConfigLoader import ConfigLoader
 import pandas as pd
 import shutil
 import yaml
 from pathlib import Path
+
+def bootstrap_balacc_ci(df: pd.DataFrame, pred_col: str, n_boot: int = 2000, seed: int = 42):
+    rng = np.random.default_rng(seed)
+    y = df["true_label"].to_numpy()
+    p = df[pred_col].to_numpy()
+    n = len(df)
+    scores = np.empty(n_boot, dtype=float)
+    for i in range(n_boot):
+        idx = rng.integers(0, n, size=n)
+        scores[i] = balanced_accuracy_score(y[idx], p[idx])
+    return (
+        float(scores.mean()),
+        float(np.percentile(scores, 2.5)),
+        float(np.percentile(scores, 97.5)),
+    )
 
 def get_mlrun_base_folder(gdrive, kaggle,linux):
     if kaggle:
@@ -408,7 +424,10 @@ from utils.explainability_functions import (
 )
 
 from utils.data_visualization_functions import (
-    plot_learning_curves, plot_confusion_matrix, generate_cv_results_figure
+    plot_learning_curves,
+    plot_confusion_matrix,
+    generate_cv_results_figure,
+    generate_patient_cv_boxplots,
 )
 from utils.train_functions import make_loader
 from utils.data_visualization_functions import min_max_normalization
@@ -637,7 +656,6 @@ def log_run_to_mlflow(
         mlflow.log_metrics(metrics)
         # --------------------- PATIENT-LEVEL METRICS (if present)
         try:
-            # Safely extract arrays if keys are available in fold_results
             major_bal = [r["patient_major_bal_acc"] for r in fold_results if r.get("patient_major_bal_acc") is not None]
             soft_bal  = [r["patient_soft_bal_acc"] for r in fold_results if r.get("patient_soft_bal_acc") is not None]
             major_auc = [r["patient_major_auc"] for r in fold_results if r.get("patient_major_auc") is not None]
@@ -791,6 +809,10 @@ def log_run_to_mlflow(
         # 3. CV box-plotis not set
         fig_box = generate_cv_results_figure(fold_results, "test")
         mlflow.log_figure(fig_box, "fold_box_plot.png")
+        # 4b. patient-level CV boxplots (balanced acc / mcc, soft & majority)
+        fig_patient_box = generate_patient_cv_boxplots(fold_results)
+        if fig_patient_box is not None:
+            mlflow.log_figure(fig_patient_box, "patient_fold_box_plots.png")
 
         # 4. learning curves (if produced)
         lc_dir = Path.cwd() / "learning_curves"
@@ -861,6 +883,33 @@ def log_run_to_mlflow(
             cm_patient_dir = Path.cwd() / "confusion_matrices" / "patient"
         if cm_patient_dir.is_dir():
             mlflow.log_artifacts(str(cm_patient_dir), artifact_path="confusion_matrices/patient")
+
+        # 5c. patient-level predictions table (combined across folds) + bootstrap CI
+        try:
+            if output_dir:
+                patient_preds_csv = Path(output_dir) / "patient_predictions_all_folds.csv"
+                if patient_preds_csv.is_file():
+                    mlflow.log_artifact(str(patient_preds_csv), artifact_path="patient_predictions")
+                    df_pat = pd.read_csv(patient_preds_csv)
+                    mj_mean, mj_lo, mj_hi = bootstrap_balacc_ci(df_pat, "pred_major")
+                    sf_mean, sf_lo, sf_hi = bootstrap_balacc_ci(df_pat, "pred_soft")
+                    mlflow.log_metrics({
+                        "patient_balacc_major": mj_mean,
+                        "patient_balacc_major_ci_low": mj_lo,
+                        "patient_balacc_major_ci_high": mj_hi,
+                        "patient_balacc_soft": sf_mean,
+                        "patient_balacc_soft_ci_low": sf_lo,
+                        "patient_balacc_soft_ci_high": sf_hi,
+                    })
+                    ci_df = pd.DataFrame([
+                        {"vote": "majority", "mean": mj_mean, "ci_low": mj_lo, "ci_high": mj_hi},
+                        {"vote": "soft", "mean": sf_mean, "ci_low": sf_lo, "ci_high": sf_hi},
+                    ])
+                    ci_csv = Path(output_dir) / "patient_balacc_ci.csv"
+                    ci_df.to_csv(ci_csv, index=False)
+                    mlflow.log_artifact(str(ci_csv), artifact_path="patient_predictions")
+        except Exception as e:
+            print(f"Warning: failed to log patient predictions CSV: {e}")
 
         # 6. train.py backup (was originally 5)
         # if Path("train.py").is_file():

@@ -106,25 +106,10 @@ def from_GBR_to_RGB(image: torch.Tensor) -> torch.Tensor:
             return image[[3, 0, 1, 2], :, :]
         else:
             raise ValueError(f"Expected 3 or 4 channels in dim 0, got {c}")
-
-    batch_image = (ndim == 4)
-    if batch_image: # Batch: (B, C, H, W)
-        b, c, h, w = image.shape
-        if b>64:
-            raise ValueError(f"Batch size {b} is too large, expected <= 64 look at batch shape {image.shape}")
-        if c == 3:
-            # Permute 3-channel GBR to RGB for each image in batch
-            return image[:, [2, 0, 1], :, :]
-        elif c == 4:
-            # Input order is assumed G, B, Gr, R (GBGrR)
-            # Convert to R, G, B, Gr as expected downstream
-            return image[:, [3, 0, 1, 2], :, :]
-        else:
-            raise ValueError(f"Expected 3 or 4 channels in dim 1, got {c}")
-
     else:
         raise ValueError(f"Unsupported tensor shape {image.shape}; "
-                         "expected 3D (C,H,W) or 4D (B,C,H,W)")
+                         "expected 3D (C,H,W)")
+        
 
 def get_preNormalization_transforms_list(cfg, is_supported_by_torchvision=False)->List[MapTransform]:
     """
@@ -715,7 +700,6 @@ def get_custom_transforms_lists(cfg: ConfigLoader, fold_specific_stats: dict, cr
     
     # Pipeline di base che carica e ridimensiona
     train_transforms_list = get_preNormalization_transforms_list(cfg, supported_by_torchvision)
-    # --- INSERISCI QUESTA PARTE ---
     # Aggiungi il cropping casuale per forzare il modello a ignorare i bordi.
     # Prima calcoliamo la dimensione del crop, ad esempio il 90% della dimensione dell'immagine.
     crop = bool(cfg.get_use_crop())

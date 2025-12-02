@@ -1,20 +1,10 @@
 dataset:
-  class_names: ["MSA-P", "PD"] #["MSA-P", "PD"] #["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
-
-ablation:
-  use_ablation: false
-  # Choose ONE of these (after RGB permutation):
-  # channels_index_to_ablate: [0]     # Ablate Red (R)
-  # channels_index_to_ablate: [1]     # Ablate Green (G) ← Your intended target
-  # channels_index_to_ablate: [2]     # Ablate Blue (B)
-  # channels_index_to_ablate: [3]     # Ablate Gray-Red (Gr)
-  # For your current experiments (ablate Green):
-  channels_index_to_ablate: [1]  # ← Change this from [0] to [1]
+  class_names: ["MSA-P", "PD"] #["MSA", "PD"] #["MSA-P", "MSA-C"],["MSA-P", "PD"],["PD", "MSA-P", "MSA-C"]
 
 # config.yaml
 data_splitting:
   random_seed: 42
-  val_set_size: 0.15
+  val_set_size: 0.2
   test_set_size: 0.10
   num_folds: 8
   lr_discovery_folds: 4
@@ -41,36 +31,34 @@ data_loading:
 model:
   model_name: "base"
   spatial_dims: 2
-  in_channels: 4
+  in_channels: 3
   out_channels: 2
   dropout_prob: 0.1
   patch_size: [16, 16]  # New parameter
   library: "torchvision"
   
 training:
-  num_epochs: 5
-  early_stopping_patience: 1
+  num_epochs: 150
+  early_stopping_patience: 17
   mixup_alpha: 0
   oversample: true
   undersample: false
   weighted_loss: false
-  # fine_tuning: false
   transfer_learning: false
   freezed_layerIndex: null  # null in YAML = None in Python
-  # discover_lr: false # this become useless 
-  lr_discovery_method: 'nested' 
-   # Opzioni: '  grid_search'--> do 80/20 split and then grid search over 5 candidates , 'nested': do nested hyperparameter tuning with optuna, 'fixed': set a fixed lre
-   # NOTE grid search introduce optimistic bias since it uses data that will be tested as data on which to tune the lr
+  lr_discovery_method: 'nested'  # Opzioni: '  grid_search'--> do 80/20 split and then grid search over 5 candidates , 'nested': do nested hyperparameter tuning with optuna, 'fixed': set a fixed learning rate
+  # discover_lr: True
 
 optimizer:
   learning_rate: 1e-4  # Will be adjusted automatically
-  optimizer_name: "AdamW"
+  optimizer_name: "Adam"
   weight_decay: 2e-5
-  patience: 25
 
 scheduler:
   scheduler_name: "ReduceLROnPlateau"
   factor: 0.5
-  scheduler_patience: 10
+  scheduler_patience: 9
   threshold: 1e-4
   min_lr: 1e-8
+
+    
