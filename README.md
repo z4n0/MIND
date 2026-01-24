@@ -128,8 +128,3 @@ The `clinica/` directory contains tools for analyzing patient metadata (`Dati cl
 - **Data Integrity:** Stratification is performed strictly by **Patient ID** to ensure biological independence between train/validation sets.
 - **Augmentation:** Biologically plausible transformations (affine, intensity) implemented via MONAI, preserving biomarker relationships.
 - **Metrics:** AUROC, Accuracy, Sensitivity, and Specificity logged per fold and aggregated.
-
-## Contact
-
-**Luca Zanotto**  
-Master's Thesis Project
