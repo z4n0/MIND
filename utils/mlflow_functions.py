@@ -523,7 +523,7 @@ def log_run_to_mlflow(
                          If provided, logs ablation-specific metadata for channel importance studies.
     """
     # ------------------------------------------------------------------ URI
-    env_experiment_name = "NO_AUG"#os.getenv("MLFLOW_EXPERIMENT_NAME") #"PERCENTILE_CLIP_MINMAX_X_channel"#os.getenv("MLFLOW_EXPERIMENT_NAME")
+    env_experiment_name = "BEST_4c_MSA-P_PD"#os.getenv("MLFLOW_EXPERIMENT_NAME") #"PERCENTILE_CLIP_MINMAX_X_channel"#os.getenv("MLFLOW_EXPERIMENT_NAME")
     if not env_experiment_name:
         raise RuntimeError("MLFLOW_EXPERIMENT_NAME env-var missing")
     
@@ -618,7 +618,7 @@ def log_run_to_mlflow(
                     "test_pat_ids_for_best_fold": test_pat_ids_per_fold.get(best_fold_idx)
                 }
             )
-        # --------------------- METRICS
+        # --------------------- METRICS ----------------------------
         # log_kfold_epoch_metrics(per_fold_metrics, prefix="val")
         per_fold = np.asarray(
             [
@@ -654,7 +654,7 @@ def log_run_to_mlflow(
         }
         metrics = {k: round(v, 3) for k, v in metrics.items()}
         mlflow.log_metrics(metrics)
-        # --------------------- PATIENT-LEVEL METRICS (if present)
+        # --------------------- PATIENT-LEVEL METRICS ----------------------
         try:
             major_bal = [r["patient_major_bal_acc"] for r in fold_results if r.get("patient_major_bal_acc") is not None]
             soft_bal  = [r["patient_soft_bal_acc"] for r in fold_results if r.get("patient_soft_bal_acc") is not None]
@@ -813,7 +813,18 @@ def log_run_to_mlflow(
         fig_patient_box = generate_patient_cv_boxplots(fold_results)
         if fig_patient_box is not None:
             mlflow.log_figure(fig_patient_box, "patient_fold_box_plots.png")
-
+        # 4c. per-fold results table for reuse/comparisons
+        try:
+            if fold_results:
+                df_fold = pd.DataFrame(fold_results)
+                fold_csv = Path(output_dir) / "fold_results.csv" if output_dir else Path("fold_results.csv")
+                df_fold.to_csv(fold_csv, index=False)
+                mlflow.log_artifact(str(fold_csv), artifact_path="fold_results")
+                if not output_dir and fold_csv.exists():
+                    fold_csv.unlink()
+        except Exception as e:
+            print(f"Warning: failed to log fold results CSV: {e}")
+            
         # 4. learning curves (if produced)
         lc_dir = Path.cwd() / "learning_curves"
         # prefer output_dir if specified
@@ -985,7 +996,7 @@ def log_attention_maps_to_mlflow(
     
     from utils.vit_explanation_functions import save_attention_overlays_side_by_side
     activation_overlay_output_path = "activation_overlays"
-    save_attention_overlays_side_by_side(test_loader, model, activation_overlay_output_path, device, overlay_alpha=0.5)
+    save_attention_overlays_side_by_side(test_loader, model, activation_overlay_output_path, device, heatmap_alpha=0.5)
     mlflow.log_artifacts(activation_overlay_output_path, artifact_path="activation_overlays_test")
     # Delete the local directory after logging to MLflow
     shutil.rmtree(activation_overlay_output_path)
@@ -996,9 +1007,9 @@ def log_gradcam_to_mlflow(
     test_true_labels_np: np.ndarray,
     test_transforms: Compose,
     class_names: List[str],
-    cfg,  # Add cfg parameter
-    ssl: bool = False,  # Add ssl parameter
-    run_name: Optional[str] = None,  # Add run_name parameter
+    cfg,  
+    ssl: bool = False,  
+    run_name: Optional[str] = None,  
     experiment_name: Optional[str] = None,  # Add experiment_name parameter
     base_dir: Optional[Path] = None,  # Add base_dir parameter
 ):

@@ -136,11 +136,11 @@ overall_total=$((overall_total + ${group3C_total:-0}))
 SCRIPTS_DIR_4C="local_run_scripts_DS2/4c"
 scripts_4c=(
     "run_local_densenet121_4c.sh"
-    # "run_local_densenet169_4c.sh"
-    # "run_local_resnet18_4c.sh"
+    "run_local_densenet169_4c.sh"
+    "run_local_resnet18_4c.sh"
     # # "run_local_resnet50_4c.sh"
     # # "run_local_efficientnet_4c.sh"
-    # "run_local_vit_4c.sh"
+    "run_local_vit_4c.sh"
 )
 run_script_group "group4C" "$SCRIPTS_DIR_4C" "DS2_4c" "${scripts_4c[@]}"
 overall_successful=$((overall_successful + ${group4C_successful:-0}))

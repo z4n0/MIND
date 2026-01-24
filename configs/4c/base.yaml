@@ -48,8 +48,8 @@ model:
   library: "torchvision"
   
 training:
-  num_epochs: 5
-  early_stopping_patience: 1
+  num_epochs: 210
+  early_stopping_patience: 35
   mixup_alpha: 0
   oversample: true
   undersample: false
