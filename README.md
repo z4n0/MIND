@@ -102,7 +102,7 @@ python downstream_supervised_fine_tuning.py \
     --freeze_encoder
 ```
 
-### 4. Running on CINECA (HPC)
+### 4. Running on HPC (via Slurm)
 The `slurm_files/` directory contains production-ready scripts.
 ```bash
 # Submit a job to the cluster
